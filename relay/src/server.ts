@@ -3,11 +3,22 @@ import http from 'http';
 import { Server } from 'socket.io';
 import cors from 'cors';
 import { setupSockets } from './sockets';
+import authRoutes from './auth';
+import { dbManager } from './db';
 
 const app = express();
 app.use(cors());
 
 const server = http.createServer(app);
+
+// Initialize DB Manager
+dbManager.initialize().catch(err => {
+  console.error("Failed to initialize DB Manager. Exiting...");
+  process.exit(1);
+});
+
+// REST API Routes
+app.use('/api/v1/auth', authRoutes);
 
 const io = new Server(server, {
   cors: {
