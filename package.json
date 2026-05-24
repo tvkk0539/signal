@@ -1,0 +1,32 @@
+{
+  "name": "distributed-swarm-monorepo",
+  "version": "1.0.0",
+  "private": true,
+  "description": "Highly engineered distributed swarm architecture with WebRTC, gRPC, and GraphQL.",
+  "workspaces": [
+    "frontend",
+    "backend",
+    "relay",
+    "mobile",
+    "shared"
+  ],
+  "scripts": {
+    "start:relay": "npm --workspace=relay start",
+    "start:backend": "npm --workspace=backend start",
+    "dev:frontend": "npm --workspace=frontend run dev",
+    "dev:mobile": "npm --workspace=mobile run start",
+    "build:all": "npm run build --workspaces",
+    "test:all": "npm run test --workspaces"
+  },
+  "keywords": [
+    "monorepo",
+    "swarm",
+    "rclone",
+    "webrtc",
+    "grpc",
+    "react",
+    "react-native"
+  ],
+  "author": "Architecture Team",
+  "license": "MIT"
+}
