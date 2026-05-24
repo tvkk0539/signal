@@ -1,0 +1,11 @@
+
+> distributed-swarm-monorepo@1.0.0 start:relay
+> npm --workspace=relay start
+
+
+> @swarm/relay@1.0.0 start
+> ts-node-dev --respawn src/server.ts
+
+[INFO] 14:09:11 ts-node-dev ver. 2.0.0 (using ts-node ver. 10.9.2, typescript ver. 5.9.3)
+[Relay Server] Started on port 3001
+[Relay Server] Acting as Central Nervous System
