@@ -27,7 +27,7 @@ The project utilizes a strict, professional folder structure enforcing the Clean
 │   ├── package.json
 │   └── tsconfig.json
 │
-├── frontend/               # React / Vite Frontend
+├── frontend/               # React / Vite Web Frontend
 │   ├── src/
 │   │   ├── assets/         # Images, global CSS
 │   │   ├── components/     # Reusable UI parts (shadcn/ui, custom buttons)
@@ -45,6 +45,15 @@ The project utilizes a strict, professional folder structure enforcing the Clean
 │   ├── tailwind.config.js
 │   ├── vite.config.ts
 │   └── tsconfig.json
+│
+├── mobile/                 # React Native / Expo Mobile App
+│   ├── src/
+│   │   ├── components/     # Native UI components
+│   │   ├── screens/        # Full mobile views
+│   │   ├── navigation/     # App routing (React Navigation)
+│   │   └── api/            # GraphQL and WebTransport clients
+│   ├── package.json
+│   └── app.json
 │
 ├── relay/                  # Lightweight WebSocket & Signaling Server
 │   ├── src/
