@@ -46,7 +46,20 @@ The project utilizes a strict, professional folder structure enforcing the Clean
 │   ├── vite.config.ts
 │   └── tsconfig.json
 │
-├── shared/                 # (Optional future phase) Shared TS Types
+├── relay/                  # Lightweight WebSocket & Signaling Server
+│   ├── src/
+│   │   ├── sockets/        # Traffic routing logic
+│   │   ├── server.ts       # Standalone HTTP/WebSocket server
+│   │   └── types/          # Relay-specific types
+│   ├── Dockerfile
+│   └── package.json
+│
+├── shared/                 # Universal Data Contracts
+│   ├── src/
+│   │   ├── types/          # Shared WebSocket payload interfaces
+│   │   └── enums/          # Shared constants
+│   ├── package.json
+│   └── tsconfig.json
 ├── package.json            # Root workspace configuration
 └── docker-compose.yml      # Local development orchestrator
 ```
