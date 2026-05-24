@@ -10,6 +10,7 @@ The project utilizes a strict, professional folder structure enforcing the Clean
 
 ```text
 /
+├── _architecture-and-blueprints/ # Highly Engineered Project Documentation
 ├── .github/                # CI/CD workflows
 ├── backend/                # Node.js / Express / Socket.io Backend
 │   ├── src/
