@@ -25,4 +25,7 @@ var MessageType;
     MessageType["TASK_COMPLETE"] = "TASK_COMPLETE";
     MessageType["PING"] = "PING";
     MessageType["PONG"] = "PONG";
+    MessageType["CHAT_MESSAGE"] = "CHAT_MESSAGE";
+    MessageType["CHAT_TYPING"] = "CHAT_TYPING";
+    MessageType["FILE_OFFER"] = "FILE_OFFER";
 })(MessageType || (exports.MessageType = MessageType = {}));

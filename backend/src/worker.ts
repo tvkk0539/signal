@@ -2,7 +2,7 @@ import { io, Socket } from 'socket.io-client';
 import { MessageType, AuthRequestMessage } from '@swarm/shared';
 
 const RELAY_SERVER_URL = process.env.RELAY_URL || 'http://localhost:3001';
-const WORKER_SECRET = 'SECRET_WORKER_KEY_123';
+const WORKER_SECRET = process.env.WORKER_SECRET || 'fallback_for_dev_only';
 
 console.log(`[Worker] Booting up. Attempting to connect to Relay Server at ${RELAY_SERVER_URL}`);
 

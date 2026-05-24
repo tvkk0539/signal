@@ -59,26 +59,50 @@ function App() {
     }
   };
 
+  const sendTestChat = () => {
+    if (socket && isConnected) {
+      console.log('Sending chat message payload over Relay');
+      // Payload to be fully defined in Chat Contracts
+      socket.emit(MessageType.CHAT_MESSAGE, { text: "Hello Swarm!" });
+    }
+  };
+
   return (
-    <div className="App" style={{ textAlign: 'center', marginTop: '50px' }}>
-      <h1>Swarm Command Center</h1>
-      <div style={{ marginBottom: '20px' }}>
-        <strong>Status: </strong>
-        <span style={{ color: isConnected ? 'green' : 'red' }}>
-          {isConnected ? 'Connected to Relay' : 'Disconnected'}
-        </span>
+    <div className="App" style={{ textAlign: 'center', marginTop: '50px', display: 'flex', gap: '20px', justifyContent: 'center' }}>
+      <div style={{ border: '1px solid #ccc', padding: '20px', borderRadius: '8px' }}>
+        <h1>Swarm Command Center</h1>
+        <div style={{ marginBottom: '20px' }}>
+          <strong>Status: </strong>
+          <span style={{ color: isConnected ? 'green' : 'red' }}>
+            {isConnected ? 'Connected to Relay' : 'Disconnected'}
+          </span>
+        </div>
+
+        <button
+          onClick={pingSwarm}
+          disabled={!isConnected}
+          style={{ padding: '10px 20px', fontSize: '16px', cursor: isConnected ? 'pointer' : 'not-allowed' }}
+        >
+          Ping Swarm
+        </button>
+
+        <div style={{ marginTop: '20px', color: '#666' }}>
+          {pingData}
+        </div>
       </div>
 
-      <button
-        onClick={pingSwarm}
-        disabled={!isConnected}
-        style={{ padding: '10px 20px', fontSize: '16px', cursor: isConnected ? 'pointer' : 'not-allowed' }}
-      >
-        Ping Swarm
-      </button>
-
-      <div style={{ marginTop: '20px', color: '#666' }}>
-        {pingData}
+      <div style={{ border: '1px solid #ccc', padding: '20px', borderRadius: '8px', minWidth: '250px' }}>
+        <h2>Chat Box</h2>
+        <div style={{ height: '100px', border: '1px dashed #eee', marginBottom: '10px', display: 'flex', alignItems: 'center', justifyContent: 'center', color: '#999' }}>
+           [Chat Messages Here]
+        </div>
+        <button
+          onClick={sendTestChat}
+          disabled={!isConnected}
+          style={{ padding: '8px 16px', fontSize: '14px', cursor: isConnected ? 'pointer' : 'not-allowed', width: '100%' }}
+        >
+          Send Test Msg
+        </button>
       </div>
     </div>
   );

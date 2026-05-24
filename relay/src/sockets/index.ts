@@ -12,9 +12,10 @@ export function setupSockets(io: Server) {
     socket.on(MessageType.AUTH_REQUEST, (msg: AuthRequestMessage) => {
       console.log(`[Gatekeeper] Auth Request from ${msg.role}`);
 
-      // Zero-Trust Concept: Hardcoded API Key check for workers
+      // Zero-Trust Concept: API Key check for workers via Env
+      const expectedWorkerSecret = process.env.WORKER_SECRET || 'fallback_for_dev_only';
       if (msg.role === 'WORKER') {
-        if (msg.token === 'SECRET_WORKER_KEY_123') {
+        if (msg.token === expectedWorkerSecret) {
            console.log(`[Fleet Admiral] Worker Authorized: ${socket.id}`);
            connectedWorkers.set(socket.id, socket);
 
