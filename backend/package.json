@@ -3,7 +3,9 @@
   "version": "1.0.0",
   "private": true,
   "scripts": {
-    "start": "ts-node-dev --respawn src/worker.ts"
+    "start": "ts-node-dev --respawn src/worker.ts",
+    "build": "tsc",
+    "start:prod": "node dist/worker.js"
   },
   "dependencies": {
     "@swarm/shared": "*",
