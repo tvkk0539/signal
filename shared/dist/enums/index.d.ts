@@ -18,8 +18,5 @@ export declare enum MessageType {
     TASK_PROGRESS = "TASK_PROGRESS",
     TASK_COMPLETE = "TASK_COMPLETE",
     PING = "PING",
-    PONG = "PONG",
-    CHAT_MESSAGE = "CHAT_MESSAGE",
-    CHAT_TYPING = "CHAT_TYPING",
-    FILE_OFFER = "FILE_OFFER"
+    PONG = "PONG"
 }

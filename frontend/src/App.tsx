@@ -1,128 +1,122 @@
-import { useEffect, useState } from 'react';
-import { io, Socket } from 'socket.io-client';
-import { MessageType } from '@swarm/shared';
-import type { AuthRequestMessage } from '@swarm/shared';
-import { useAuthStore } from './store/authStore';
-import { AuthScreen } from './components/auth/AuthScreen';
-import './App.css';
-
-const RELAY_SERVER_URL = 'http://localhost:3001';
+import { useState } from 'react'
+import reactLogo from './assets/react.svg'
+import viteLogo from './assets/vite.svg'
+import heroImg from './assets/hero.png'
+import './App.css'
 
 function App() {
-  const { token, user, isAuthenticated, logout } = useAuthStore();
-
-  const [socket, setSocket] = useState<Socket | null>(null);
-  const [isConnected, setIsConnected] = useState(false);
-  const [pingData, setPingData] = useState<string>('');
-
-  useEffect(() => {
-    if (!isAuthenticated || !token) return;
-
-    console.log(`[UI] Booting up. Connecting to Relay Server at ${RELAY_SERVER_URL}`);
-    const newSocket = io(RELAY_SERVER_URL);
-    setSocket(newSocket);
-
-    newSocket.on('connect', () => {
-      console.log(`[UI] Connected to Relay Server. Authenticating...`);
-
-      const authMessage: AuthRequestMessage = {
-        type: MessageType.AUTH_REQUEST,
-        timestamp: Date.now(),
-        role: 'UI',
-        token: token
-      };
-
-      newSocket.emit(MessageType.AUTH_REQUEST, authMessage);
-    });
-
-    newSocket.on(MessageType.AUTH_RESPONSE, (res: { success: boolean }) => {
-      if (res.success) {
-        setIsConnected(true);
-        console.log(`[UI] Authentication Successful! Ready to control swarm.`);
-      }
-    });
-
-    newSocket.on(MessageType.PONG, (data: { timestamp: number }) => {
-      const latency = Date.now() - data.timestamp;
-      setPingData(`Ping: ${latency}ms`);
-      console.log(`[UI] Received PONG from Relay Server (Latency: ${latency}ms)`);
-    });
-
-    newSocket.on('disconnect', () => {
-      setIsConnected(false);
-      console.log(`[UI] Disconnected from Relay Server.`);
-    });
-
-    return () => {
-      newSocket.close();
-    };
-  }, []);
-
-  const pingSwarm = () => {
-    if (socket && isConnected) {
-      setPingData('Pinging...');
-      socket.emit(MessageType.PING, { timestamp: Date.now() });
-    }
-  };
-
-  const sendTestChat = () => {
-    if (socket && isConnected) {
-      console.log('Sending chat message payload over Relay');
-      // Payload to be fully defined in Chat Contracts
-      socket.emit(MessageType.CHAT_MESSAGE, { text: "Hello Swarm!" });
-    }
-  };
-
-  if (!isAuthenticated) {
-    return <AuthScreen />;
-  }
+  const [count, setCount] = useState(0)
 
   return (
-    <div className="App" style={{ textAlign: 'center', marginTop: '50px', display: 'flex', flexDirection: 'column', alignItems: 'center' }}>
-      <div style={{ width: '100%', maxWidth: '800px', display: 'flex', justifyContent: 'space-between', marginBottom: '20px', padding: '10px', backgroundColor: '#eee', borderRadius: '8px' }}>
-         <div>Commander: <strong>{user?.email}</strong></div>
-         <button onClick={logout} style={{ background: 'none', border: 'none', color: 'red', cursor: 'pointer' }}>Logout</button>
-      </div>
-
-      <div style={{ display: 'flex', gap: '20px', justifyContent: 'center' }}>
-        <div style={{ border: '1px solid #ccc', padding: '20px', borderRadius: '8px' }}>
-          <h1>Swarm Command Center</h1>
-          <div style={{ marginBottom: '20px' }}>
-            <strong>Status: </strong>
-            <span style={{ color: isConnected ? 'green' : 'red' }}>
-              {isConnected ? 'Connected to Relay' : 'Disconnected'}
-            </span>
-          </div>
-
+    <>
+      <section id="center">
+        <div className="hero">
+          <img src={heroImg} className="base" width="170" height="179" alt="" />
+          <img src={reactLogo} className="framework" alt="React logo" />
+          <img src={viteLogo} className="vite" alt="Vite logo" />
+        </div>
+        <div>
+          <h1>Get started</h1>
+          <p>
+            Edit <code>src/App.tsx</code> and save to test <code>HMR</code>
+          </p>
+        </div>
         <button
-          onClick={pingSwarm}
-          disabled={!isConnected}
-          style={{ padding: '10px 20px', fontSize: '16px', cursor: isConnected ? 'pointer' : 'not-allowed' }}
+          type="button"
+          className="counter"
+          onClick={() => setCount((count) => count + 1)}
         >
-          Ping Swarm
+          Count is {count}
         </button>
+      </section>
 
-        <div style={{ marginTop: '20px', color: '#666' }}>
-          {pingData}
-        </div>
-      </div>
+      <div className="ticks"></div>
 
-      <div style={{ border: '1px solid #ccc', padding: '20px', borderRadius: '8px', minWidth: '250px' }}>
-        <h2>Chat Box</h2>
-        <div style={{ height: '100px', border: '1px dashed #eee', marginBottom: '10px', display: 'flex', alignItems: 'center', justifyContent: 'center', color: '#999' }}>
-           [Chat Messages Here]
+      <section id="next-steps">
+        <div id="docs">
+          <svg className="icon" role="presentation" aria-hidden="true">
+            <use href="/icons.svg#documentation-icon"></use>
+          </svg>
+          <h2>Documentation</h2>
+          <p>Your questions, answered</p>
+          <ul>
+            <li>
+              <a href="https://vite.dev/" target="_blank">
+                <img className="logo" src={viteLogo} alt="" />
+                Explore Vite
+              </a>
+            </li>
+            <li>
+              <a href="https://react.dev/" target="_blank">
+                <img className="button-icon" src={reactLogo} alt="" />
+                Learn more
+              </a>
+            </li>
+          </ul>
         </div>
-          <button
-            onClick={sendTestChat}
-            disabled={!isConnected}
-            style={{ padding: '8px 16px', fontSize: '14px', cursor: isConnected ? 'pointer' : 'not-allowed', width: '100%' }}
-          >
-            Send Test Msg
-          </button>
+        <div id="social">
+          <svg className="icon" role="presentation" aria-hidden="true">
+            <use href="/icons.svg#social-icon"></use>
+          </svg>
+          <h2>Connect with us</h2>
+          <p>Join the Vite community</p>
+          <ul>
+            <li>
+              <a href="https://github.com/vitejs/vite" target="_blank">
+                <svg
+                  className="button-icon"
+                  role="presentation"
+                  aria-hidden="true"
+                >
+                  <use href="/icons.svg#github-icon"></use>
+                </svg>
+                GitHub
+              </a>
+            </li>
+            <li>
+              <a href="https://chat.vite.dev/" target="_blank">
+                <svg
+                  className="button-icon"
+                  role="presentation"
+                  aria-hidden="true"
+                >
+                  <use href="/icons.svg#discord-icon"></use>
+                </svg>
+                Discord
+              </a>
+            </li>
+            <li>
+              <a href="https://x.com/vite_js" target="_blank">
+                <svg
+                  className="button-icon"
+                  role="presentation"
+                  aria-hidden="true"
+                >
+                  <use href="/icons.svg#x-icon"></use>
+                </svg>
+                X.com
+              </a>
+            </li>
+            <li>
+              <a href="https://bsky.app/profile/vite.dev" target="_blank">
+                <svg
+                  className="button-icon"
+                  role="presentation"
+                  aria-hidden="true"
+                >
+                  <use href="/icons.svg#bluesky-icon"></use>
+                </svg>
+                Bluesky
+              </a>
+            </li>
+          </ul>
         </div>
-      </div>
-    </div>
-  );
+      </section>
+
+      <div className="ticks"></div>
+      <section id="spacer"></section>
+    </>
+  )
 }
 
-export default App;
+export default App

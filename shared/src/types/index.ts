@@ -23,20 +23,3 @@ export interface TaskAssignmentMessage extends BaseMessage {
   taskType: TaskType;
   payload: any;
 }
-
-export interface ChatMessage extends BaseMessage {
-  type: MessageType.CHAT_MESSAGE;
-  senderId: string;
-  targetId: string;
-  encryptedPayload: string;
-  hasAttachment: boolean;
-}
-
-export interface FileOfferMessage extends BaseMessage {
-  type: MessageType.FILE_OFFER;
-  senderId: string;
-  targetId: string;
-  fileName: string;
-  fileSizeInBytes: number;
-  sdpOffer: string; // For WebRTC P2P bypass
-}
