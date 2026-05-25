@@ -1,5 +1,6 @@
 import { IUserRepository } from './interfaces/IUserRepository';
 import { MongoUserRepository } from './providers/mongo/MongoUserRepository';
+import { InMemoryUserRepository } from './providers/mock/InMemoryUserRepository';
 import { connectMongo } from './providers/mongo/connection';
 
 class DatabaseManager {
@@ -11,8 +12,13 @@ class DatabaseManager {
     console.log(`[DB Manager] Initializing with Plugin: ${dbType}`);
 
     if (dbType === 'MONGODB') {
-      await connectMongo();
-      this.userRepository = new MongoUserRepository();
+      try {
+        await connectMongo();
+        this.userRepository = new MongoUserRepository();
+      } catch (err) {
+        console.warn(`[DB Manager] MongoDB connection failed. Falling back to InMemoryMockDB for sandbox development.`);
+        this.userRepository = new InMemoryUserRepository();
+      }
     } else if (dbType === 'POSTGRES') {
       // Future Plugin Implementation
       throw new Error("Postgres Plugin not yet implemented.");
