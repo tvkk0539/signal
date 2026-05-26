@@ -4,6 +4,7 @@ import { MessageType } from '@swarm/shared';
 import type { AuthRequestMessage } from '@swarm/shared';
 import { useAuthStore } from './store/authStore';
 import { AuthScreen } from './components/auth/AuthScreen';
+import { FileExplorer } from './components/explorer/FileExplorer';
 import './App.css';
 
 const RELAY_SERVER_URL = 'http://localhost:3001';
@@ -14,6 +15,8 @@ function App() {
   const [socket, setSocket] = useState<Socket | null>(null);
   const [isConnected, setIsConnected] = useState(false);
   const [pingData, setPingData] = useState<string>('');
+  const [targetWorkerId, setTargetWorkerId] = useState<string>('');
+  const [workerIdInput, setWorkerIdInput] = useState<string>('');
 
   useEffect(() => {
     if (!isAuthenticated || !token) return;
@@ -65,17 +68,14 @@ function App() {
     }
   };
 
-  const sendTestChat = () => {
-    if (socket && isConnected) {
-      console.log('Sending chat message payload over Relay');
-      // Payload to be fully defined in Chat Contracts
-      socket.emit(MessageType.CHAT_MESSAGE, { text: "Hello Swarm!" });
-    }
-  };
-
   if (!isAuthenticated) {
     return <AuthScreen />;
   }
+
+  const handleSetWorker = (e: React.FormEvent) => {
+    e.preventDefault();
+    setTargetWorkerId(workerIdInput);
+  };
 
   return (
     <div className="App" style={{ textAlign: 'center', marginTop: '50px', display: 'flex', flexDirection: 'column', alignItems: 'center' }}>
@@ -84,8 +84,8 @@ function App() {
          <button onClick={logout} style={{ background: 'none', border: 'none', color: 'red', cursor: 'pointer' }}>Logout</button>
       </div>
 
-      <div style={{ display: 'flex', gap: '20px', justifyContent: 'center' }}>
-        <div style={{ border: '1px solid #ccc', padding: '20px', borderRadius: '8px' }}>
+      <div style={{ display: 'flex', gap: '20px', justifyContent: 'center', flexWrap: 'wrap', maxWidth: '1200px' }}>
+        <div style={{ border: '1px solid #ccc', padding: '20px', borderRadius: '8px', minWidth: '300px' }}>
           <h1>Swarm Command Center</h1>
           <div style={{ marginBottom: '20px' }}>
             <strong>Status: </strong>
@@ -94,32 +94,44 @@ function App() {
             </span>
           </div>
 
-        <button
-          onClick={pingSwarm}
-          disabled={!isConnected}
-          style={{ padding: '10px 20px', fontSize: '16px', cursor: isConnected ? 'pointer' : 'not-allowed' }}
-        >
-          Ping Swarm
-        </button>
-
-        <div style={{ marginTop: '20px', color: '#666' }}>
-          {pingData}
-        </div>
-      </div>
-
-      <div style={{ border: '1px solid #ccc', padding: '20px', borderRadius: '8px', minWidth: '250px' }}>
-        <h2>Chat Box</h2>
-        <div style={{ height: '100px', border: '1px dashed #eee', marginBottom: '10px', display: 'flex', alignItems: 'center', justifyContent: 'center', color: '#999' }}>
-           [Chat Messages Here]
-        </div>
           <button
-            onClick={sendTestChat}
+            onClick={pingSwarm}
             disabled={!isConnected}
-            style={{ padding: '8px 16px', fontSize: '14px', cursor: isConnected ? 'pointer' : 'not-allowed', width: '100%' }}
+            style={{ padding: '10px 20px', fontSize: '16px', cursor: isConnected ? 'pointer' : 'not-allowed', marginBottom: '20px' }}
           >
-            Send Test Msg
+            Ping Swarm
           </button>
+
+          <div style={{ color: '#666', marginBottom: '20px' }}>
+            {pingData}
+          </div>
+
+          <div style={{ borderTop: '1px solid #eee', paddingTop: '20px' }}>
+            <h3>Target Worker</h3>
+            <form onSubmit={handleSetWorker} style={{ display: 'flex', gap: '10px', justifyContent: 'center' }}>
+              <input
+                type="text"
+                placeholder="Enter Worker Socket ID"
+                value={workerIdInput}
+                onChange={(e) => setWorkerIdInput(e.target.value)}
+                style={{ padding: '8px', flex: 1, borderRadius: '4px', border: '1px solid #ccc' }}
+              />
+              <button type="submit" style={{ padding: '8px 16px', cursor: 'pointer' }}>Set Worker</button>
+            </form>
+          </div>
         </div>
+
+        {targetWorkerId ? (
+           <FileExplorer
+             socket={socket}
+             isConnected={isConnected}
+             workerId={targetWorkerId}
+           />
+        ) : (
+          <div style={{ padding: '40px', border: '1px dashed #ccc', borderRadius: '8px', display: 'flex', alignItems: 'center', justifyContent: 'center', color: '#999', minWidth: '600px' }}>
+            Enter a Worker ID to load the File Explorer
+          </div>
+        )}
       </div>
     </div>
   );
