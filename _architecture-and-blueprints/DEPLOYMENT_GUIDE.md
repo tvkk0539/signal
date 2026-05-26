@@ -38,7 +38,7 @@ For security and flexibility, the codebase does not hardcode passwords or server
 
 ## 🚀 3. Automated Bare-Metal Deployment (VPS / Ubuntu)
 
-If you purchased a standard Linux Virtual Private Server (like a $5 DigitalOcean Droplet or AWS EC2), follow these exact steps.
+If you purchased a standard Linux Virtual Private Server (like a $5 DigitalOcean Droplet or AWS EC2), follow these exact steps. We provide a highly automated bash script (`deploy.sh`) to do the heavy lifting for you.
 
 ### Step 3.1: Server Prep
 SSH into your server and clone the code:
@@ -74,11 +74,18 @@ VITE_RELAY_URL=http://YOUR_SERVER_PUBLIC_IP:3001
 ```
 
 ### Step 3.3: Execute the Automated Setup
-Now that the configuration is ready, run our automated script. This script installs Node.js, `rclone`, PM2 (a process manager that keeps your apps running if they crash), and compiles the code.
+Now that the configuration is ready, run our automated `deploy.sh` script.
+
 ```bash
 chmod +x deploy.sh
 sudo ./deploy.sh
 ```
+
+### What the `deploy.sh` script does:
+1.  Installs **Node.js v20**, **rclone**, **ffmpeg**, and **PM2** (Process Manager).
+2.  Installs NPM dependencies and builds the `/shared`, `/relay`, and `/backend` workspaces.
+3.  Starts the `/relay` server and a local `/backend` worker as daemonized background processes using PM2.
+4.  Configures PM2 to automatically restart the swarm if the server reboots.
 
 ### Step 3.4: Serving the Frontend UI via Nginx
 The `deploy.sh` script started the Relay and Backend, and it compiled your Frontend React code into static HTML/CSS files located at `/frontend/dist`.
