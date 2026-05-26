@@ -62,7 +62,6 @@ if [ "$DEPLOY_METHOD" == "1" ]; then
     echo "✅ Relay Server successfully deployed via Bare-Metal!"
     echo "The server is running in the background on Port 3001."
     echo "Use 'pm2 logs swarm-relay' to view live traffic."
-    echo "========================================================"
 
 elif [ "$DEPLOY_METHOD" == "2" ]; then
     echo ""
@@ -98,8 +97,19 @@ DOCKER
     echo "✅ Relay Server successfully deployed via Docker!"
     echo "The container is running on Port 3001."
     echo "Use 'docker logs -f \$(docker-compose -f docker-compose-relay.yml ps -q relay-server)' to view live traffic."
-    echo "========================================================"
 
 else
     echo "❌ Invalid selection."
 fi
+
+echo ""
+echo "⚠️  CRITICAL CLOUD FIREWALL INSTRUCTIONS ⚠️"
+echo "If you are hosting this on Google Cloud Platform (GCP), AWS, or Azure:"
+echo "1. Go to your Cloud Console -> VPC Network -> Firewall Rules."
+echo "2. Create a new rule allowing INGRESS TCP traffic on Port 3001."
+echo "3. If you do not do this, the UI and Workers will timeout trying to connect!"
+echo ""
+echo "🌐 If you DO NOT have a domain name:"
+echo "Your Frontend and Backend MUST connect using: ws://YOUR_SERVER_PUBLIC_IP:3001"
+echo "(Note: Browsers block 'ws://' if the UI is hosted on an 'https://' website. You must host the UI on plain 'http://' to test without a domain)."
+echo "========================================================"

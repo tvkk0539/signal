@@ -36,13 +36,49 @@ The script will prompt you for two things:
 
 ---
 
-## 🔒 Securing WebSockets with Nginx (WSS://)
+## 🧱 Cloud Provider Firewall Configuration (GCP/AWS)
+
+If you are using Google Cloud Platform (GCP), AWS EC2, or Azure, the `deploy_relay.sh` script will run perfectly, but **the system will still be broken** because cloud providers block all ports by default.
+
+You must manually open **Port 3001** to the public.
+
+**If using Google Cloud Platform (GCP):**
+1. Open the GCP Console and search for "VPC Network".
+2. Click on "Firewall".
+3. Click "Create Firewall Rule" at the top.
+4. Set the following values:
+   * **Name:** `allow-relay-port-3001`
+   * **Direction of traffic:** Ingress
+   * **Action on match:** Allow
+   * **Targets:** All instances in the network
+   * **Source IPv4 ranges:** `0.0.0.0/0` (This means anyone can connect)
+   * **Protocols and ports:** Check `TCP` and enter `3001`.
+5. Click Save. Your Relay is now live!
+
+---
+
+## 🌐 Deploying WITHOUT a Domain (IP-Only)
+
+If you do not have a domain name, you can still test and use the entire swarm architecture using raw IP addresses.
 
 By default, the Relay Server boots up on `http://YOUR_SERVER_IP:3001`.
 
-However, modern browsers will block the React UI from connecting to an insecure `ws://` WebSocket if the UI itself is hosted on a secure `https://` domain.
+You must configure your Frontend and Backend `.env` files to point to the raw WebSocket protocol (`ws://` instead of `wss://`).
 
-To fix this, you must put an **Nginx Reverse Proxy** in front of your Relay Server to handle SSL termination.
+*   **In Frontend `.env`:** `VITE_RELAY_URL=http://YOUR_SERVER_IP:3001`
+*   **In Backend `.env`:** `RELAY_URL=http://YOUR_SERVER_IP:3001`
+
+### ⚠️ The Mixed-Content Restriction
+Modern web browsers have very strict security rules.
+If you host your Frontend UI on an `https://` domain, the browser will **block** the UI from connecting to an insecure `ws://YOUR_SERVER_IP:3001` Relay Server. This is called a "Mixed Content" error.
+
+**Therefore, if you do not have a domain for the Relay Server, you MUST host the Frontend UI on plain `http://` (like a local development server or a basic unencrypted bucket) to test it.**
+
+---
+
+## 🔒 Securing WebSockets with Nginx (WSS://)
+
+If you *do* have a domain name, you should secure the connection. To do this, you must put an **Nginx Reverse Proxy** in front of your Relay Server to handle SSL termination.
 
 ### 1. Install Nginx and Certbot (Let's Encrypt)
 ```bash
