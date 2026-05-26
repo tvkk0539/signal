@@ -28,4 +28,6 @@ var MessageType;
     MessageType["CHAT_MESSAGE"] = "CHAT_MESSAGE";
     MessageType["CHAT_TYPING"] = "CHAT_TYPING";
     MessageType["FILE_OFFER"] = "FILE_OFFER";
+    MessageType["FILE_LIST_REQUEST"] = "FILE_LIST_REQUEST";
+    MessageType["FILE_LIST_RESPONSE"] = "FILE_LIST_RESPONSE";
 })(MessageType || (exports.MessageType = MessageType = {}));

@@ -40,3 +40,27 @@ export interface FileOfferMessage extends BaseMessage {
   fileSizeInBytes: number;
   sdpOffer: string; // For WebRTC P2P bypass
 }
+
+export interface FileItem {
+  Path: string;
+  Name: string;
+  Size: number;
+  MimeType: string;
+  ModTime: string;
+  IsDir: boolean;
+  ID: string;
+}
+
+export interface FileListRequestMessage extends BaseMessage {
+  type: MessageType.FILE_LIST_REQUEST;
+  workerId: string;
+  directory: string;
+}
+
+export interface FileListResponseMessage extends BaseMessage {
+  type: MessageType.FILE_LIST_RESPONSE;
+  workerId: string;
+  directory: string;
+  files: FileItem[];
+  error?: string;
+}

@@ -48,14 +48,25 @@ This system leverages five major communication protocols to achieve "magic" func
 
 The entire monorepo is governed by NPM Workspaces.
 
-### 1. Install Dependencies
-From the root of the repository:
+### 1. Install Dependencies & Environment Setup
+This project requires specific system-level dependencies (like `rclone` for the backend and `playwright` for automated UI testing).
+
+To streamline setup for both **Human Developers** and **AI Coding Agents**, we provide a dedicated setup script.
+
+From the root of the repository, run:
 ```bash
-npm install
+bash jules_environment_setup.sh
 ```
+*(Note: This script will install NPM packages, download the global `rclone` binary, and install Playwright chromium dependencies).*
+
+**For AI Agents (Jules Workflow):**
+To ensure the AI sandbox boots instantly without installing dependencies every session, you must configure the "Environment Snapshot".
+1. Open the Jules Environment settings.
+2. In the setup script box, enter: `bash jules_environment_setup.sh`
+3. Click "Run and snapshot". All future sessions will load this environment instantly.
 
 ### 2. Compile Shared Contracts
-Before running the services, the shared data contracts must be compiled:
+Before running the services, the shared TypeScript data contracts must be compiled across the workspaces:
 ```bash
 npm run build:all
 ```
