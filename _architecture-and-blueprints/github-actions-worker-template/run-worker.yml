@@ -21,8 +21,27 @@ jobs:
       - name: 🐳 Pull Docker Image
         run: docker pull ghcr.io/your-username/distributed-swarm-monorepo-worker:latest
 
+      # Dynamically build the rclone.conf file on the host machine before booting Docker.
+      # It checks if you provided the config as raw text or as a secure URL.
+      - name: 📁 Prepare Rclone Configuration
+        env:
+          RCLONE_CONF_TEXT: ${{ secrets.RCLONE_CONF_TEXT }}
+          RCLONE_CONF_URL: ${{ secrets.RCLONE_CONF_URL }}
+        run: |
+          mkdir -p ~/.config/rclone
+          if [ -n "$RCLONE_CONF_TEXT" ]; then
+            echo "Injecting rclone config from Text Secret..."
+            echo "$RCLONE_CONF_TEXT" > ~/.config/rclone/rclone.conf
+          elif [ -n "$RCLONE_CONF_URL" ]; then
+            echo "Downloading rclone config from URL Secret..."
+            curl -s "$RCLONE_CONF_URL" -o ~/.config/rclone/rclone.conf
+          else
+            echo "No rclone config secrets found. Worker will only browse local sandbox."
+            touch ~/.config/rclone/rclone.conf
+          fi
+
       # Run the Docker container in the foreground so the GitHub Action stays alive.
-      # We inject the secure secrets stored in the repository settings.
+      # We inject the secure secrets and mount the rclone.conf file into the container.
       - name: 🦾 Execute Worker Node
         env:
           RELAY_URL: ${{ secrets.RELAY_URL }}
@@ -31,4 +50,5 @@ jobs:
           docker run --rm \
             -e RELAY_URL=$RELAY_URL \
             -e WORKER_SECRET=$WORKER_SECRET \
+            -v ~/.config/rclone/rclone.conf:/root/.config/rclone/rclone.conf:ro \
             ghcr.io/your-username/distributed-swarm-monorepo-worker:latest

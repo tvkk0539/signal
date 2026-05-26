@@ -14,7 +14,7 @@ If you want to spin up a worker in a completely different GitHub account, follow
 1. Log into the target GitHub account.
 2. Create a new, empty repository (e.g., `my-swarm-node-1`).
 
-### Step 2: Add the Secrets
+### Step 2: Add the Required Secrets
 The worker needs to know where to connect and how to authenticate.
 1. In your new repository, click on **Settings** -> **Secrets and variables** -> **Actions**.
 2. Click **New repository secret**.
@@ -25,7 +25,22 @@ The worker needs to know where to connect and how to authenticate.
    *   **Name:** `WORKER_SECRET`
    *   **Secret:** `your_super_secure_swarm_password` (Must match the Relay Server's Gatekeeper password).
 
-### Step 3: Add the Workflow File
+### Step 3: Add Cloud Drive Secrets (Optional but Recommended)
+To allow your worker to browse and stream from cloud drives (Google Drive, OneDrive), you must provide your `rclone.conf` data. You can do this in two ways:
+
+**Method A: Raw Text (Recommended)**
+Open your local `rclone.conf` file, copy all the text, and create a secret:
+*   **Name:** `RCLONE_CONF_TEXT`
+*   **Secret:** *(Paste the entire contents of your rclone.conf here)*
+
+**Method B: Secure URL**
+If you host your config on a secure, raw endpoint (like a private gist with a token):
+*   **Name:** `RCLONE_CONF_URL`
+*   **Secret:** `https://your-secure-url.com/rclone.conf`
+
+*The `.yml` workflow will automatically detect which method you used and inject the configuration into the Docker container!*
+
+### Step 4: Add the Workflow File
 1. In the repository, create a new folder path: `.github/workflows/`
 2. Create a new file inside it named `run-worker.yml`.
 3. Copy and paste the entire contents of the `run-worker.yml` file from this template folder into that new file.
@@ -37,11 +52,11 @@ Inside the `.yml` file, you must find and replace `your-username` with the GitHu
 
 Commit the file to the main branch.
 
-### Step 4: Boot the Worker
+### Step 5: Boot the Worker
 1. Click the **Actions** tab in your GitHub repository.
 2. On the left sidebar, click **"Swarm Backend Worker (Docker Runner)"**.
 3. On the right side, click the **"Run workflow"** button.
-4. The worker will instantly boot up, pull the Docker image, read your secrets, and connect to your UI!
+4. The worker will instantly boot up, pull the Docker image, read your secrets, mount your cloud drives, and connect to your UI!
 
 ---
 
