@@ -1,7 +1,7 @@
 import React, { useState, useEffect } from 'react';
 import { Socket } from 'socket.io-client';
 import { MessageType } from '@swarm/shared';
-import type { FileItem, FileListRequestMessage, FileListResponseMessage } from '@swarm/shared';
+import type { FileItem, FileListRequestMessage, FileListResponseMessage, RemoteItem, RemoteListRequestMessage, RemoteListResponseMessage } from '@swarm/shared';
 
 interface FileExplorerProps {
   socket: Socket | null;
@@ -10,12 +10,27 @@ interface FileExplorerProps {
 }
 
 export const FileExplorer: React.FC<FileExplorerProps> = ({ socket, isConnected, workerId }) => {
-  const [currentPath, setCurrentPath] = useState<string>('/');
+  const [currentPath, setCurrentPath] = useState<string>('');
   const [files, setFiles] = useState<FileItem[]>([]);
+  const [remotes, setRemotes] = useState<RemoteItem[]>([]);
+  const [selectedFs, setSelectedFs] = useState<string>('/');
   const [loading, setLoading] = useState<boolean>(false);
   const [error, setError] = useState<string | null>(null);
 
-  const fetchDirectory = (path: string) => {
+  // Fetch Available Remotes when the worker changes
+  useEffect(() => {
+    if (!socket || !isConnected || !workerId) return;
+
+    console.log(`[UI] Requesting remotes list from worker ${workerId}`);
+    const payload: RemoteListRequestMessage = {
+      type: MessageType.REMOTE_LIST_REQUEST,
+      timestamp: Date.now(),
+      workerId
+    };
+    socket.emit(MessageType.REMOTE_LIST_REQUEST, payload);
+  }, [socket, isConnected, workerId]);
+
+  const fetchDirectory = (fs: string, path: string) => {
     if (!socket || !isConnected || !workerId) return;
 
     setLoading(true);
@@ -26,25 +41,26 @@ export const FileExplorer: React.FC<FileExplorerProps> = ({ socket, isConnected,
       type: MessageType.FILE_LIST_REQUEST,
       timestamp: Date.now(),
       workerId,
-      directory: path
+      directory: path,
+      fs: fs
     };
 
-    console.log(`[UI] Requesting directory: ${path} from worker ${workerId}`);
+    console.log(`[UI] Requesting directory: ${path} on fs: ${fs} from worker ${workerId}`);
     socket.emit(MessageType.FILE_LIST_REQUEST, payload);
   };
 
   useEffect(() => {
-    if (isConnected && workerId) {
-      fetchDirectory(currentPath);
+    if (isConnected && workerId && selectedFs) {
+      fetchDirectory(selectedFs, currentPath);
     }
-  }, [isConnected, workerId, currentPath]);
+  }, [isConnected, workerId, currentPath, selectedFs]);
 
   useEffect(() => {
     if (!socket) return;
 
     const handleFileListResponse = (msg: FileListResponseMessage) => {
-      // Only process the response if it matches the current worker and requested path
-      if (msg.workerId === workerId && msg.directory === currentPath) {
+      // Only process the response if it matches the current worker and requested path and fs
+      if (msg.workerId === workerId && msg.directory === currentPath && msg.fs === selectedFs) {
         setLoading(false);
         if (msg.error) {
           setError(msg.error);
@@ -56,28 +72,50 @@ export const FileExplorer: React.FC<FileExplorerProps> = ({ socket, isConnected,
       }
     };
 
+    const handleRemoteListResponse = (msg: RemoteListResponseMessage) => {
+      if (msg.workerId === workerId) {
+        if (msg.error) {
+          console.error(`[UI] Error fetching remotes: ${msg.error}`);
+        } else {
+          setRemotes(msg.remotes || []);
+          // If the currently selected FS isn't in the list, default back to local '/'
+          if (!msg.remotes.find(r => r.name === selectedFs)) {
+            setSelectedFs('/');
+            setCurrentPath('');
+          }
+        }
+      }
+    };
+
     socket.on(MessageType.FILE_LIST_RESPONSE, handleFileListResponse);
+    socket.on(MessageType.REMOTE_LIST_RESPONSE, handleRemoteListResponse);
 
     return () => {
       socket.off(MessageType.FILE_LIST_RESPONSE, handleFileListResponse);
+      socket.off(MessageType.REMOTE_LIST_RESPONSE, handleRemoteListResponse);
     };
-  }, [socket, workerId, currentPath]);
+  }, [socket, workerId, currentPath, selectedFs]);
 
   const handleNavigateUp = () => {
-    if (currentPath === '/') return;
+    if (currentPath === '' || currentPath === '/') return;
     const parts = currentPath.split('/').filter(Boolean);
     parts.pop(); // remove last segment
-    const newPath = parts.length === 0 ? '/' : '/' + parts.join('/');
+    const newPath = parts.join('/');
     setCurrentPath(newPath);
   };
 
   const handleRefresh = () => {
-    fetchDirectory(currentPath);
+    fetchDirectory(selectedFs, currentPath);
+  };
+
+  const handleFsChange = (e: React.ChangeEvent<HTMLSelectElement>) => {
+    setSelectedFs(e.target.value);
+    setCurrentPath(''); // Reset path to root when changing file systems
   };
 
   const handleRowClick = (item: FileItem) => {
     if (item.IsDir) {
-      const newPath = currentPath === '/' ? `/${item.Name}` : `${currentPath}/${item.Name}`;
+      const newPath = currentPath === '' ? item.Name : `${currentPath}/${item.Name}`;
       setCurrentPath(newPath);
     } else {
       alert(`File Details:\nName: ${item.Name}\nSize: ${formatBytes(item.Size)}\nModified: ${new Date(item.ModTime).toLocaleString()}`);
@@ -94,21 +132,45 @@ export const FileExplorer: React.FC<FileExplorerProps> = ({ socket, isConnected,
   };
 
   return (
-    <div style={{ padding: '20px', border: '1px solid #ccc', borderRadius: '8px', minWidth: '600px', backgroundColor: '#f9f9f9', color: '#333' }}>
-      <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '16px' }}>
+    <div style={{ padding: '20px', border: '1px solid #333', borderRadius: '8px', minWidth: '600px', backgroundColor: '#2d2d30', color: '#eee', height: '100%', display: 'flex', flexDirection: 'column' }}>
+      <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '20px', paddingBottom: '15px', borderBottom: '1px solid #444' }}>
         <h2 style={{ margin: 0 }}>File Explorer</h2>
-        <div style={{ fontSize: '14px', color: '#666' }}>Worker: <span style={{ fontFamily: 'monospace' }}>{workerId}</span></div>
+
+        {/* Cloud Remote Selector */}
+        <div style={{ display: 'flex', alignItems: 'center', gap: '10px' }}>
+          <label style={{ fontSize: '14px', color: '#aaa' }}>Cloud Remote:</label>
+          <select
+            value={selectedFs}
+            onChange={handleFsChange}
+            style={{ padding: '8px', borderRadius: '4px', backgroundColor: '#3c3c3c', color: 'white', border: '1px solid #555', cursor: 'pointer', outline: 'none' }}
+          >
+            {remotes.map(remote => (
+              <option key={remote.name} value={remote.name}>
+                {remote.name === '/' ? 'Local Machine (/)' : `${remote.name} (${remote.type})`}
+              </option>
+            ))}
+            {remotes.length === 0 && <option value="/">Local Machine (/)</option>}
+          </select>
+        </div>
       </div>
 
       <div style={{ display: 'flex', gap: '10px', marginBottom: '16px', alignItems: 'center' }}>
-        <button onClick={handleNavigateUp} disabled={currentPath === '/'} style={{ padding: '8px 12px', cursor: currentPath === '/' ? 'not-allowed' : 'pointer' }}>
+        <button
+          onClick={handleNavigateUp}
+          disabled={currentPath === '' || currentPath === '/'}
+          style={{ padding: '8px 15px', cursor: (currentPath === '' || currentPath === '/') ? 'not-allowed' : 'pointer', backgroundColor: '#0e639c', color: 'white', border: 'none', borderRadius: '4px' }}
+        >
           ⬆️ Up
         </button>
-        <button onClick={handleRefresh} disabled={loading} style={{ padding: '8px 12px', cursor: loading ? 'not-allowed' : 'pointer' }}>
+        <button
+          onClick={handleRefresh}
+          disabled={loading}
+          style={{ padding: '8px 15px', cursor: loading ? 'not-allowed' : 'pointer', backgroundColor: '#333', color: 'white', border: '1px solid #555', borderRadius: '4px' }}
+        >
           🔄 Refresh
         </button>
-        <div style={{ flex: 1, padding: '8px 12px', backgroundColor: '#fff', border: '1px solid #ddd', borderRadius: '4px', fontFamily: 'monospace', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
-          {currentPath}
+        <div style={{ flex: 1, padding: '8px 12px', backgroundColor: '#1e1e1e', border: '1px solid #444', borderRadius: '4px', fontFamily: 'monospace', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap', color: '#ccc' }}>
+          {selectedFs}{currentPath}
         </div>
       </div>
 
@@ -117,32 +179,40 @@ export const FileExplorer: React.FC<FileExplorerProps> = ({ socket, isConnected,
       {error && <div style={{ padding: '20px', textAlign: 'center', color: 'red', border: '1px solid red', backgroundColor: '#fee' }}>Error: {error}</div>}
 
       {!loading && !error && (
-        <table style={{ width: '100%', borderCollapse: 'collapse', backgroundColor: '#fff' }}>
-          <thead>
-            <tr style={{ borderBottom: '2px solid #ddd', textAlign: 'left', backgroundColor: '#eee' }}>
-              <th style={{ padding: '12px 8px', width: '50px', textAlign: 'center' }}>Type</th>
-              <th style={{ padding: '12px 8px' }}>Name</th>
-              <th style={{ padding: '12px 8px', textAlign: 'right' }}>Size</th>
-              <th style={{ padding: '12px 8px', textAlign: 'right' }}>Modified</th>
-            </tr>
-          </thead>
-          <tbody>
-            {files.length === 0 ? (
-              <tr>
-                <td colSpan={4} style={{ padding: '20px', textAlign: 'center', color: '#999' }}>Empty directory</td>
+        <div style={{ flex: 1, overflowY: 'auto' }}>
+          <table style={{ width: '100%', borderCollapse: 'collapse', backgroundColor: '#252526', color: '#ccc' }}>
+            <thead style={{ position: 'sticky', top: 0, backgroundColor: '#333', zIndex: 1 }}>
+              <tr style={{ borderBottom: '1px solid #555', textAlign: 'left' }}>
+                <th style={{ padding: '12px 15px', width: '50px', textAlign: 'center' }}>Type</th>
+                <th style={{ padding: '12px 15px' }}>Name</th>
+                <th style={{ padding: '12px 15px', textAlign: 'right' }}>Size</th>
+                <th style={{ padding: '12px 15px', textAlign: 'right' }}>Modified</th>
               </tr>
-            ) : (
-              files.map((file) => (
-                <tr key={file.ID || file.Name} onClick={() => handleRowClick(file)} style={{ borderBottom: '1px solid #eee', cursor: 'pointer', transition: 'background-color 0.2s' }} onMouseOver={(e) => (e.currentTarget.style.backgroundColor = '#f5f5f5')} onMouseOut={(e) => (e.currentTarget.style.backgroundColor = 'transparent')}>
-                  <td style={{ padding: '12px 8px', textAlign: 'center', fontSize: '18px' }}>{file.IsDir ? '📁' : '📄'}</td>
-                  <td style={{ padding: '12px 8px', wordBreak: 'break-all' }}>{file.Name}</td>
-                  <td style={{ padding: '12px 8px', textAlign: 'right', color: '#666' }}>{file.IsDir ? '--' : formatBytes(file.Size)}</td>
-                  <td style={{ padding: '12px 8px', textAlign: 'right', color: '#666', fontSize: '14px' }}>{new Date(file.ModTime).toLocaleString()}</td>
+            </thead>
+            <tbody>
+              {files.length === 0 ? (
+                <tr>
+                  <td colSpan={4} style={{ padding: '40px', textAlign: 'center', color: '#888', fontStyle: 'italic' }}>Empty directory</td>
                 </tr>
-              ))
-            )}
-          </tbody>
-        </table>
+              ) : (
+                files.map((file) => (
+                  <tr
+                    key={file.ID || file.Name}
+                    onClick={() => handleRowClick(file)}
+                    style={{ borderBottom: '1px solid #333', cursor: 'pointer', transition: 'background-color 0.1s' }}
+                    onMouseOver={(e) => (e.currentTarget.style.backgroundColor = '#2a2d2e')}
+                    onMouseOut={(e) => (e.currentTarget.style.backgroundColor = 'transparent')}
+                  >
+                    <td style={{ padding: '12px 15px', textAlign: 'center', fontSize: '18px' }}>{file.IsDir ? '📁' : '📄'}</td>
+                    <td style={{ padding: '12px 15px', wordBreak: 'break-all' }}>{file.Name}</td>
+                    <td style={{ padding: '12px 15px', textAlign: 'right', color: '#999' }}>{file.IsDir ? '--' : formatBytes(file.Size)}</td>
+                    <td style={{ padding: '12px 15px', textAlign: 'right', color: '#999', fontSize: '14px' }}>{new Date(file.ModTime).toLocaleString()}</td>
+                  </tr>
+                ))
+              )}
+            </tbody>
+          </table>
+        </div>
       )}
     </div>
   );

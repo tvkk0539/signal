@@ -55,12 +55,49 @@ export interface FileListRequestMessage extends BaseMessage {
   type: MessageType.FILE_LIST_REQUEST;
   workerId: string;
   directory: string;
+  fs?: string;
 }
 
 export interface FileListResponseMessage extends BaseMessage {
   type: MessageType.FILE_LIST_RESPONSE;
   workerId: string;
   directory: string;
+  fs?: string;
   files: FileItem[];
   error?: string;
+}
+
+export interface FleetStateUpdateMessage extends BaseMessage {
+  type: MessageType.FLEET_STATE_UPDATE;
+  workers: string[];
+}
+
+export interface RemoteItem {
+  name: string;
+  type: string;
+}
+
+export interface RemoteListRequestMessage extends BaseMessage {
+  type: MessageType.REMOTE_LIST_REQUEST;
+  workerId: string;
+}
+
+export interface RemoteListResponseMessage extends BaseMessage {
+  type: MessageType.REMOTE_LIST_RESPONSE;
+  workerId: string;
+  remotes: RemoteItem[];
+  error?: string;
+}
+
+export interface BatchTaskRequestMessage extends BaseMessage {
+  type: MessageType.BATCH_TASK_REQUEST;
+  tasks: Array<{ id: string; action: string; payload: any }>;
+}
+
+export interface TaskProgressMessage extends BaseMessage {
+  type: MessageType.TASK_PROGRESS;
+  taskId: string;
+  workerId: string;
+  progress: number;
+  status: string;
 }

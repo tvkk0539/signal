@@ -30,4 +30,8 @@ var MessageType;
     MessageType["FILE_OFFER"] = "FILE_OFFER";
     MessageType["FILE_LIST_REQUEST"] = "FILE_LIST_REQUEST";
     MessageType["FILE_LIST_RESPONSE"] = "FILE_LIST_RESPONSE";
+    MessageType["FLEET_STATE_UPDATE"] = "FLEET_STATE_UPDATE";
+    MessageType["REMOTE_LIST_REQUEST"] = "REMOTE_LIST_REQUEST";
+    MessageType["REMOTE_LIST_RESPONSE"] = "REMOTE_LIST_RESPONSE";
+    MessageType["BATCH_TASK_REQUEST"] = "BATCH_TASK_REQUEST";
 })(MessageType || (exports.MessageType = MessageType = {}));
