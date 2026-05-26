@@ -98,6 +98,37 @@ async function bootWorker() {
     }
   });
 
+  socket.on(MessageType.OFFLINE_FILE_UPLOAD_REQUEST, async (msg: any) => {
+    console.log(`[Worker] Received OFFLINE_FILE_UPLOAD_REQUEST for ${msg.fileName}`);
+    try {
+      // Decode the base64 MVP payload
+      const base64Data = msg.fileBuffer.split(';base64,').pop();
+      const buffer = Buffer.from(base64Data, 'base64');
+
+      // In a real scenario, RcloneDaemonManager would upload this to an S3 bucket
+      // and return a presigned URL. For MVP, we mock the upload delay and link.
+      console.log(`[Worker] Uploading ${msg.fileName} to Cloud Storage via rclone...`);
+      await new Promise(resolve => setTimeout(resolve, 1500));
+
+      const mockedDownloadLink = `https://storage.swarm.local/download/${msg.fileName}?token=mock-token`;
+
+      // Hand off the message back to the Relay for the target's chat history
+      socket.emit(MessageType.CHAT_MESSAGE, {
+        type: MessageType.CHAT_MESSAGE,
+        timestamp: Date.now(),
+        senderId: msg.senderId,
+        targetId: msg.targetId,
+        encryptedPayload: `File uploaded to cloud worker. Download link: ${mockedDownloadLink}`,
+        hasAttachment: true,
+        isSystemMessage: true
+      });
+      console.log(`[Worker] File Handoff Complete. Emitted message with link.`);
+
+    } catch (e) {
+      console.error(`[Worker] Failed offline file upload:`, e);
+    }
+  });
+
   socket.on(MessageType.TASK_ASSIGNMENT, (msg: any) => {
     console.log(`[Worker] Received TASK_ASSIGNMENT: ${msg.taskId} (${msg.taskType})`);
 

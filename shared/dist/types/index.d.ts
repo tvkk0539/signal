@@ -25,6 +25,12 @@ export interface ChatMessage extends BaseMessage {
     targetId: string;
     encryptedPayload: string;
     hasAttachment: boolean;
+    isSystemMessage?: boolean;
+}
+export interface ChatMessageDelivered extends BaseMessage {
+    type: MessageType.CHAT_MESSAGE_DELIVERED;
+    messageId: string;
+    targetId: string;
 }
 export interface FileOfferMessage extends BaseMessage {
     type: MessageType.FILE_OFFER;
@@ -32,7 +38,33 @@ export interface FileOfferMessage extends BaseMessage {
     targetId: string;
     fileName: string;
     fileSizeInBytes: number;
-    sdpOffer: string;
+    sdpOffer?: string;
+}
+export interface SdpOfferMessage extends BaseMessage {
+    type: MessageType.SDP_OFFER;
+    senderId: string;
+    targetId: string;
+    sdp: string;
+}
+export interface SdpAnswerMessage extends BaseMessage {
+    type: MessageType.SDP_ANSWER;
+    senderId: string;
+    targetId: string;
+    sdp: string;
+}
+export interface IceCandidateMessage extends BaseMessage {
+    type: MessageType.ICE_CANDIDATE;
+    senderId: string;
+    targetId: string;
+    candidate: any;
+}
+export interface OfflineFileUploadRequestMessage extends BaseMessage {
+    type: MessageType.OFFLINE_FILE_UPLOAD_REQUEST;
+    senderId: string;
+    targetId: string;
+    fileName: string;
+    fileSize: number;
+    fileBuffer: string;
 }
 export interface FileItem {
     Path: string;

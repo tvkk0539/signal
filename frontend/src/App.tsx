@@ -7,6 +7,7 @@ import { AuthScreen } from './components/auth/AuthScreen';
 import { FileExplorer } from './components/explorer/FileExplorer';
 import { FleetSidebar } from './components/swarm/FleetSidebar';
 import { JobManager } from './components/swarm/JobManager';
+import { ChatBox } from './components/chat/ChatBox';
 import './App.css';
 
 const RELAY_SERVER_URL = 'http://localhost:3001';
@@ -93,13 +94,21 @@ function App() {
 
         {/* Dashboard Content */}
         <div style={{ flex: 1, display: 'flex', overflow: 'hidden' }}>
-          <div style={{ flex: 1, padding: '30px', overflowY: 'auto' }}>
+          <div style={{ flex: 1, padding: '30px', overflowY: 'auto', display: 'flex', flexDirection: 'column', gap: '20px' }}>
             {targetWorkerId ? (
-              <FileExplorer
-                socket={socket}
-                isConnected={isConnected}
-                workerId={targetWorkerId}
-              />
+              <>
+                <div style={{ flex: 1 }}>
+                  <FileExplorer
+                    socket={socket}
+                    isConnected={isConnected}
+                    workerId={targetWorkerId}
+                  />
+                </div>
+                <div style={{ flex: 1 }}>
+                  {/* Note: targetWorkerId is used for MVP Phase 3 to show the UI. In full prod, we'd select a targetUserId */}
+                  <ChatBox socket={socket} targetId={targetWorkerId} isOnline={false} />
+                </div>
+              </>
             ) : (
               <div style={{
                 height: '100%',

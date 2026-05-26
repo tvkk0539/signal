@@ -103,6 +103,72 @@ export function setupSockets(io: Server) {
       });
     });
 
+    // --- Phase 3: Chat Router & WebRTC Matchmaker ---
+
+    // Chat Message Routing
+    socket.on(MessageType.CHAT_MESSAGE, (msg: any) => {
+      // In a real implementation, we would map User IDs to Socket IDs using a robust registry.
+      // For MVP, we route directly if we can find the socket by ID, or broadcast it
+      // (which the client will filter based on targetId).
+      const targetSocket = connectedUIClients.get(msg.targetId);
+      if (targetSocket) {
+        targetSocket.emit(MessageType.CHAT_MESSAGE, msg);
+        // Optionally send a delivery receipt back to sender
+        socket.emit(MessageType.CHAT_MESSAGE_DELIVERED, {
+          type: MessageType.CHAT_MESSAGE_DELIVERED,
+          timestamp: Date.now(),
+          messageId: msg.timestamp.toString(), // Using timestamp as simple ID
+          targetId: msg.targetId
+        });
+      } else {
+        // If the target is not currently connected via UI, route it to a Worker for offline storage handoff
+        const workers = Array.from(connectedWorkers.values());
+        if (workers.length > 0) {
+           const worker = workers[roundRobinIndex % workers.length];
+           // In full production, this would trigger a specific DB insert job.
+           console.log(`[Chat Router] Target offline. Delegating to Worker ${worker.id} for storage.`);
+           roundRobinIndex++;
+        }
+      }
+    });
+
+    // Cloud Handoff (Offline File Upload Routing)
+    socket.on(MessageType.OFFLINE_FILE_UPLOAD_REQUEST, (msg: any) => {
+      const workers = Array.from(connectedWorkers.values());
+      if (workers.length > 0) {
+        const worker = workers[roundRobinIndex % workers.length];
+        console.log(`[Relay] Routing OFFLINE_FILE_UPLOAD_REQUEST for ${msg.fileName} to Worker ${worker.id}`);
+        worker.emit(MessageType.OFFLINE_FILE_UPLOAD_REQUEST, msg);
+        roundRobinIndex++;
+      } else {
+        console.error(`[Relay] No workers available for offline file upload handoff.`);
+      }
+    });
+
+    // WebRTC Signaling Matchmaker
+    socket.on(MessageType.SDP_OFFER, (msg: any) => {
+      console.log(`[Matchmaker] Routing SDP_OFFER from ${msg.senderId} to ${msg.targetId}`);
+      const targetSocket = connectedUIClients.get(msg.targetId) || connectedWorkers.get(msg.targetId);
+      if (targetSocket) {
+        targetSocket.emit(MessageType.SDP_OFFER, msg);
+      }
+    });
+
+    socket.on(MessageType.SDP_ANSWER, (msg: any) => {
+      console.log(`[Matchmaker] Routing SDP_ANSWER from ${msg.senderId} to ${msg.targetId}`);
+      const targetSocket = connectedUIClients.get(msg.targetId) || connectedWorkers.get(msg.targetId);
+      if (targetSocket) {
+        targetSocket.emit(MessageType.SDP_ANSWER, msg);
+      }
+    });
+
+    socket.on(MessageType.ICE_CANDIDATE, (msg: any) => {
+      const targetSocket = connectedUIClients.get(msg.targetId) || connectedWorkers.get(msg.targetId);
+      if (targetSocket) {
+        targetSocket.emit(MessageType.ICE_CANDIDATE, msg);
+      }
+    });
+
     // Global Task Queue: Round-Robin Load Balancing
     socket.on(MessageType.BATCH_TASK_REQUEST, (msg: any) => {
       const workers = Array.from(connectedWorkers.values());
