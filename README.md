@@ -44,6 +44,21 @@ This system leverages five major communication protocols to achieve "magic" func
 
 ---
 
+---
+
+## 🧠 Core Features & Current Phase Status
+
+The Monorepo is being developed in strict, highly-engineered phases. The current codebase supports up to **Phase 5**.
+
+*   **Phase 1 & 2: Rclone Engine & Swarm Orchestration (✅ Active):** The Node.js worker dynamically controls the `rclone rcd` daemon. The React UI displays a live Fleet Sidebar of connected workers and features a global Job Manager that uses Round-Robin load balancing via the Relay.
+*   **Phase 3: Chat System & Cloud Handoff (✅ Active):** Users can chat and share files. Online users punch STUN holes to stream P2P. Offline users trigger a Cloud Worker Handoff, where an ephemeral worker accepts the base64 payload and generates a cloud download link.
+*   **Phase 4: WebRTC Media Engine (✅ Active):** The worker uses `werift` to intercept WebRTC `SDP_OFFER`s. When a user streams a massive 50GB file, the worker pulls the VFS HTTP stream from `rclone` and pipes it directly into the `RTCDataChannel`, achieving zero-disk memory streaming.
+*   **Phase 5: gRPC Swarm Engine (✅ Active):** Ephemeral workers use the Relay Server as a DNS discovery mechanism to find each other's dynamic gRPC ports. Workers can pipe binary data directly to other workers via protobuf streams, forming a Virtual MapReduce Network.
+*   **Zero-Trust Security:** Workers must authenticate via strict API Keys (`WORKER_SECRET`) before joining the swarm.
+*   **Pluggable Databases:** Built utilizing the Clean Architecture Repository Pattern. Currently configured for MongoDB, but designed to gracefully fallback to an InMemory mock DB during development.
+
+---
+
 ## 🛠️ Quick Start (Development Mode)
 
 The entire monorepo is governed by NPM Workspaces.
