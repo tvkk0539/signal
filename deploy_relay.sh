@@ -57,11 +57,55 @@ if [ "$DEPLOY_METHOD" == "1" ]; then
     pm2 start dist/server.js --name "swarm-relay"
     pm2 save
     pm2 startup
+    cd ..
 
-    echo "========================================================"
-    echo "✅ Relay Server successfully deployed via Bare-Metal!"
-    echo "The server is running in the background on Port 3001."
-    echo "Use 'pm2 logs swarm-relay' to view live traffic."
+    echo ""
+    echo "--- 🌐 Domain & SSL Configuration ---"
+    read -p "Do you want to configure a Domain Name and get a FREE SSL Certificate? (y/n): " SETUP_SSL
+
+    if [[ "$SETUP_SSL" == "y" || "$SETUP_SSL" == "Y" ]]; then
+        read -p "Enter your Domain Name (e.g., signalrelay.neonlite.cc): " DOMAIN_NAME
+        read -p "Enter an Admin Email (required by Let's Encrypt for renewal notices): " ADMIN_EMAIL
+
+        echo "[5/5] Installing Nginx and Securing with Let's Encrypt SSL..."
+        sudo apt-get install -y nginx certbot python3-certbot-nginx
+
+        sudo cat <<NGINX > /etc/nginx/sites-available/swarm-relay
+server {
+    listen 80;
+    server_name ${DOMAIN_NAME};
+
+    location / {
+        proxy_pass http://127.0.0.1:3001;
+        proxy_http_version 1.1;
+        proxy_set_header Upgrade \$http_upgrade;
+        proxy_set_header Connection "upgrade";
+        proxy_set_header Host \$host;
+        proxy_set_header X-Real-IP \$remote_addr;
+        proxy_set_header X-Forwarded-For \$proxy_add_x_forwarded_for;
+        proxy_set_header X-Forwarded-Proto \$scheme;
+    }
+}
+NGINX
+
+        sudo ln -sf /etc/nginx/sites-available/swarm-relay /etc/nginx/sites-enabled/
+        sudo rm -f /etc/nginx/sites-enabled/default
+        sudo systemctl restart nginx
+
+        sudo certbot --nginx -d "${DOMAIN_NAME}" --non-interactive --agree-tos -m "${ADMIN_EMAIL}" --redirect
+
+        echo "========================================================"
+        echo "✅ Relay Server successfully deployed via Bare-Metal with SSL!"
+        echo "The server is securely running at: https://${DOMAIN_NAME}"
+        echo "Use 'pm2 logs swarm-relay' to view live traffic."
+        echo "========================================================"
+    else
+        echo "========================================================"
+        echo "✅ Relay Server successfully deployed via Bare-Metal!"
+        echo "The server is running in the background on Port 3001."
+        echo "Use 'pm2 logs swarm-relay' to view live traffic."
+        echo "========================================================"
+    fi
 
 elif [ "$DEPLOY_METHOD" == "2" ]; then
     echo ""

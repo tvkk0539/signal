@@ -47,10 +47,22 @@ if [ "$DEPLOY_METHOD" == "1" ]; then
     echo "[4/4] Configuring Nginx to serve the UI on Port 80..."
     REPO_PATH=$(pwd)
 
+    echo ""
+    echo "--- 🌐 Domain & SSL Configuration ---"
+    read -p "Do you want to configure a Domain Name and get a FREE SSL Certificate? (y/n): " SETUP_SSL
+
+    if [[ "$SETUP_SSL" == "y" || "$SETUP_SSL" == "Y" ]]; then
+        read -p "Enter your Domain Name (e.g., signal.neonlite.cc): " DOMAIN_NAME
+        read -p "Enter an Admin Email (required by Let's Encrypt for renewal notices): " ADMIN_EMAIL
+        SERVER_NAME_CONF="${DOMAIN_NAME}"
+    else
+        SERVER_NAME_CONF="_"
+    fi
+
     sudo cat <<NGINX > /etc/nginx/sites-available/swarm-ui
 server {
     listen 80;
-    server_name _;
+    server_name ${SERVER_NAME_CONF};
 
     root ${REPO_PATH}/frontend/dist;
     index index.html;
@@ -66,10 +78,21 @@ NGINX
     sudo rm -f /etc/nginx/sites-enabled/default
     sudo systemctl restart nginx
 
-    echo "========================================================"
-    echo "✅ Frontend UI successfully deployed via Nginx!"
-    echo "You can now visit this server's public IP address in your browser."
-    echo "========================================================"
+    if [[ "$SETUP_SSL" == "y" || "$SETUP_SSL" == "Y" ]]; then
+        echo ""
+        echo "[5/5] Securing with Let's Encrypt SSL..."
+        sudo apt-get install -y certbot python3-certbot-nginx
+        sudo certbot --nginx -d "${DOMAIN_NAME}" --non-interactive --agree-tos -m "${ADMIN_EMAIL}" --redirect
+        echo "========================================================"
+        echo "✅ Frontend UI successfully deployed via Nginx with SSL!"
+        echo "You can now visit: https://${DOMAIN_NAME}"
+        echo "========================================================"
+    else
+        echo "========================================================"
+        echo "✅ Frontend UI successfully deployed via Nginx!"
+        echo "You can now visit this server's public IP address in your browser."
+        echo "========================================================"
+    fi
 
 elif [ "$DEPLOY_METHOD" == "2" ]; then
     echo ""
