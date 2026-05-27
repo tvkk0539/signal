@@ -33,6 +33,37 @@ The script will prompt you for two things:
 2.  **Environment Variables:**
     *   `JWT_SECRET`: Type a long, random string. The Relay uses this to generate and verify login tokens for the React UI.
     *   `WORKER_SECRET`: Type a secure password. The Relay uses this as the "Gatekeeper." Any backend worker that tries to connect must provide this password, or the Relay instantly drops the connection.
+    *   `MONGO_URI`: (Optional) The connection string to your MongoDB database. The Relay Server uses this to persist Audit Logs of all swarm activity.
+
+### 🗄️ Database Strategy (MONGO_URI)
+When the script asks for the `MONGO_URI`, you have two architectural choices:
+
+#### Choice 1: Use a Free Managed Database (Recommended)
+This perfectly matches our decoupled architecture, ensuring the database does not consume CPU resources on your Relay Server.
+1. Go to [MongoDB Atlas](https://www.mongodb.com/cloud/atlas/register) and create a free account.
+2. Create a Free Cluster (M0 tier).
+3. Once created, click "Connect", choose "Connect your application", and copy the connection string.
+4. Paste that exact string (e.g., `mongodb+srv://<username>:<password>@cluster0.mongodb.net/swarm_db`) when the deployment script asks for `MONGO_URI`.
+
+#### Choice 2: Install MongoDB on your GCP Server
+If you prefer to host the database yourself on the exact same server as the Relay, simply **press Enter (leave it blank)** when the deployment script asks for `MONGO_URI`. It will default to `mongodb://localhost:27017/swarm`.
+
+However, you **must install MongoDB on your server before starting the Relay**. Run these commands on your Ubuntu server:
+```bash
+# 1. Import the MongoDB public GPG Key
+curl -fsSL https://www.mongodb.org/static/pgp/server-7.0.asc | sudo gpg -o /usr/share/keyrings/mongodb-server-7.0.gpg --dearmor
+
+# 2. Create the list file
+echo "deb [ arch=amd64,arm64 signed-by=/usr/share/keyrings/mongodb-server-7.0.gpg ] https://repo.mongodb.org/apt/ubuntu jammy/mongodb-org/7.0 multiverse" | sudo tee /etc/apt/sources.list.d/mongodb-org-7.0.list
+
+# 3. Reload local package database and install
+sudo apt-get update
+sudo apt-get install -y mongodb-org
+
+# 4. Start the database and enable it to start on boot
+sudo systemctl start mongod
+sudo systemctl enable mongod
+```
 
 ---
 

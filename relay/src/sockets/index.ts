@@ -1,6 +1,7 @@
 import { Server, Socket } from 'socket.io';
 import { MessageType, AuthRequestMessage } from '@swarm/shared';
 import jwt from 'jsonwebtoken';
+import { dbManager } from '../db';
 
 const JWT_SECRET = process.env.JWT_SECRET || 'fallback_insecure_jwt_secret_key';
 
@@ -230,9 +231,34 @@ export function setupSockets(io: Server) {
     });
 
     socket.on(MessageType.TASK_PROGRESS, (msg: any) => {
+      // Broadcast to UI
       connectedUIClients.forEach((clientSocket) => {
         clientSocket.emit(MessageType.TASK_PROGRESS, msg);
       });
+
+      // Audit Logging for completed tasks
+      if (msg.status === 'COMPLETE' || msg.status === 'gRPC TRANSFER COMPLETE' || msg.progress === 100) {
+        console.log(`[Audit Logger] Logging completed task ${msg.taskId} for worker ${msg.workerId}`);
+        dbManager.getAuditLogs().createLog({
+          jobId: msg.taskId,
+          workerId: msg.workerId,
+          action: msg.status === 'gRPC TRANSFER COMPLETE' ? 'gRPC_TRANSFER' : 'TASK',
+          status: 'SUCCESS',
+          timestamp: new Date()
+        }).catch(err => {
+          console.error(`[Audit Logger] Failed to save audit log for task ${msg.taskId}`, err);
+        });
+      } else if (msg.status === 'FAILED' || msg.status === 'ERROR') {
+        dbManager.getAuditLogs().createLog({
+          jobId: msg.taskId,
+          workerId: msg.workerId,
+          action: 'TASK',
+          status: 'FAILED',
+          timestamp: new Date()
+        }).catch(err => {
+          console.error(`[Audit Logger] Failed to save audit log for task ${msg.taskId}`, err);
+        });
+      }
     });
 
     // Ping/Pong capability test

@@ -150,3 +150,12 @@ export interface TaskProgressMessage extends BaseMessage {
     progress: number;
     status: string;
 }
+export interface JobAuditLog {
+    id?: string;
+    jobId: string;
+    workerId: string;
+    action: string;
+    status: 'SUCCESS' | 'FAILED' | 'CANCELLED';
+    bytesTransferred?: number;
+    timestamp: Date;
+}

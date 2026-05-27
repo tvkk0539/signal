@@ -10,7 +10,11 @@ import { JobManager } from './components/swarm/JobManager';
 import { ChatBox } from './components/chat/ChatBox';
 import './App.css';
 
-const RELAY_SERVER_URL = 'http://localhost:3001';
+// Resolve the URL. If the placeholder wasn't replaced (e.g. local dev without Docker), fall back to localhost.
+let RELAY_SERVER_URL = import.meta.env.VITE_RELAY_URL || 'http://localhost:3001';
+if (RELAY_SERVER_URL === '__VITE_RELAY_URL_' + 'PLACEHOLDER__') {
+  RELAY_SERVER_URL = 'http://localhost:3001';
+}
 
 function App() {
   const { token, user, isAuthenticated, logout } = useAuthStore();
