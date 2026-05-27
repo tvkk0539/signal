@@ -10,7 +10,7 @@ import { JobManager } from './components/swarm/JobManager';
 import { ChatBox } from './components/chat/ChatBox';
 import './App.css';
 
-const RELAY_SERVER_URL = 'http://localhost:3001';
+const RELAY_SERVER_URL = import.meta.env.VITE_RELAY_URL || 'http://localhost:3001';
 
 function App() {
   const { token, user, isAuthenticated, logout } = useAuthStore();
