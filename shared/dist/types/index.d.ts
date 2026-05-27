@@ -66,6 +66,22 @@ export interface OfflineFileUploadRequestMessage extends BaseMessage {
     fileSize: number;
     fileBuffer: string;
 }
+export interface StreamRequestMessage extends BaseMessage {
+    type: MessageType.STREAM_REQUEST;
+    workerId: string;
+    fs: string;
+    path: string;
+    action: 'DOWNLOAD' | 'PLAY';
+    startByte?: number;
+    endByte?: number;
+}
+export interface StreamMetadataMessage extends BaseMessage {
+    type: MessageType.STREAM_METADATA;
+    workerId: string;
+    fileName: string;
+    fileSize: number;
+    mimeType: string;
+}
 export interface FileItem {
     Path: string;
     Name: string;

@@ -2,6 +2,8 @@ import React, { useState, useEffect } from 'react';
 import { Socket } from 'socket.io-client';
 import { MessageType } from '@swarm/shared';
 import type { FileItem, FileListRequestMessage, FileListResponseMessage, RemoteItem, RemoteListRequestMessage, RemoteListResponseMessage } from '@swarm/shared';
+import { MediaPlayerModal } from '../media/MediaPlayerModal';
+import { useAuthStore } from '../../store/authStore';
 
 interface FileExplorerProps {
   socket: Socket | null;
@@ -113,12 +115,23 @@ export const FileExplorer: React.FC<FileExplorerProps> = ({ socket, isConnected,
     setCurrentPath(''); // Reset path to root when changing file systems
   };
 
+  const [playingMedia, setPlayingMedia] = useState<{ fs: string; path: string } | null>(null);
+
   const handleRowClick = (item: FileItem) => {
     if (item.IsDir) {
       const newPath = currentPath === '' ? item.Name : `${currentPath}/${item.Name}`;
       setCurrentPath(newPath);
     } else {
-      alert(`File Details:\nName: ${item.Name}\nSize: ${formatBytes(item.Size)}\nModified: ${new Date(item.ModTime).toLocaleString()}`);
+      // If it's a media file (basic check for MVP), open the Phase 4 Media Player
+      const isMedia = item.Name.endsWith('.mp4') || item.Name.endsWith('.webm') || item.Name.endsWith('.mkv');
+      if (isMedia) {
+         setPlayingMedia({
+           fs: selectedFs,
+           path: currentPath === '' ? item.Name : `${currentPath}/${item.Name}`
+         });
+      } else {
+        alert(`File Details:\nName: ${item.Name}\nSize: ${formatBytes(item.Size)}\nModified: ${new Date(item.ModTime).toLocaleString()}`);
+      }
     }
   };
 
@@ -213,6 +226,18 @@ export const FileExplorer: React.FC<FileExplorerProps> = ({ socket, isConnected,
             </tbody>
           </table>
         </div>
+      )}
+
+      {/* Phase 4: MediaPlayer Modal */}
+      {playingMedia && (
+        <MediaPlayerModal
+           socket={socket}
+           workerId={workerId}
+           fs={playingMedia.fs}
+           path={playingMedia.path}
+           userId={useAuthStore.getState().user?.id || 'unknown'}
+           onClose={() => setPlayingMedia(null)}
+        />
       )}
     </div>
   );

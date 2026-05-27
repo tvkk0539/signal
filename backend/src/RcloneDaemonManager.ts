@@ -148,4 +148,47 @@ export class RcloneDaemonManager {
       throw new Error(error.response?.data?.error || error.message);
     }
   }
+
+  // Phase 4: On-The-Fly Memory Streaming
+  // Streams a file from rclone VFS as a buffer stream, allowing us to pipe it into WebRTC
+  public async streamFile(fs: string, path: string, startByte: number = 0, endByte?: number): Promise<NodeJS.ReadableStream> {
+    if (!this.isRunning) {
+      throw new Error('Rclone daemon is not running');
+    }
+
+    const targetFs = fs || '/';
+    console.log(`[Rclone] Initiating VFS stream for fs: "${targetFs}", path: "${path}", Range: bytes=${startByte}-${endByte || ''}`);
+
+    const auth = Buffer.from(`${RCLONE_RC_USER}:${RCLONE_RC_PASS}`).toString('base64');
+
+    let rangeHeader = `bytes=${startByte}-`;
+    if (endByte !== undefined) {
+      rangeHeader += endByte.toString();
+    }
+
+    try {
+      // We use axios to make an HTTP GET request to the local rclone WebDAV or HTTP VFS endpoint.
+      // Note: To properly support GET streaming, the rclone command must include standard VFS flags or we hit the operations/publicLink API.
+      // For this Phase 4 MVP, we will hit the internal core/command to `cat` the file directly into the stream,
+      // or rely on a configured VFS endpoint if available.
+      // A robust implementation would use `rcd` with `--vfs-cache-mode full` and access the HTTP server it spawns.
+
+      const response = await axios.post(`${RCLONE_RC_BASE_URL}/core/command`, {
+        command: "cat",
+        arg: [`${targetFs}${targetFs === '/' ? '' : ':'}${path}`],
+        opt: { offset: startByte.toString(), count: endByte ? (endByte - startByte + 1).toString() : undefined }
+      }, {
+        headers: {
+          'Authorization': `Basic ${auth}`,
+          'Content-Type': 'application/json'
+        },
+        responseType: 'stream'
+      });
+
+      return response.data;
+    } catch (error: any) {
+      console.error(`[Rclone] streamFile Error: ${error.message}`);
+      throw error;
+    }
+  }
 }

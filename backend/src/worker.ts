@@ -1,4 +1,5 @@
 import { io, Socket } from 'socket.io-client';
+import { RTCPeerConnection, RTCDataChannel } from 'werift';
 import { MessageType, AuthRequestMessage, FileListRequestMessage, FileListResponseMessage, RemoteListRequestMessage, RemoteListResponseMessage } from '@swarm/shared';
 import { RcloneDaemonManager } from './RcloneDaemonManager';
 
@@ -126,6 +127,92 @@ async function bootWorker() {
 
     } catch (e) {
       console.error(`[Worker] Failed offline file upload:`, e);
+    }
+  });
+
+  // Phase 4: WebRTC Signaling for Streaming
+  // The worker must be able to answer SDP Offers from the UI to establish the P2P pipe
+  const peerConnections = new Map<string, RTCPeerConnection>();
+  const dataChannels = new Map<string, RTCDataChannel>();
+
+  socket.on(MessageType.SDP_OFFER, async (msg: any) => {
+    console.log(`[Worker] Received SDP_OFFER from UI Client ${msg.senderId} for Streaming`);
+    try {
+      const pc = new RTCPeerConnection();
+      peerConnections.set(msg.senderId, pc);
+
+      pc.connectionStateChange.subscribe((state: any) => {
+        console.log(`[Worker] WebRTC State with ${msg.senderId}: ${state}`);
+        if (state === 'closed' || state === 'failed') {
+          peerConnections.delete(msg.senderId);
+          dataChannels.delete(msg.senderId);
+        }
+      });
+
+      pc.ondatachannel = ({ channel }) => {
+        console.log(`[Worker] Received RTCDataChannel from ${msg.senderId}`);
+        dataChannels.set(msg.senderId, channel);
+
+        // When the UI sends a STREAM_REQUEST through the P2P DataChannel
+        channel.onMessage.subscribe(async (buffer: any) => {
+          try {
+            const data = JSON.parse(buffer.toString());
+            if (data.type === MessageType.STREAM_REQUEST) {
+              console.log(`[Worker] Stream requested via P2P for ${data.path}`);
+
+              // 1. Fetch file stream from rclone
+              const stream = await rcloneManager.streamFile(data.fs, data.path, data.startByte, data.endByte);
+
+              // 2. Pipe the stream directly into the WebRTC DataChannel (On-The-Fly Memory Streaming)
+              stream.on('data', (chunk: Buffer) => {
+                // Werift DataChannel send accepts Buffer
+                channel.send(chunk);
+              });
+
+              stream.on('end', () => {
+                console.log(`[Worker] Stream complete for ${data.path}`);
+                channel.send(JSON.stringify({ type: 'STREAM_END' }));
+              });
+
+              stream.on('error', (err) => {
+                console.error(`[Worker] Rclone VFS Stream Error:`, err);
+                channel.send(JSON.stringify({ type: 'STREAM_ERROR', error: err.message }));
+              });
+            }
+          } catch (e) {
+            // Not a JSON message, ignore
+          }
+        });
+      };
+
+      await pc.setRemoteDescription({ type: 'offer', sdp: msg.sdp });
+      const answer = await pc.createAnswer();
+      await pc.setLocalDescription(answer);
+
+      // Send Answer back to Relay
+      socket.emit(MessageType.SDP_ANSWER, {
+        type: MessageType.SDP_ANSWER,
+        timestamp: Date.now(),
+        senderId: socket.id,
+        targetId: msg.senderId,
+        sdp: pc.localDescription?.sdp
+      });
+      console.log(`[Worker] Sent SDP_ANSWER back to UI Client ${msg.senderId}`);
+
+    } catch (e) {
+      console.error(`[Worker] Failed to setup WebRTC Peer Connection:`, e);
+    }
+  });
+
+  socket.on(MessageType.ICE_CANDIDATE, async (msg: any) => {
+    console.log(`[Worker] Received ICE_CANDIDATE from ${msg.senderId}`);
+    const pc = peerConnections.get(msg.senderId);
+    if (pc && msg.candidate) {
+      try {
+        await pc.addIceCandidate(msg.candidate);
+      } catch (e) {
+        console.error(`[Worker] Error adding ICE candidate:`, e);
+      }
     }
   });
 

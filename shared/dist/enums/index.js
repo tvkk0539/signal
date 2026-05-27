@@ -39,4 +39,6 @@ var MessageType;
     MessageType["SDP_OFFER"] = "SDP_OFFER";
     MessageType["SDP_ANSWER"] = "SDP_ANSWER";
     MessageType["ICE_CANDIDATE"] = "ICE_CANDIDATE";
+    MessageType["STREAM_REQUEST"] = "STREAM_REQUEST";
+    MessageType["STREAM_METADATA"] = "STREAM_METADATA";
 })(MessageType || (exports.MessageType = MessageType = {}));

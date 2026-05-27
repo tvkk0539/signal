@@ -1,6 +1,7 @@
 "use strict";
 Object.defineProperty(exports, "__esModule", { value: true });
 const socket_io_client_1 = require("socket.io-client");
+const werift_1 = require("werift");
 const shared_1 = require("@swarm/shared");
 const RcloneDaemonManager_1 = require("./RcloneDaemonManager");
 const RELAY_SERVER_URL = process.env.RELAY_URL || 'http://localhost:3001';
@@ -115,6 +116,82 @@ async function bootWorker() {
         }
         catch (e) {
             console.error(`[Worker] Failed offline file upload:`, e);
+        }
+    });
+    // Phase 4: WebRTC Signaling for Streaming
+    // The worker must be able to answer SDP Offers from the UI to establish the P2P pipe
+    const peerConnections = new Map();
+    const dataChannels = new Map();
+    socket.on(shared_1.MessageType.SDP_OFFER, async (msg) => {
+        console.log(`[Worker] Received SDP_OFFER from UI Client ${msg.senderId} for Streaming`);
+        try {
+            const pc = new werift_1.RTCPeerConnection();
+            peerConnections.set(msg.senderId, pc);
+            pc.connectionStateChange.subscribe((state) => {
+                console.log(`[Worker] WebRTC State with ${msg.senderId}: ${state}`);
+                if (state === 'closed' || state === 'failed') {
+                    peerConnections.delete(msg.senderId);
+                    dataChannels.delete(msg.senderId);
+                }
+            });
+            pc.ondatachannel = ({ channel }) => {
+                console.log(`[Worker] Received RTCDataChannel from ${msg.senderId}`);
+                dataChannels.set(msg.senderId, channel);
+                // When the UI sends a STREAM_REQUEST through the P2P DataChannel
+                channel.onMessage.subscribe(async (buffer) => {
+                    try {
+                        const data = JSON.parse(buffer.toString());
+                        if (data.type === shared_1.MessageType.STREAM_REQUEST) {
+                            console.log(`[Worker] Stream requested via P2P for ${data.path}`);
+                            // 1. Fetch file stream from rclone
+                            const stream = await rcloneManager.streamFile(data.fs, data.path, data.startByte, data.endByte);
+                            // 2. Pipe the stream directly into the WebRTC DataChannel (On-The-Fly Memory Streaming)
+                            stream.on('data', (chunk) => {
+                                // Werift DataChannel send accepts Buffer
+                                channel.send(chunk);
+                            });
+                            stream.on('end', () => {
+                                console.log(`[Worker] Stream complete for ${data.path}`);
+                                channel.send(JSON.stringify({ type: 'STREAM_END' }));
+                            });
+                            stream.on('error', (err) => {
+                                console.error(`[Worker] Rclone VFS Stream Error:`, err);
+                                channel.send(JSON.stringify({ type: 'STREAM_ERROR', error: err.message }));
+                            });
+                        }
+                    }
+                    catch (e) {
+                        // Not a JSON message, ignore
+                    }
+                });
+            };
+            await pc.setRemoteDescription({ type: 'offer', sdp: msg.sdp });
+            const answer = await pc.createAnswer();
+            await pc.setLocalDescription(answer);
+            // Send Answer back to Relay
+            socket.emit(shared_1.MessageType.SDP_ANSWER, {
+                type: shared_1.MessageType.SDP_ANSWER,
+                timestamp: Date.now(),
+                senderId: socket.id,
+                targetId: msg.senderId,
+                sdp: pc.localDescription?.sdp
+            });
+            console.log(`[Worker] Sent SDP_ANSWER back to UI Client ${msg.senderId}`);
+        }
+        catch (e) {
+            console.error(`[Worker] Failed to setup WebRTC Peer Connection:`, e);
+        }
+    });
+    socket.on(shared_1.MessageType.ICE_CANDIDATE, async (msg) => {
+        console.log(`[Worker] Received ICE_CANDIDATE from ${msg.senderId}`);
+        const pc = peerConnections.get(msg.senderId);
+        if (pc && msg.candidate) {
+            try {
+                await pc.addIceCandidate(msg.candidate);
+            }
+            catch (e) {
+                console.error(`[Worker] Error adding ICE candidate:`, e);
+            }
         }
     });
     socket.on(shared_1.MessageType.TASK_ASSIGNMENT, (msg) => {
