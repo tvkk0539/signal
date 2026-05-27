@@ -1,0 +1,21 @@
+syntax = "proto3";
+
+package swarm;
+
+service SwarmNode {
+  // A high-speed, client-to-server streaming RPC to pipe massive binary files
+  // directly between ephemeral workers.
+  rpc PipeData (stream DataChunk) returns (TransferStatus) {}
+}
+
+message DataChunk {
+  string transfer_id = 1;
+  bytes content = 2;
+  bool is_last = 3;
+}
+
+message TransferStatus {
+  bool success = 1;
+  string message = 2;
+  int64 bytes_received = 3;
+}

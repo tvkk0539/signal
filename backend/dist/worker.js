@@ -4,12 +4,19 @@ const socket_io_client_1 = require("socket.io-client");
 const werift_1 = require("werift");
 const shared_1 = require("@swarm/shared");
 const RcloneDaemonManager_1 = require("./RcloneDaemonManager");
+const server_1 = require("./grpc/server");
+const client_1 = require("./grpc/client");
 const RELAY_SERVER_URL = process.env.RELAY_URL || 'http://localhost:3001';
 const WORKER_SECRET = process.env.WORKER_SECRET || 'fallback_for_dev_only';
 const rcloneManager = new RcloneDaemonManager_1.RcloneDaemonManager();
+const grpcServer = new server_1.GrpcSwarmServer();
 async function bootWorker() {
-    console.log(`[Worker] Booting up... Starting Rclone Daemon...`);
+    console.log(`[Worker] Booting up...`);
+    let grpcPort = 0;
     try {
+        console.log(`[Worker] Starting gRPC Server...`);
+        grpcPort = await grpcServer.start();
+        console.log(`[Worker] Starting Rclone Daemon...`);
         await rcloneManager.start();
     }
     catch (error) {
@@ -26,7 +33,8 @@ async function bootWorker() {
             type: shared_1.MessageType.AUTH_REQUEST,
             timestamp: Date.now(),
             role: 'WORKER',
-            token: WORKER_SECRET
+            token: WORKER_SECRET,
+            grpcPort: grpcPort // Phase 5: Tell the Fleet Admiral our gRPC address
         };
         socket.emit(shared_1.MessageType.AUTH_REQUEST, authMessage);
     });
@@ -194,25 +202,72 @@ async function bootWorker() {
             }
         }
     });
-    socket.on(shared_1.MessageType.TASK_ASSIGNMENT, (msg) => {
+    socket.on(shared_1.MessageType.TASK_ASSIGNMENT, async (msg) => {
         console.log(`[Worker] Received TASK_ASSIGNMENT: ${msg.taskId} (${msg.taskType})`);
-        // Simulate a long running task that emits progress rapidly to test the Zustand firehose throttle
-        let progress = 0;
-        const interval = setInterval(() => {
-            progress += Math.floor(Math.random() * 10) + 1;
-            if (progress >= 100) {
-                progress = 100;
-                clearInterval(interval);
-            }
-            socket.emit(shared_1.MessageType.TASK_PROGRESS, {
-                type: shared_1.MessageType.TASK_PROGRESS,
+        if (msg.taskType === 'WORKER_TO_WORKER_TRANSFER') {
+            // Phase 5: Initiate a gRPC transfer to another worker
+            console.log(`[Worker] Initiating gRPC Worker-to-Worker Transfer...`);
+            const targetWorkerId = msg.payload.targetWorkerId;
+            const fileToStream = msg.payload.file;
+            // 1. Look up target worker's gRPC IP/Port via Relay Service Discovery
+            const discoveryReq = {
+                type: shared_1.MessageType.GRPC_DISCOVERY_REQUEST,
                 timestamp: Date.now(),
-                taskId: msg.taskId,
-                workerId: socket.id,
-                progress: progress,
-                status: progress === 100 ? 'COMPLETE' : 'DOWNLOADING'
-            });
-        }, 50); // Emit incredibly fast (every 50ms) to test UI resilience
+                targetWorkerId: targetWorkerId
+            };
+            socket.emit(shared_1.MessageType.GRPC_DISCOVERY_REQUEST, discoveryReq);
+            // Temporary listener for the response
+            const handleDiscoveryResponse = async (res) => {
+                if (res.targetWorkerId === targetWorkerId) {
+                    socket.off(shared_1.MessageType.GRPC_DISCOVERY_RESPONSE, handleDiscoveryResponse);
+                    if (res.error) {
+                        console.error(`[Worker] Service Discovery Failed: ${res.error}`);
+                        return;
+                    }
+                    console.log(`[Worker] Discovered Target Worker gRPC at ${res.ipAddress}:${res.grpcPort}`);
+                    try {
+                        // 2. Fetch the massive file from Rclone VFS
+                        const stream = await rcloneManager.streamFile('/', fileToStream);
+                        // 3. Connect gRPC Client and pipe the data!
+                        const grpcClient = new client_1.GrpcSwarmClient(res.ipAddress, res.grpcPort);
+                        const status = await grpcClient.pipeStream(`transfer_${Date.now()}`, stream);
+                        console.log(`[Worker] gRPC Transfer Complete! Payload Status:`, status);
+                        // Notify UI
+                        socket.emit(shared_1.MessageType.TASK_PROGRESS, {
+                            type: shared_1.MessageType.TASK_PROGRESS,
+                            timestamp: Date.now(),
+                            taskId: msg.taskId,
+                            workerId: socket.id,
+                            progress: 100,
+                            status: 'gRPC TRANSFER COMPLETE'
+                        });
+                    }
+                    catch (e) {
+                        console.error(`[Worker] gRPC Transfer Failed:`, e);
+                    }
+                }
+            };
+            socket.on(shared_1.MessageType.GRPC_DISCOVERY_RESPONSE, handleDiscoveryResponse);
+        }
+        else {
+            // Standard UI task simulation
+            let progress = 0;
+            const interval = setInterval(() => {
+                progress += Math.floor(Math.random() * 10) + 1;
+                if (progress >= 100) {
+                    progress = 100;
+                    clearInterval(interval);
+                }
+                socket.emit(shared_1.MessageType.TASK_PROGRESS, {
+                    type: shared_1.MessageType.TASK_PROGRESS,
+                    timestamp: Date.now(),
+                    taskId: msg.taskId,
+                    workerId: socket.id,
+                    progress: progress,
+                    status: progress === 100 ? 'COMPLETE' : 'DOWNLOADING'
+                });
+            }, 50);
+        }
     });
     socket.on('disconnect', () => {
         console.log(`[Worker] Disconnected from Relay Server.`);
@@ -221,6 +276,7 @@ async function bootWorker() {
     process.on('SIGINT', () => {
         console.log(`[Worker] Shutting down...`);
         rcloneManager.stop();
+        grpcServer.stop();
         socket.disconnect();
         process.exit(0);
     });

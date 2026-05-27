@@ -41,4 +41,6 @@ var MessageType;
     MessageType["ICE_CANDIDATE"] = "ICE_CANDIDATE";
     MessageType["STREAM_REQUEST"] = "STREAM_REQUEST";
     MessageType["STREAM_METADATA"] = "STREAM_METADATA";
+    MessageType["GRPC_DISCOVERY_REQUEST"] = "GRPC_DISCOVERY_REQUEST";
+    MessageType["GRPC_DISCOVERY_RESPONSE"] = "GRPC_DISCOVERY_RESPONSE";
 })(MessageType || (exports.MessageType = MessageType = {}));

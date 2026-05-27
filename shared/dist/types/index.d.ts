@@ -7,6 +7,18 @@ export interface AuthRequestMessage extends BaseMessage {
     type: MessageType.AUTH_REQUEST;
     role: 'UI' | 'WORKER';
     token: string;
+    grpcPort?: number;
+}
+export interface GrpcDiscoveryRequestMessage extends BaseMessage {
+    type: MessageType.GRPC_DISCOVERY_REQUEST;
+    targetWorkerId: string;
+}
+export interface GrpcDiscoveryResponseMessage extends BaseMessage {
+    type: MessageType.GRPC_DISCOVERY_RESPONSE;
+    targetWorkerId: string;
+    ipAddress: string;
+    grpcPort: number;
+    error?: string;
 }
 export interface WorkerStatusMessage extends BaseMessage {
     type: MessageType.WORKER_STATUS_UPDATE;

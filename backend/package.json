@@ -8,6 +8,8 @@
     "start:prod": "node dist/worker.js"
   },
   "dependencies": {
+    "@grpc/grpc-js": "^1.14.4",
+    "@grpc/proto-loader": "^0.8.1",
     "@swarm/shared": "*",
     "axios": "^1.16.1",
     "socket.io-client": "^4.7.5",
