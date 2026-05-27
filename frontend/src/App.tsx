@@ -5,18 +5,19 @@ import type { AuthRequestMessage } from '@swarm/shared';
 import { useAuthStore } from './store/authStore';
 import { AuthScreen } from './components/auth/AuthScreen';
 import { FileExplorer } from './components/explorer/FileExplorer';
+import { FleetSidebar } from './components/swarm/FleetSidebar';
+import { JobManager } from './components/swarm/JobManager';
+import { ChatBox } from './components/chat/ChatBox';
 import './App.css';
 
-const RELAY_SERVER_URL = 'http://localhost:3001';
+const RELAY_SERVER_URL = import.meta.env.VITE_RELAY_URL || 'http://localhost:3001';
 
 function App() {
   const { token, user, isAuthenticated, logout } = useAuthStore();
 
   const [socket, setSocket] = useState<Socket | null>(null);
   const [isConnected, setIsConnected] = useState(false);
-  const [pingData, setPingData] = useState<string>('');
   const [targetWorkerId, setTargetWorkerId] = useState<string>('');
-  const [workerIdInput, setWorkerIdInput] = useState<string>('');
 
   useEffect(() => {
     if (!isAuthenticated || !token) return;
@@ -47,7 +48,6 @@ function App() {
 
     newSocket.on(MessageType.PONG, (data: { timestamp: number }) => {
       const latency = Date.now() - data.timestamp;
-      setPingData(`Ping: ${latency}ms`);
       console.log(`[UI] Received PONG from Relay Server (Latency: ${latency}ms)`);
     });
 
@@ -59,79 +59,74 @@ function App() {
     return () => {
       newSocket.close();
     };
-  }, []);
-
-  const pingSwarm = () => {
-    if (socket && isConnected) {
-      setPingData('Pinging...');
-      socket.emit(MessageType.PING, { timestamp: Date.now() });
-    }
-  };
+  }, [isAuthenticated, token]);
 
   if (!isAuthenticated) {
     return <AuthScreen />;
   }
 
-  const handleSetWorker = (e: React.FormEvent) => {
-    e.preventDefault();
-    setTargetWorkerId(workerIdInput);
-  };
-
   return (
-    <div className="App" style={{ textAlign: 'center', marginTop: '50px', display: 'flex', flexDirection: 'column', alignItems: 'center' }}>
-      <div style={{ width: '100%', maxWidth: '800px', display: 'flex', justifyContent: 'space-between', marginBottom: '20px', padding: '10px', backgroundColor: '#eee', borderRadius: '8px' }}>
-         <div>Commander: <strong>{user?.email}</strong></div>
-         <button onClick={logout} style={{ background: 'none', border: 'none', color: 'red', cursor: 'pointer' }}>Logout</button>
-      </div>
+    <div className="App" style={{ display: 'flex', height: '100vh', width: '100vw', backgroundColor: '#1e1e1e', overflow: 'hidden' }}>
 
-      <div style={{ display: 'flex', gap: '20px', justifyContent: 'center', flexWrap: 'wrap', maxWidth: '1200px' }}>
-        <div style={{ border: '1px solid #ccc', padding: '20px', borderRadius: '8px', minWidth: '300px' }}>
-          <h1>Swarm Command Center</h1>
-          <div style={{ marginBottom: '20px' }}>
-            <strong>Status: </strong>
-            <span style={{ color: isConnected ? 'green' : 'red' }}>
-              {isConnected ? 'Connected to Relay' : 'Disconnected'}
-            </span>
-          </div>
+      {/* Sidebar: The Fleet Registry */}
+      <FleetSidebar
+        socket={socket}
+        targetWorkerId={targetWorkerId}
+        setTargetWorkerId={setTargetWorkerId}
+      />
 
-          <button
-            onClick={pingSwarm}
-            disabled={!isConnected}
-            style={{ padding: '10px 20px', fontSize: '16px', cursor: isConnected ? 'pointer' : 'not-allowed', marginBottom: '20px' }}
-          >
-            Ping Swarm
-          </button>
+      {/* Main Content Area */}
+      <div style={{ flex: 1, display: 'flex', flexDirection: 'column' }}>
 
-          <div style={{ color: '#666', marginBottom: '20px' }}>
-            {pingData}
-          </div>
-
-          <div style={{ borderTop: '1px solid #eee', paddingTop: '20px' }}>
-            <h3>Target Worker</h3>
-            <form onSubmit={handleSetWorker} style={{ display: 'flex', gap: '10px', justifyContent: 'center' }}>
-              <input
-                type="text"
-                placeholder="Enter Worker Socket ID"
-                value={workerIdInput}
-                onChange={(e) => setWorkerIdInput(e.target.value)}
-                style={{ padding: '8px', flex: 1, borderRadius: '4px', border: '1px solid #ccc' }}
-              />
-              <button type="submit" style={{ padding: '8px 16px', cursor: 'pointer' }}>Set Worker</button>
-            </form>
-          </div>
+        {/* Top Navbar */}
+        <div style={{ display: 'flex', justifyContent: 'space-between', padding: '15px 30px', backgroundColor: '#252526', color: 'white', borderBottom: '1px solid #333' }}>
+           <div>
+              <span style={{ fontSize: '20px', fontWeight: 'bold', marginRight: '20px' }}>Swarm Command Center</span>
+              <span style={{ fontSize: '14px', color: isConnected ? '#2ecc71' : '#e74c3c' }}>
+                {isConnected ? '● Connected to Relay' : '● Disconnected'}
+              </span>
+           </div>
+           <div>
+              <span style={{ marginRight: '20px', color: '#aaa' }}>Commander: {user?.email}</span>
+              <button onClick={logout} style={{ background: 'none', border: '1px solid #e74c3c', color: '#e74c3c', padding: '5px 15px', borderRadius: '4px', cursor: 'pointer' }}>Logout</button>
+           </div>
         </div>
 
-        {targetWorkerId ? (
-           <FileExplorer
-             socket={socket}
-             isConnected={isConnected}
-             workerId={targetWorkerId}
-           />
-        ) : (
-          <div style={{ padding: '40px', border: '1px dashed #ccc', borderRadius: '8px', display: 'flex', alignItems: 'center', justifyContent: 'center', color: '#999', minWidth: '600px' }}>
-            Enter a Worker ID to load the File Explorer
+        {/* Dashboard Content */}
+        <div style={{ flex: 1, display: 'flex', overflow: 'hidden' }}>
+          <div style={{ flex: 1, padding: '30px', overflowY: 'auto', display: 'flex', flexDirection: 'column', gap: '20px' }}>
+            {targetWorkerId ? (
+              <>
+                <div style={{ flex: 1 }}>
+                  <FileExplorer
+                    socket={socket}
+                    isConnected={isConnected}
+                    workerId={targetWorkerId}
+                  />
+                </div>
+                <div style={{ flex: 1 }}>
+                  {/* Note: targetWorkerId is used for MVP Phase 3 to show the UI. In full prod, we'd select a targetUserId */}
+                  <ChatBox socket={socket} targetId={targetWorkerId} isOnline={false} />
+                </div>
+              </>
+            ) : (
+              <div style={{
+                height: '100%',
+                display: 'flex',
+                alignItems: 'center',
+                justifyContent: 'center',
+                color: '#666',
+                border: '2px dashed #444',
+                borderRadius: '10px'
+              }}>
+                <h2>Select a Worker from the Fleet Sidebar to begin</h2>
+              </div>
+            )}
           </div>
-        )}
+
+          {/* Job Manager Sidebar */}
+          <JobManager socket={socket} isConnected={isConnected} />
+        </div>
       </div>
     </div>
   );
