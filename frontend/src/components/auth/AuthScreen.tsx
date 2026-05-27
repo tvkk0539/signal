@@ -1,7 +1,7 @@
 import React, { useState } from 'react';
 import { useAuthStore } from '../../store/authStore';
 
-const RELAY_SERVER_URL = 'http://localhost:3001';
+const RELAY_SERVER_URL = import.meta.env.VITE_RELAY_URL || 'http://localhost:3001';
 
 export const AuthScreen: React.FC = () => {
   const [isLogin, setIsLogin] = useState(true);
