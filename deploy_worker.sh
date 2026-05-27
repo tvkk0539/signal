@@ -75,8 +75,14 @@ elif [ "$DEPLOY_METHOD" == "2" ]; then
         echo "[1/2] Docker already installed."
     fi
 
+    echo ""
+    echo "Do you want to use a pre-built GitHub Container Registry (GHCR) image?"
+    echo "If no, the script will build the Docker image locally from source."
+    read -p "Enter GHCR Image URL (or press enter to build from source): " GHCR_IMAGE
+
     echo "[2/2] Generating standalone docker-compose.yml for Worker..."
-    cat <<DOCKER > docker-compose-worker.yml
+    if [ -z "$GHCR_IMAGE" ]; then
+        cat <<DOCKER > docker-compose-worker.yml
 version: '3.8'
 
 services:
@@ -88,12 +94,24 @@ services:
       - backend/.env
     restart: unless-stopped
 DOCKER
+    else
+        cat <<DOCKER > docker-compose-worker.yml
+version: '3.8'
 
-    docker-compose -f docker-compose-worker.yml up -d --build
+services:
+  backend-worker:
+    image: ${GHCR_IMAGE}
+    env_file:
+      - backend/.env
+    restart: unless-stopped
+DOCKER
+    fi
+
+    docker compose -f docker-compose-worker.yml up -d $( [ -z "$GHCR_IMAGE" ] && echo "--build" )
 
     echo "========================================================"
     echo "✅ Backend Worker successfully deployed via Docker!"
-    echo "Use 'docker logs -f \$(docker-compose -f docker-compose-worker.yml ps -q backend-worker)' to view logs."
+    echo "Use 'docker logs -f \$(docker compose -f docker-compose-worker.yml ps -q backend-worker)' to view logs."
     echo "========================================================"
 
 else

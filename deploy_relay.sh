@@ -75,8 +75,14 @@ elif [ "$DEPLOY_METHOD" == "2" ]; then
         echo "[1/2] Docker already installed."
     fi
 
+    echo ""
+    echo "Do you want to use a pre-built GitHub Container Registry (GHCR) image?"
+    echo "If no, the script will build the Docker image locally from source."
+    read -p "Enter GHCR Image URL (or press enter to build from source): " GHCR_IMAGE
+
     echo "[2/2] Generating standalone docker-compose.yml for Relay..."
-    cat <<DOCKER > docker-compose-relay.yml
+    if [ -z "$GHCR_IMAGE" ]; then
+        cat <<DOCKER > docker-compose-relay.yml
 version: '3.8'
 
 services:
@@ -90,13 +96,27 @@ services:
       - relay/.env
     restart: unless-stopped
 DOCKER
+    else
+        cat <<DOCKER > docker-compose-relay.yml
+version: '3.8'
 
-    docker-compose -f docker-compose-relay.yml up -d --build
+services:
+  relay-server:
+    image: ${GHCR_IMAGE}
+    ports:
+      - "3001:3001"
+    env_file:
+      - relay/.env
+    restart: unless-stopped
+DOCKER
+    fi
+
+    docker compose -f docker-compose-relay.yml up -d $( [ -z "$GHCR_IMAGE" ] && echo "--build" )
 
     echo "========================================================"
     echo "✅ Relay Server successfully deployed via Docker!"
     echo "The container is running on Port 3001."
-    echo "Use 'docker logs -f \$(docker-compose -f docker-compose-relay.yml ps -q relay-server)' to view live traffic."
+    echo "Use 'docker logs -f \$(docker compose -f docker-compose-relay.yml ps -q relay-server)' to view live traffic."
 
 else
     echo "❌ Invalid selection."

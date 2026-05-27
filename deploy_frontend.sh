@@ -83,8 +83,14 @@ elif [ "$DEPLOY_METHOD" == "2" ]; then
         echo "[1/2] Docker already installed."
     fi
 
+    echo ""
+    echo "Do you want to use a pre-built GitHub Container Registry (GHCR) image?"
+    echo "If no, the script will build the Docker image locally from source."
+    read -p "Enter GHCR Image URL (or press enter to build from source): " GHCR_IMAGE
+
     echo "[2/2] Generating standalone docker-compose.yml for Frontend..."
-    cat <<DOCKER > docker-compose-frontend.yml
+    if [ -z "$GHCR_IMAGE" ]; then
+        cat <<DOCKER > docker-compose-frontend.yml
 version: '3.8'
 
 services:
@@ -98,8 +104,22 @@ services:
       - "80:80"
     restart: unless-stopped
 DOCKER
+    else
+        cat <<DOCKER > docker-compose-frontend.yml
+version: '3.8'
 
-    docker-compose -f docker-compose-frontend.yml up -d --build
+services:
+  frontend-ui:
+    image: ${GHCR_IMAGE}
+    environment:
+      - VITE_RELAY_URL=${VITE_RELAY_URL}
+    ports:
+      - "80:80"
+    restart: unless-stopped
+DOCKER
+    fi
+
+    docker compose -f docker-compose-frontend.yml up -d $( [ -z "$GHCR_IMAGE" ] && echo "--build" )
 
     echo "========================================================"
     echo "✅ Frontend UI successfully deployed via Docker!"
