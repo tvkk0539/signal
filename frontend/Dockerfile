@@ -16,7 +16,9 @@ RUN npm ci
 # Build shared contracts
 RUN npm run build --workspace=shared
 
-# Build frontend static assets via Vite
+# Build frontend static assets via Vite.
+# We explicitly set a placeholder here so the Nginx container can replace it at runtime.
+ENV VITE_RELAY_URL=__VITE_RELAY_URL_PLACEHOLDER__
 RUN npm run build --workspace=frontend
 
 # Stage 2: Serve via Nginx
@@ -28,8 +30,13 @@ RUN rm -rf /usr/share/nginx/html/*
 # Copy built static assets from the builder stage
 COPY --from=builder /app/frontend/dist /usr/share/nginx/html
 
+# Copy the custom entrypoint script
+COPY frontend/docker-entrypoint.sh /docker-entrypoint.sh
+RUN chmod +x /docker-entrypoint.sh
+
 # Expose HTTP port
 EXPOSE 80
 
-# Start Nginx
+# Use the custom entrypoint to replace variables, then start Nginx
+ENTRYPOINT ["/docker-entrypoint.sh"]
 CMD ["nginx", "-g", "daemon off;"]
