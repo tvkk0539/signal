@@ -10,7 +10,12 @@ import { JobManager } from './components/swarm/JobManager';
 import { ChatBox } from './components/chat/ChatBox';
 import './App.css';
 
-const RELAY_SERVER_URL = import.meta.env.VITE_RELAY_URL || 'http://localhost:3001';
+// Use a split string for the placeholder so global search-and-replace in the Docker entrypoint
+// doesn't accidentally replace this source code during compilation.
+const PLACEHOLDER = '__VITE_RELAY_URL_' + 'PLACEHOLDER__';
+const RELAY_SERVER_URL = import.meta.env.VITE_RELAY_URL && import.meta.env.VITE_RELAY_URL !== PLACEHOLDER
+  ? import.meta.env.VITE_RELAY_URL
+  : 'http://localhost:3001';
 
 function App() {
   const { token, user, isAuthenticated, logout } = useAuthStore();

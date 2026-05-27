@@ -98,8 +98,8 @@ services:
     build:
       context: .
       dockerfile: frontend/Dockerfile
-      args:
-        - VITE_RELAY_URL=${VITE_RELAY_URL}
+    environment:
+      - VITE_RELAY_URL=${VITE_RELAY_URL}
     ports:
       - "80:80"
     restart: unless-stopped
