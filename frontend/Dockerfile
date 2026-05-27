@@ -30,13 +30,12 @@ RUN rm -rf /usr/share/nginx/html/*
 # Copy built static assets from the builder stage
 COPY --from=builder /app/frontend/dist /usr/share/nginx/html
 
-# Copy the custom entrypoint script
-COPY frontend/docker-entrypoint.sh /docker-entrypoint.sh
-RUN chmod +x /docker-entrypoint.sh
+# Copy the custom entrypoint script into Nginx's native initialization folder
+COPY frontend/docker-entrypoint.sh /docker-entrypoint.d/40-replace-env-vars.sh
+RUN chmod +x /docker-entrypoint.d/40-replace-env-vars.sh
 
 # Expose HTTP port
 EXPOSE 80
 
-# Use the custom entrypoint to replace variables, then start Nginx
-ENTRYPOINT ["/docker-entrypoint.sh"]
+# Start Nginx using its native entrypoint
 CMD ["nginx", "-g", "daemon off;"]

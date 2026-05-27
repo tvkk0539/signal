@@ -12,7 +12,7 @@ import './App.css';
 
 // Resolve the URL. If the placeholder wasn't replaced (e.g. local dev without Docker), fall back to localhost.
 let RELAY_SERVER_URL = import.meta.env.VITE_RELAY_URL || 'http://localhost:3001';
-if (RELAY_SERVER_URL === '__VITE_RELAY_URL_PLACEHOLDER__') {
+if (RELAY_SERVER_URL === '__VITE_RELAY_URL_' + 'PLACEHOLDER__') {
   RELAY_SERVER_URL = 'http://localhost:3001';
 }
 

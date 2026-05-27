@@ -9,6 +9,3 @@ if [ -n "$VITE_RELAY_URL" ]; then
 else
   echo "Warning: VITE_RELAY_URL environment variable is not set!"
 fi
-
-# Execute the main container command (nginx)
-exec "$@"
