@@ -1,9 +1,9 @@
 import React, { useState } from 'react';
 import { useAuthStore } from '../../store/authStore';
 
-// Use a split string for the placeholder so global search-and-replace in the Docker entrypoint
-// doesn't accidentally replace this source code during compilation.
-const PLACEHOLDER = '__VITE_RELAY_URL_' + 'PLACEHOLDER__';
+// Use an array join for the placeholder so global search-and-replace in the Docker entrypoint
+// doesn't accidentally replace this source code during compilation, and esbuild doesn't merge it.
+const PLACEHOLDER = ['__VITE_RELAY_URL_', 'PLACEHOLDER__'].join('');
 const RELAY_SERVER_URL = import.meta.env.VITE_RELAY_URL && import.meta.env.VITE_RELAY_URL !== PLACEHOLDER
   ? import.meta.env.VITE_RELAY_URL
   : 'http://localhost:3001';
