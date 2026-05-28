@@ -69,6 +69,9 @@ export const MediaPlayerModal: React.FC<MediaPlayerModalProps> = ({ workerId, fs
       channel.send(JSON.stringify(streamReq));
     };
 
+    // Explicitly ask for ArrayBuffer, otherwise browsers might default to Blob or String
+    channel.binaryType = 'arraybuffer';
+
     channel.onmessage = (event) => {
       if (typeof event.data === 'string') {
         try {
@@ -132,10 +135,17 @@ export const MediaPlayerModal: React.FC<MediaPlayerModalProps> = ({ workerId, fs
 
         if (action === 'PLAY') {
             setStatus('Streaming from Worker...');
-            if (sourceBufferRef.current && !sourceBufferRef.current.updating) {
-              sourceBufferRef.current.appendBuffer(buffer);
-            } else {
-              queueRef.current.push(buffer);
+            try {
+                if (sourceBufferRef.current && !sourceBufferRef.current.updating) {
+                  sourceBufferRef.current.appendBuffer(buffer);
+                } else {
+                  queueRef.current.push(buffer);
+                }
+            } catch (err) {
+                console.warn("[UI] MSE Append Error (File likely not fragmented MP4). Buffering in RAM to play at end.");
+                // If MSE fails (because it's a standard MP4, not fragmented), fallback to buffering it like a download,
+                // and we will attach it to the video player as a Blob when it finishes.
+                downloadBufferRef.current.push(buffer);
             }
         } else {
             // DOWNLOAD mode: To avoid RAM OOM crashes on massive files (e.g. 50GB),
