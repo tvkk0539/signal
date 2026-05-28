@@ -109,6 +109,15 @@ export const MediaPlayerModal: React.FC<MediaPlayerModalProps> = ({ workerId, fs
                 if (mediaSourceRef.current?.readyState === 'open') {
                    mediaSourceRef.current.endOfStream();
                 }
+
+                // If MSE failed and we buffered the file in RAM instead, play it now.
+                if (downloadBufferRef.current.length > 0 && videoRef.current) {
+                   console.log("[UI] Playing buffered non-fragmented file as Blob.");
+                   const blob = new Blob(downloadBufferRef.current);
+                   const url = window.URL.createObjectURL(blob);
+                   videoRef.current.src = url;
+                   videoRef.current.play().catch(e => console.error("Playback failed", e));
+                }
             } else {
                 setStatus('Download Complete. Saving file...');
                 // Combine chunks and trigger browser download
@@ -135,15 +144,27 @@ export const MediaPlayerModal: React.FC<MediaPlayerModalProps> = ({ workerId, fs
         const buffer = event.data as ArrayBuffer;
 
         if (action === 'PLAY') {
-            setStatus('Streaming from Worker...');
             try {
+                // If we've already fallen back to buffering, don't try MSE again
+                if (downloadBufferRef.current.length > 0) {
+                   throw new Error("Already fallen back to RAM buffering");
+                }
+
+                setStatus('Streaming from Worker...');
                 if (sourceBufferRef.current && !sourceBufferRef.current.updating) {
                   sourceBufferRef.current.appendBuffer(buffer);
                 } else {
                   queueRef.current.push(buffer);
                 }
             } catch (err) {
-                console.warn("[UI] MSE Append Error (File likely not fragmented MP4). Buffering in RAM to play at end.");
+                if (downloadBufferRef.current.length === 0) {
+                    console.warn("[UI] MSE Append Error (File likely not fragmented MP4). Buffering in RAM to play at end.");
+                }
+                // Calculate progress for the UI
+                bytesReceivedRef.current += buffer.byteLength;
+                const mbBuffered = (bytesReceivedRef.current / (1024 * 1024)).toFixed(1);
+                setStatus(`Buffering unfragmented MP4... (${mbBuffered} MB)`);
+
                 // If MSE fails (because it's a standard MP4, not fragmented), fallback to buffering it like a download,
                 // and we will attach it to the video player as a Blob when it finishes.
                 downloadBufferRef.current.push(buffer);
