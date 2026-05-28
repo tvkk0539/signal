@@ -30,15 +30,16 @@ This system leverages five major communication protocols to achieve "magic" func
 1.  **WebSockets (The Telemetry Pipe):** Provides real-time UI updates (e.g., live progress bars) between the Swarm and the Command Center.
 2.  **WebTransport / QUIC (The Mobile Pipe):** Ensures mobile clients never disconnect, even when rapidly switching between Wi-Fi and 4G networks.
 3.  **WebRTC (The Media & P2P Pipe):** Utilizes STUN/TURN hole-punching to bypass the Relay Server entirely, allowing users to stream 50GB videos or share massive files Peer-to-Peer with zero central bandwidth cost.
-4.  **gRPC (The Swarm Engine):** Allows isolated GitHub Action workers to stream binary data directly to each other, forming a "Virtual Network" for distributed MapReduce tasks.
+4.  **gRPC (The Dual-Mode Swarm Engine):** Allows workers to stream massive binary data to each other. It operates in two modes: `DIRECT` (P2P for LAN/VPC optimizing bandwidth) and `RELAYED` (Reverse-Tunneling through the central hub for completely firewalled GitHub Actions). The Relay acts as an intelligent "Traffic Cop" to bridge any combination of environments automatically.
 5.  **REST (The Authentication Gateway):** Secures the entry points utilizing a Database-Agnostic Manager and JSON Web Tokens (JWT).
 
 ---
 
 ## 🧠 Core Features
 
+*   **Sleek IDE Dashboard UI:** A highly-engineered React interface featuring Virtualized Grid/List views (handling 10,000+ files instantly), a collapsible Telemetry Drawer for global task tracking, and a built-in Pluggable DB Switchboard.
 *   **Frontend Web Worker Throttling:** Manages massive WebSocket "data firehoses" (e.g., thousands of progress updates per second) using a background thread (`swarm.worker.ts`), preventing the Main UI React thread from freezing while controlling large swarms.
-*   **On-The-Fly Memory Streaming:** Uses `rclone` VFS and WebRTC Data Channels to stream massive cloud files (50GB+) through low-resource ephemeral workers (14GB GitHub Actions) without ever writing to the physical hard drive. The UI dynamically detects MIME types via `StreamMetadataMessage`.
+*   **On-The-Fly Memory Streaming & Downloading:** Uses `rclone` VFS and WebRTC Data Channels to stream massive cloud files (50GB+) through low-resource ephemeral workers without ever writing to the physical hard drive. Includes a secure P2P local download feature to fetch files directly to the browser.
 *   **Relay Bypass Chat (True E2EE):** An End-to-End Encrypted messaging system utilizing native WebCrypto (ECDH + AES-GCM) for Zero-Knowledge privacy. The server acts purely as a dumb router, incapable of reading intercepted payloads. Intelligently offloads heavy file transfers.
 *   **God-Tier Database Architecture:** Features **Polyglot Persistence** and **Zero-Delay Multi-DB Mirroring**. The Relay Server acts as a domain-level switchboard, allowing the UI to hot-swap database engines (MongoDB, Postgres, SQLite, etc.) on the fly and stream writes to multiple async mirror databases without blocking the main event loop.
 

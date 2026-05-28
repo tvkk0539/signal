@@ -240,31 +240,35 @@ export const ChatBox: React.FC<ChatBoxProps> = ({ targetId, isOnline }) => {
   };
 
   return (
-    <div style={{ display: 'flex', flexDirection: 'column', height: '100%', backgroundColor: '#1e1e1e', borderRadius: '8px', border: '1px solid #444', overflow: 'hidden' }}>
+    <div className="flex flex-col h-full bg-card/20 rounded-2xl border border-border/50 overflow-hidden shadow-2xl backdrop-blur-sm">
       {/* Chat Header */}
-      <div style={{ padding: '15px', backgroundColor: '#252526', borderBottom: '1px solid #444', display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
-        <div>
-          <strong style={{ color: 'white' }}>Chatting with: </strong>
-          <span style={{ fontFamily: 'monospace', color: '#4a90e2' }}>{targetId || 'Select a user'}</span>
+      <div className="p-4 bg-background/50 border-b border-border/50 flex justify-between items-center backdrop-blur-md">
+        <div className="flex items-center gap-3">
+          <div className={`w-2.5 h-2.5 rounded-full ${isOnline ? 'bg-emerald-500 shadow-[0_0_8px_rgba(46,204,113,0.6)]' : 'bg-muted-foreground'}`} />
+          <div>
+            <div className="text-xs text-muted-foreground uppercase tracking-wider font-semibold">Secure Comm Link</div>
+            <div className="font-mono text-sm text-foreground">{targetId || 'No Target Selected'}</div>
+          </div>
         </div>
-        <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'flex-end', gap: '2px' }}>
-          <div style={{ display: 'flex', alignItems: 'center', gap: '5px' }}>
-             <div style={{ width: '10px', height: '10px', borderRadius: '50%', backgroundColor: isOnline ? '#2ecc71' : '#e74c3c' }} />
-             <span style={{ color: '#aaa', fontSize: '12px' }}>{isOnline ? 'Online (P2P Ready)' : 'Offline (Cloud)'}</span>
+        <div className="flex flex-col items-end gap-1">
+          <div className="text-xs text-muted-foreground flex items-center gap-2">
+             {isOnline ? 'P2P Ready' : 'Cloud Relayed'}
           </div>
           {targetId && (
-            <div style={{ fontSize: '11px', color: e2eeStatus === 'SECURE' ? '#2ecc71' : '#f1c40f' }}>
-              {e2eeStatus === 'SECURE' ? '🔒 E2EE Active' : (e2eeStatus === 'PENDING' ? '🔐 Exchanging Keys...' : '⚠️ Unencrypted')}
+            <div className={`text-[10px] font-medium px-2 py-0.5 rounded-full border ${e2eeStatus === 'SECURE' ? 'bg-emerald-500/10 text-emerald-500 border-emerald-500/20' : 'bg-amber-500/10 text-amber-500 border-amber-500/20'}`}>
+              {e2eeStatus === 'SECURE' ? '🔒 E2EE ACTIVE' : (e2eeStatus === 'PENDING' ? '🔐 NEGOTIATING...' : '⚠️ UNENCRYPTED')}
             </div>
           )}
         </div>
       </div>
 
       {/* Messages Area */}
-      <div style={{ flex: 1, padding: '20px', overflowY: 'auto', display: 'flex', flexDirection: 'column', gap: '10px' }}>
+      <div className="flex-1 p-6 overflow-y-auto flex flex-col gap-4 bg-[url('https://www.transparenttextures.com/patterns/cubes.png')] bg-opacity-5">
         {messages.length === 0 ? (
-          <div style={{ textAlign: 'center', color: '#666', marginTop: 'auto', marginBottom: 'auto' }}>
-            No messages yet. Send a message to start the secure conversation.
+          <div className="text-center text-muted-foreground m-auto max-w-sm">
+            <div className="text-4xl mb-4">🔐</div>
+            <h3 className="text-lg font-medium text-foreground mb-2">Zero-Knowledge Chat</h3>
+            <p className="text-sm">Messages are end-to-end encrypted locally before leaving your device. The Relay Server cannot read your communications.</p>
           </div>
         ) : (
           messages.map((msg, index) => {
@@ -272,8 +276,8 @@ export const ChatBox: React.FC<ChatBoxProps> = ({ targetId, isOnline }) => {
 
             if (msg.isSystemMessage) {
               return (
-                <div key={index} style={{ textAlign: 'center', margin: '10px 0' }}>
-                   <span style={{ backgroundColor: '#333', color: '#aaa', padding: '4px 12px', borderRadius: '12px', fontSize: '12px' }}>
+                <div key={index} className="text-center my-2">
+                   <span className="bg-background/80 text-muted-foreground px-3 py-1.5 rounded-full text-[10px] uppercase tracking-wide border border-border/50">
                      {msg.encryptedPayload}
                    </span>
                 </div>
@@ -281,18 +285,17 @@ export const ChatBox: React.FC<ChatBoxProps> = ({ targetId, isOnline }) => {
             }
 
             return (
-              <div key={index} style={{ alignSelf: isMe ? 'flex-end' : 'flex-start', maxWidth: '70%' }}>
-                <div style={{
-                  backgroundColor: isMe ? '#0078d4' : '#3c3c3c',
-                  color: 'white',
-                  padding: '10px 15px',
-                  borderRadius: isMe ? '15px 15px 0 15px' : '15px 15px 15px 0',
-                  wordBreak: 'break-word'
-                }}>
+              <div key={index} className={`max-w-[75%] ${isMe ? 'self-end' : 'self-start'} flex flex-col ${isMe ? 'items-end' : 'items-start'}`}>
+                <div className={`
+                  px-4 py-2.5 rounded-2xl break-words text-sm
+                  ${isMe
+                    ? 'bg-primary text-primary-foreground rounded-tr-sm shadow-[0_4px_15px_rgba(170,59,255,0.2)]'
+                    : 'bg-secondary text-secondary-foreground rounded-tl-sm border border-border/50'}
+                `}>
                   {msg.encryptedPayload}
                 </div>
-                <div style={{ fontSize: '10px', color: '#888', marginTop: '4px', textAlign: isMe ? 'right' : 'left' }}>
-                  {new Date(msg.timestamp).toLocaleTimeString()}
+                <div className="text-[10px] text-muted-foreground mt-1 px-1">
+                  {new Date(msg.timestamp).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}
                 </div>
               </div>
             );
@@ -302,13 +305,13 @@ export const ChatBox: React.FC<ChatBoxProps> = ({ targetId, isOnline }) => {
       </div>
 
       {/* Input Area */}
-      <div style={{ padding: '15px', backgroundColor: '#252526', borderTop: '1px solid #444' }}>
-        <form onSubmit={handleSendMessage} style={{ display: 'flex', gap: '10px' }}>
+      <div className="p-4 bg-background/50 border-t border-border/50 backdrop-blur-md">
+        <form onSubmit={handleSendMessage} className="flex gap-3 items-center">
           <button
             type="button"
             onClick={handleFileAttachClick}
             disabled={!targetId}
-            style={{ padding: '0 15px', backgroundColor: '#3c3c3c', color: 'white', border: '1px solid #555', borderRadius: '20px', cursor: targetId ? 'pointer' : 'not-allowed', display: 'flex', alignItems: 'center', justifyContent: 'center' }}
+            className="w-10 h-10 flex-none rounded-full bg-secondary text-secondary-foreground hover:bg-secondary/80 flex items-center justify-center transition-colors disabled:opacity-50 disabled:cursor-not-allowed border border-border/50"
             title="Attach File (Relay Bypass)"
           >
             📎
@@ -317,7 +320,7 @@ export const ChatBox: React.FC<ChatBoxProps> = ({ targetId, isOnline }) => {
             type="file"
             ref={fileInputRef}
             onChange={handleFileChange}
-            style={{ display: 'none' }}
+            className="hidden"
           />
           <input
             type="text"
@@ -325,12 +328,12 @@ export const ChatBox: React.FC<ChatBoxProps> = ({ targetId, isOnline }) => {
             onChange={(e) => setInputText(e.target.value)}
             placeholder={targetId ? "Type a secure message..." : "Select a user to chat"}
             disabled={!targetId}
-            style={{ flex: 1, padding: '12px 15px', backgroundColor: '#1e1e1e', color: 'white', border: '1px solid #555', borderRadius: '20px', outline: 'none' }}
+            className="flex-1 bg-background/80 border border-border/50 rounded-full px-5 py-2.5 text-sm text-foreground outline-none focus:border-primary/50 transition-colors"
           />
           <button
             type="submit"
             disabled={!targetId || !inputText.trim()}
-            style={{ padding: '0 20px', backgroundColor: '#0078d4', color: 'white', border: 'none', borderRadius: '20px', cursor: (targetId && inputText.trim()) ? 'pointer' : 'not-allowed', fontWeight: 'bold' }}
+            className="px-6 h-10 bg-primary hover:bg-primary/90 text-primary-foreground font-medium rounded-full text-sm transition-all disabled:opacity-50 disabled:cursor-not-allowed shadow-[0_0_15px_rgba(170,59,255,0.3)]"
           >
             Send
           </button>

@@ -5,15 +5,25 @@ import { dbManager } from '../db';
 
 const JWT_SECRET = process.env.JWT_SECRET || 'fallback_insecure_jwt_secret_key';
 
+import { GrpcRelayRouter } from '../grpc/router';
+
+// Global router instance
+export const grpcRouter = new GrpcRelayRouter();
+
+// Start the gRPC Relay Router when sockets are setup
+grpcRouter.start().catch(e => console.error("Failed to start gRPC Relay Router:", e));
+
 // Registry to track connected workers and their gRPC configurations
 interface WorkerData {
   socket: Socket;
   grpcPort?: number;
   ipAddress: string;
+  grpcMode?: 'DIRECT' | 'RELAY';
 }
 
 export const connectedWorkers = new Map<string, WorkerData>();
-export const connectedUIClients = new Map<string, Socket>();
+export const connectedUIClients = new Map<string, Socket>(); // Maps socket.id to Socket
+export const uiUserSocketMap = new Map<string, string>();    // Maps userId to socket.id
 
 // Public Key Directory for E2EE (User ID -> Base64 Public Key)
 export const publicKeyRegistry = new Map<string, string>();
@@ -49,7 +59,8 @@ export function setupSockets(io: Server) {
            connectedWorkers.set(socket.id, {
              socket: socket,
              grpcPort: msg.grpcPort,
-             ipAddress: typeof ipAddress === 'string' ? ipAddress.split(',')[0] : ipAddress[0]
+             ipAddress: typeof ipAddress === 'string' ? ipAddress.split(',')[0] : ipAddress[0],
+             grpcMode: msg.grpcMode || 'DIRECT' // Default to DIRECT if not specified
            });
 
            socket.emit(MessageType.AUTH_RESPONSE, { success: true });
@@ -62,8 +73,12 @@ export function setupSockets(io: Server) {
         try {
           // Cryptographically verify the JWT sent by the frontend
           const decoded = jwt.verify(msg.token, JWT_SECRET);
-          console.log(`[Gatekeeper] UI Dashboard Authorized for user: ${(decoded as any).email}`);
+          const userId = (decoded as any).id;
+          console.log(`[Gatekeeper] UI Dashboard Authorized for user: ${(decoded as any).email} (ID: ${userId})`);
+
           connectedUIClients.set(socket.id, socket);
+          uiUserSocketMap.set(userId, socket.id);
+
           socket.emit(MessageType.AUTH_RESPONSE, { success: true });
 
           // Send current state to newly connected UI client
@@ -88,6 +103,14 @@ export function setupSockets(io: Server) {
       } else if (connectedUIClients.has(socket.id)) {
         console.log(`[Gatekeeper] UI Client disconnected: ${socket.id}`);
         connectedUIClients.delete(socket.id);
+
+        // Clean up user mapping
+        for (const [userId, sockId] of uiUserSocketMap.entries()) {
+           if (sockId === socket.id) {
+              uiUserSocketMap.delete(userId);
+              break;
+           }
+        }
       } else {
         console.log(`[Gatekeeper] Client disconnected: ${socket.id}`);
       }
@@ -123,12 +146,20 @@ export function setupSockets(io: Server) {
 
     // --- Phase 3: Chat Router & WebRTC Matchmaker ---
 
+    // Helper to get socket by UI User ID or Worker ID
+    const getTargetSocket = (targetId: string): Socket | undefined => {
+       const workerData = connectedWorkers.get(targetId);
+       if (workerData) return workerData.socket;
+
+       const uiSocketId = uiUserSocketMap.get(targetId);
+       if (uiSocketId) return connectedUIClients.get(uiSocketId);
+
+       return undefined;
+    };
+
     // Chat Message Routing
     socket.on(MessageType.CHAT_MESSAGE, (msg: any) => {
-      // In a real implementation, we would map User IDs to Socket IDs using a robust registry.
-      // For MVP, we route directly if we can find the socket by ID, or broadcast it
-      // (which the client will filter based on targetId).
-      const targetSocket = connectedUIClients.get(msg.targetId);
+      const targetSocket = getTargetSocket(msg.targetId);
       if (targetSocket) {
         targetSocket.emit(MessageType.CHAT_MESSAGE, msg);
         // Optionally send a delivery receipt back to sender
@@ -166,47 +197,94 @@ export function setupSockets(io: Server) {
     // WebRTC Signaling Matchmaker
     socket.on(MessageType.SDP_OFFER, (msg: any) => {
       console.log(`[Matchmaker] Routing SDP_OFFER from ${msg.senderId} to ${msg.targetId}`);
-      const targetSocket = connectedUIClients.get(msg.targetId) || connectedWorkers.get(msg.targetId)?.socket;
+      const targetSocket = getTargetSocket(msg.targetId);
       if (targetSocket) {
         targetSocket.emit(MessageType.SDP_OFFER, msg);
+      } else {
+        console.error(`[Matchmaker] Target ${msg.targetId} not found for SDP_OFFER`);
       }
     });
 
     socket.on(MessageType.SDP_ANSWER, (msg: any) => {
       console.log(`[Matchmaker] Routing SDP_ANSWER from ${msg.senderId} to ${msg.targetId}`);
-      const targetSocket = connectedUIClients.get(msg.targetId) || connectedWorkers.get(msg.targetId)?.socket;
+      const targetSocket = getTargetSocket(msg.targetId);
       if (targetSocket) {
         targetSocket.emit(MessageType.SDP_ANSWER, msg);
+      } else {
+        console.error(`[Matchmaker] Target ${msg.targetId} not found for SDP_ANSWER`);
       }
     });
 
     socket.on(MessageType.ICE_CANDIDATE, (msg: any) => {
-      const targetSocket = connectedUIClients.get(msg.targetId) || connectedWorkers.get(msg.targetId)?.socket;
+      const targetSocket = getTargetSocket(msg.targetId);
       if (targetSocket) {
         targetSocket.emit(MessageType.ICE_CANDIDATE, msg);
       }
     });
 
-    // Phase 5: gRPC Service Discovery (DNS Router)
+    // Phase 5.5: Dual-Mode gRPC Service Discovery ("Traffic Cop" Router)
     socket.on(MessageType.GRPC_DISCOVERY_REQUEST, (msg: any) => {
       console.log(`[Service Discovery] Worker ${socket.id} looking up gRPC address for ${msg.targetWorkerId}`);
       const targetData = connectedWorkers.get(msg.targetWorkerId);
 
-      if (targetData && targetData.grpcPort) {
+      if (!targetData) {
         socket.emit(MessageType.GRPC_DISCOVERY_RESPONSE, {
           type: MessageType.GRPC_DISCOVERY_RESPONSE,
           timestamp: Date.now(),
           targetWorkerId: msg.targetWorkerId,
-          ipAddress: targetData.ipAddress,
-          grpcPort: targetData.grpcPort
+          error: "Worker offline"
         });
+        return;
+      }
+
+      if (targetData.grpcMode === 'RELAY') {
+         // The target is behind a firewall. Route traffic through the Relay Server.
+         console.log(`[Traffic Cop] Target Worker ${msg.targetWorkerId} is RELAY mode. Creating Reverse-Tunnel...`);
+
+         const transferId = grpcRouter.createTransferSession();
+         const relayIp = grpcRouter.getIp();
+         const relayPort = grpcRouter.getPort();
+
+         // 1. Tell Target Worker to establish outbound connection to Relay and wait for data
+         targetData.socket.emit(MessageType.GRPC_RELAY_TRANSFER_READY, {
+           type: MessageType.GRPC_RELAY_TRANSFER_READY,
+           timestamp: Date.now(),
+           transferId: transferId,
+           relayGrpcIp: relayIp,
+           relayGrpcPort: relayPort
+         });
+
+         // 2. Tell Source Worker to stream data to Relay
+         socket.emit(MessageType.GRPC_DISCOVERY_RESPONSE, {
+           type: MessageType.GRPC_DISCOVERY_RESPONSE,
+           timestamp: Date.now(),
+           targetWorkerId: msg.targetWorkerId,
+           ipAddress: relayIp,
+           grpcPort: relayPort,
+           routingMode: 'RELAYED',
+           transferId: transferId
+         });
+
       } else {
-        socket.emit(MessageType.GRPC_DISCOVERY_RESPONSE, {
-          type: MessageType.GRPC_DISCOVERY_RESPONSE,
-          timestamp: Date.now(),
-          targetWorkerId: msg.targetWorkerId,
-          error: "Worker offline or gRPC port not registered"
-        });
+         // The target has an open port. Instruct source to connect directly.
+         if (targetData.grpcPort) {
+             console.log(`[Traffic Cop] Target Worker ${msg.targetWorkerId} is DIRECT mode. Routing directly.`);
+             socket.emit(MessageType.GRPC_DISCOVERY_RESPONSE, {
+               type: MessageType.GRPC_DISCOVERY_RESPONSE,
+               timestamp: Date.now(),
+               targetWorkerId: msg.targetWorkerId,
+               ipAddress: targetData.ipAddress,
+               grpcPort: targetData.grpcPort,
+               routingMode: 'DIRECT'
+             });
+         } else {
+             socket.emit(MessageType.GRPC_DISCOVERY_RESPONSE, {
+               type: MessageType.GRPC_DISCOVERY_RESPONSE,
+               timestamp: Date.now(),
+               targetWorkerId: msg.targetWorkerId,
+               error: "Target worker has no gRPC port registered"
+             });
+         }
       }
     });
 

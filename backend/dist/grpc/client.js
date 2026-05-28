@@ -56,6 +56,26 @@ class GrpcSwarmClient {
         console.log(`[gRPC Client] Constructing client for target: ${target}`);
         this.client = new swarmProto.SwarmNode(target, grpc.credentials.createInsecure());
     }
+    // Worker B (RELAY mode) connects to Relay Server to pull data
+    async receivePipe(transferId, onData, onEnd, onError) {
+        return new Promise((resolve, reject) => {
+            console.log(`[gRPC Client] Initiating ReceivePipe connection to Relay...`);
+            const call = this.client.ReceivePipe({ transfer_id: transferId });
+            call.on('data', (chunk) => {
+                onData(chunk.content);
+            });
+            call.on('end', () => {
+                console.log(`[gRPC Client] ReceivePipe stream complete.`);
+                onEnd();
+                resolve();
+            });
+            call.on('error', (err) => {
+                console.error(`[gRPC Client] ReceivePipe stream error:`, err);
+                onError(err);
+                reject(err);
+            });
+        });
+    }
     // Pipes a Node.js Readable stream directly into the gRPC connection
     async pipeStream(transferId, stream) {
         return new Promise((resolve, reject) => {

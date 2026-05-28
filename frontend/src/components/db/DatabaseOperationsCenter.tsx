@@ -5,7 +5,6 @@ import { SocketManager } from '../../worker/SocketManager';
 
 export const DatabaseOperationsCenter: React.FC = () => {
   const [routing, setRouting] = useState<Record<string, { primary: { engine: string; connectionString?: string }, mirrors: { engine: string; connectionString?: string }[] }>>({});
-  const [isPanelOpen, setIsPanelOpen] = useState(false);
 
   const socketManager = SocketManager.getInstance();
 
@@ -17,45 +16,34 @@ export const DatabaseOperationsCenter: React.FC = () => {
     socketManager.on(MessageType.DB_STATE_UPDATE, handleDbState);
 
     // Initial fetch when opened
-    if (isPanelOpen) {
-       socketManager.emit(MessageType.DB_STATE_REQUEST, { timestamp: Date.now() });
-    }
+    socketManager.emit(MessageType.DB_STATE_REQUEST, { timestamp: Date.now() });
 
     return () => {
       socketManager.off(MessageType.DB_STATE_UPDATE, handleDbState);
     };
-  }, [isPanelOpen]);
-
-  if (!isPanelOpen) {
-     return (
-       <button
-         onClick={() => setIsPanelOpen(true)}
-         style={{ position: 'fixed', bottom: 20, right: 20, backgroundColor: '#8e44ad', color: 'white', padding: '10px 20px', borderRadius: '5px', cursor: 'pointer', border: 'none', boxShadow: '0 4px 6px rgba(0,0,0,0.3)', zIndex: 1000 }}
-       >
-          🎛️ DB Ops Center
-       </button>
-     );
-  }
+  }, []);
 
   return (
-    <div style={{
-      position: 'fixed', bottom: 20, right: 20, width: '450px',
-      backgroundColor: '#2c3e50', color: 'white', borderRadius: '8px',
-      boxShadow: '0 10px 25px rgba(0,0,0,0.5)', zIndex: 1000, overflow: 'hidden', border: '1px solid #34495e'
-    }}>
-      <div style={{ backgroundColor: '#1a252f', padding: '15px', display: 'flex', justifyContent: 'space-between', alignItems: 'center', borderBottom: '1px solid #34495e' }}>
-         <h3 style={{ margin: 0, fontSize: '16px' }}>🎛️ Pluggable DB Switchboard</h3>
-         <button onClick={() => setIsPanelOpen(false)} style={{ background: 'none', border: 'none', color: '#e74c3c', cursor: 'pointer', fontSize: '18px' }}>✖</button>
-      </div>
+    <div className="w-full max-w-4xl mx-auto flex flex-col h-full">
+      <div className="p-6 bg-card/20 border border-border/50 rounded-2xl shadow-xl backdrop-blur-sm">
 
-      <div style={{ padding: '20px', display: 'flex', flexDirection: 'column', gap: '20px' }}>
-         <p style={{ margin: 0, fontSize: '13px', color: '#bdc3c7' }}>
-            Warning: Hot-swapping a domain routes all live swarm traffic to the new database engine instantly without rebooting the Relay.
-         </p>
+        <div className="flex items-center gap-4 mb-6 pb-4 border-b border-border/50">
+          <div className="w-12 h-12 rounded-full bg-primary/10 flex items-center justify-center text-primary shadow-[0_0_20px_rgba(170,59,255,0.2)]">
+            <span className="text-2xl">🎛️</span>
+          </div>
+          <div>
+            <h2 className="text-xl font-bold text-foreground">Pluggable DB Switchboard</h2>
+            <p className="text-xs text-muted-foreground mt-1">
+              Warning: Hot-swapping a domain routes all live swarm traffic to the new database engine instantly without rebooting the Relay.
+            </p>
+          </div>
+        </div>
 
-         {(['AUTH', 'AUDIT', 'CHAT'] as const).map(domain => (
-            <DomainConfigRow key={domain} domain={domain} currentConfig={routing[domain]} socketManager={socketManager} />
-         ))}
+        <div className="grid grid-cols-1 gap-6">
+          {(['AUTH', 'AUDIT', 'CHAT'] as const).map(domain => (
+             <DomainConfigRow key={domain} domain={domain} currentConfig={routing[domain]} socketManager={socketManager} />
+          ))}
+        </div>
       </div>
     </div>
   );
@@ -108,23 +96,23 @@ const DomainConfigRow: React.FC<{ domain: string; currentConfig?: { primary: { e
    };
 
    return (
-      <div style={{ backgroundColor: '#34495e', padding: '15px', borderRadius: '6px' }}>
-         <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '10px' }}>
-            <span style={{ fontWeight: 'bold', color: '#f1c40f' }}>{domain} DOMAIN</span>
-            <span style={{ fontSize: '12px', padding: '3px 8px', borderRadius: '12px', backgroundColor: currentConfig?.primary?.engine === 'MOCK' ? '#e67e22' : '#2ecc71', color: '#fff' }}>
+      <div className="bg-secondary/40 border border-border/50 p-5 rounded-xl transition-all hover:border-primary/30">
+         <div className="flex justify-between items-center mb-4">
+            <span className="font-bold text-sm tracking-widest text-primary uppercase">{domain} DOMAIN</span>
+            <span className={`text-[10px] font-medium px-3 py-1 rounded-full border ${currentConfig?.primary?.engine === 'MOCK' ? 'bg-amber-500/10 text-amber-500 border-amber-500/20' : 'bg-emerald-500/10 text-emerald-500 border-emerald-500/20'}`}>
                Live: {currentConfig?.primary?.engine || 'UNKNOWN'}
                {mirrors.length > 0 && ` (+${mirrors.length} Mirrors)`}
             </span>
          </div>
 
          {/* PRIMARY DB CONFIG */}
-         <div style={{ marginBottom: '10px' }}>
-            <span style={{ fontSize: '11px', color: '#bdc3c7', display: 'block', marginBottom: '5px' }}>PRIMARY DATABASE (Sync Read/Write)</span>
-            <div style={{ display: 'flex', gap: '10px', marginBottom: '5px' }}>
+         <div className="mb-4">
+            <span className="text-[10px] uppercase tracking-wider text-muted-foreground block mb-2 font-semibold">Primary Database (Sync Read/Write)</span>
+            <div className="flex gap-3 mb-2">
                <select
                   value={primaryEngine}
                   onChange={e => setPrimaryEngine(e.target.value)}
-                  style={{ flex: 1, padding: '8px', borderRadius: '4px', border: '1px solid #7f8c8d', backgroundColor: '#2c3e50', color: 'white' }}
+                  className="flex-1 bg-background border border-border rounded-lg p-2 text-sm text-foreground outline-none focus:border-primary/50"
                >
                   <option value="MOCK">Memory Mock DB</option>
                   <option value="MONGODB">MongoDB</option>
@@ -140,53 +128,55 @@ const DomainConfigRow: React.FC<{ domain: string; currentConfig?: { primary: { e
                   placeholder="Primary Connection String"
                   value={primaryConn}
                   onChange={e => setPrimaryConn(e.target.value)}
-                  style={{ width: '100%', padding: '8px', borderRadius: '4px', border: '1px solid #7f8c8d', backgroundColor: '#2c3e50', color: 'white', boxSizing: 'border-box' }}
+                  className="w-full bg-background border border-border rounded-lg p-2 text-sm text-foreground outline-none focus:border-primary/50 font-mono"
                />
             )}
          </div>
 
          {/* MIRRORS CONFIG */}
-         {mirrors.map((mirror, index) => (
-            <div key={index} style={{ marginBottom: '10px', padding: '10px', backgroundColor: '#2c3e50', borderRadius: '4px', border: '1px dashed #7f8c8d' }}>
-               <div style={{ display: 'flex', justifyContent: 'space-between', marginBottom: '5px' }}>
-                  <span style={{ fontSize: '11px', color: '#bdc3c7' }}>MIRROR {index + 1} (Async Write-Behind)</span>
-                  <button onClick={() => removeMirror(index)} style={{ background: 'none', border: 'none', color: '#e74c3c', cursor: 'pointer', fontSize: '10px' }}>Remove</button>
-               </div>
-               <div style={{ display: 'flex', gap: '10px', marginBottom: '5px' }}>
-                  <select
-                     value={mirror.engine}
-                     onChange={e => updateMirror(index, 'engine', e.target.value)}
-                     style={{ flex: 1, padding: '6px', borderRadius: '4px', border: '1px solid #7f8c8d', backgroundColor: '#1a252f', color: 'white', fontSize: '12px' }}
-                  >
-                     <option value="POSTGRES">PostgreSQL</option>
-                     <option value="MONGODB">MongoDB</option>
-                     <option value="SUPABASE">Supabase</option>
-                     <option value="FIREBASE">Firebase</option>
-                     <option value="SQLITE">SQLite</option>
-                  </select>
-               </div>
-               {mirror.engine !== 'SQLITE' && (
-                  <input
-                     type="text"
-                     placeholder="Mirror Connection String"
-                     value={mirror.connectionString}
-                     onChange={e => updateMirror(index, 'connectionString', e.target.value)}
-                     style={{ width: '100%', padding: '6px', borderRadius: '4px', border: '1px solid #7f8c8d', backgroundColor: '#1a252f', color: 'white', boxSizing: 'border-box', fontSize: '12px' }}
-                  />
-               )}
-            </div>
-         ))}
+         <div className="space-y-3">
+           {mirrors.map((mirror, index) => (
+              <div key={index} className="p-3 bg-background/50 rounded-lg border border-dashed border-border/60">
+                 <div className="flex justify-between items-center mb-2">
+                    <span className="text-[10px] uppercase tracking-wider text-muted-foreground font-semibold">Mirror {index + 1} (Async Write-Behind)</span>
+                    <button onClick={() => removeMirror(index)} className="text-[10px] text-destructive hover:underline">Remove</button>
+                 </div>
+                 <div className="flex gap-3 mb-2">
+                    <select
+                       value={mirror.engine}
+                       onChange={e => updateMirror(index, 'engine', e.target.value)}
+                       className="flex-1 bg-background border border-border rounded-md p-1.5 text-xs text-foreground outline-none focus:border-primary/50"
+                    >
+                       <option value="POSTGRES">PostgreSQL</option>
+                       <option value="MONGODB">MongoDB</option>
+                       <option value="SUPABASE">Supabase</option>
+                       <option value="FIREBASE">Firebase</option>
+                       <option value="SQLITE">SQLite</option>
+                    </select>
+                 </div>
+                 {mirror.engine !== 'SQLITE' && (
+                    <input
+                       type="text"
+                       placeholder="Mirror Connection String"
+                       value={mirror.connectionString}
+                       onChange={e => updateMirror(index, 'connectionString', e.target.value)}
+                       className="w-full bg-background border border-border rounded-md p-1.5 text-xs text-foreground outline-none focus:border-primary/50 font-mono"
+                    />
+                 )}
+              </div>
+           ))}
+         </div>
 
-         <div style={{ display: 'flex', gap: '10px', marginTop: '15px' }}>
+         <div className="flex gap-3 mt-4 pt-4 border-t border-border/30">
             <button
                onClick={addMirror}
-               style={{ flex: 1, padding: '8px', backgroundColor: '#7f8c8d', color: 'white', border: 'none', borderRadius: '4px', cursor: 'pointer', fontSize: '12px' }}
+               className="flex-1 px-4 py-2 bg-secondary text-secondary-foreground hover:bg-secondary/80 border border-border rounded-lg text-xs font-medium transition-colors"
             >
                + Add Async Mirror
             </button>
             <button
                onClick={handleHotSwap}
-               style={{ flex: 2, padding: '8px', backgroundColor: '#3498db', color: 'white', border: 'none', borderRadius: '4px', cursor: 'pointer', fontWeight: 'bold' }}
+               className="flex-[2] px-4 py-2 bg-primary hover:bg-primary/90 text-primary-foreground font-bold rounded-lg text-sm transition-all shadow-[0_0_10px_rgba(170,59,255,0.2)]"
             >
                Commit Routing Change
             </button>

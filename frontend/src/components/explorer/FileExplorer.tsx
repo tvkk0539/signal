@@ -1,9 +1,11 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useRef } from 'react';
 import { MessageType } from '@swarm/shared';
 import type { FileItem, FileListRequestMessage, FileListResponseMessage, RemoteItem, RemoteListRequestMessage, RemoteListResponseMessage } from '@swarm/shared';
 import { MediaPlayerModal } from '../media/MediaPlayerModal';
 import { useAuthStore } from '../../store/authStore';
 import { SocketManager } from '../../worker/SocketManager';
+import { useVirtualizer } from '@tanstack/react-virtual';
+import { Folder, File, HardDrive, RefreshCw, ArrowUp, LayoutGrid, List as ListIcon, MoreVertical } from 'lucide-react';
 
 interface FileExplorerProps {
   isConnected: boolean;
@@ -12,6 +14,7 @@ interface FileExplorerProps {
 
 export const FileExplorer: React.FC<FileExplorerProps> = ({ isConnected, workerId }) => {
   const [currentPath, setCurrentPath] = useState<string>('');
+  const [viewMode, setViewMode] = useState<'LIST' | 'GRID'>('LIST');
   const [files, setFiles] = useState<FileItem[]>([]);
   const [remotes, setRemotes] = useState<RemoteItem[]>([]);
   const [selectedFs, setSelectedFs] = useState<string>('/');
@@ -114,7 +117,7 @@ export const FileExplorer: React.FC<FileExplorerProps> = ({ isConnected, workerI
     setCurrentPath(''); // Reset path to root when changing file systems
   };
 
-  const [playingMedia, setPlayingMedia] = useState<{ fs: string; path: string } | null>(null);
+  const [playingMedia, setPlayingMedia] = useState<{ fs: string; path: string; action: 'PLAY' | 'DOWNLOAD' } | null>(null);
 
   const handleRowClick = (item: FileItem) => {
     if (item.IsDir) {
@@ -126,10 +129,18 @@ export const FileExplorer: React.FC<FileExplorerProps> = ({ isConnected, workerI
       if (isMedia) {
          setPlayingMedia({
            fs: selectedFs,
-           path: currentPath === '' ? item.Name : `${currentPath}/${item.Name}`
+           path: currentPath === '' ? item.Name : `${currentPath}/${item.Name}`,
+           action: 'PLAY'
          });
       } else {
-        alert(`File Details:\nName: ${item.Name}\nSize: ${formatBytes(item.Size)}\nModified: ${new Date(item.ModTime).toLocaleString()}`);
+         // Initiate a P2P download instead of just showing an alert
+         if (window.confirm(`Do you want to download ${item.Name} (${formatBytes(item.Size)}) via P2P Relay Bypass?`)) {
+            setPlayingMedia({
+               fs: selectedFs,
+               path: currentPath === '' ? item.Name : `${currentPath}/${item.Name}`,
+               action: 'DOWNLOAD'
+            });
+         }
       }
     }
   };
@@ -143,96 +154,196 @@ export const FileExplorer: React.FC<FileExplorerProps> = ({ isConnected, workerI
     return parseFloat((bytes / Math.pow(k, i)).toFixed(2)) + ' ' + sizes[i];
   };
 
+  const parentRef = useRef<HTMLDivElement>(null);
+
+  const rowVirtualizer = useVirtualizer({
+    count: files.length,
+    getScrollElement: () => parentRef.current,
+    estimateSize: () => 50, // Height of list row
+    overscan: 5,
+  });
+
   return (
-    <div style={{ padding: '20px', border: '1px solid #333', borderRadius: '8px', minWidth: '600px', backgroundColor: '#2d2d30', color: '#eee', height: '100%', display: 'flex', flexDirection: 'column' }}>
-      <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '20px', paddingBottom: '15px', borderBottom: '1px solid #444' }}>
-        <h2 style={{ margin: 0 }}>File Explorer</h2>
+    <div className="flex flex-col h-full bg-card/20 rounded-2xl border border-border/50 shadow-2xl overflow-hidden backdrop-blur-sm">
+      {/* Header & Controls */}
+      <div className="p-4 bg-background/50 border-b border-border/50 flex flex-col gap-4 backdrop-blur-md">
+        <div className="flex justify-between items-center">
+          <div className="flex items-center gap-3">
+             <div className="w-10 h-10 rounded-full bg-primary/10 flex items-center justify-center text-primary shadow-[0_0_15px_rgba(170,59,255,0.2)]">
+               <HardDrive size={20} />
+             </div>
+             <div>
+               <h2 className="text-lg font-semibold text-foreground m-0 leading-tight">Virtual File System</h2>
+               <div className="text-xs text-muted-foreground flex items-center gap-2">
+                 Worker: <span className="font-mono text-primary">{workerId.substring(0,8)}...</span>
+               </div>
+             </div>
+          </div>
 
-        {/* Cloud Remote Selector */}
-        <div style={{ display: 'flex', alignItems: 'center', gap: '10px' }}>
-          <label style={{ fontSize: '14px', color: '#aaa' }}>Cloud Remote:</label>
-          <select
-            value={selectedFs}
-            onChange={handleFsChange}
-            style={{ padding: '8px', borderRadius: '4px', backgroundColor: '#3c3c3c', color: 'white', border: '1px solid #555', cursor: 'pointer', outline: 'none' }}
-          >
-            {remotes.map(remote => (
-              <option key={remote.name} value={remote.name}>
-                {remote.name === '/' ? 'Local Machine (/)' : `${remote.name} (${remote.type})`}
-              </option>
-            ))}
-            {remotes.length === 0 && <option value="/">Local Machine (/)</option>}
-          </select>
+          {/* Cloud Remote Selector */}
+          <div className="flex items-center gap-3 bg-secondary/50 p-1.5 rounded-lg border border-border/50">
+            <select
+              value={selectedFs}
+              onChange={handleFsChange}
+              className="bg-transparent text-sm text-foreground outline-none cursor-pointer px-2"
+            >
+              {remotes.map(remote => (
+                <option key={remote.name} value={remote.name} className="bg-background">
+                  {remote.name === '/' ? 'Local Machine (/)' : `${remote.name} (${remote.type})`}
+                </option>
+              ))}
+              {remotes.length === 0 && <option value="/">Local Machine (/)</option>}
+            </select>
+          </div>
+        </div>
+
+        {/* Toolbar */}
+        <div className="flex gap-3 items-center">
+          <div className="flex gap-1 bg-secondary/50 p-1 rounded-lg border border-border/50">
+            <button
+              onClick={handleNavigateUp}
+              disabled={currentPath === '' || currentPath === '/'}
+              className="p-1.5 rounded-md hover:bg-background/80 disabled:opacity-30 disabled:cursor-not-allowed transition-colors text-muted-foreground hover:text-foreground"
+              title="Navigate Up"
+            >
+              <ArrowUp size={18} />
+            </button>
+            <button
+              onClick={handleRefresh}
+              disabled={loading}
+              className={`p-1.5 rounded-md hover:bg-background/80 transition-colors text-muted-foreground hover:text-foreground ${loading ? 'animate-spin text-primary' : ''}`}
+              title="Refresh Directory"
+            >
+              <RefreshCw size={18} />
+            </button>
+          </div>
+
+          <div className="flex-1 bg-secondary/30 border border-border/50 rounded-lg px-4 py-2 font-mono text-sm text-muted-foreground flex items-center gap-2 overflow-hidden whitespace-nowrap">
+            <span className="text-primary font-bold">{selectedFs}</span>
+            <span className="text-foreground truncate">{currentPath || '/'}</span>
+          </div>
+
+          <div className="flex gap-1 bg-secondary/50 p-1 rounded-lg border border-border/50">
+             <button
+                onClick={() => setViewMode('LIST')}
+                className={`p-1.5 rounded-md transition-colors ${viewMode === 'LIST' ? 'bg-background shadow-sm text-primary' : 'text-muted-foreground hover:text-foreground'}`}
+             >
+                <ListIcon size={18} />
+             </button>
+             <button
+                onClick={() => setViewMode('GRID')}
+                className={`p-1.5 rounded-md transition-colors ${viewMode === 'GRID' ? 'bg-background shadow-sm text-primary' : 'text-muted-foreground hover:text-foreground'}`}
+             >
+                <LayoutGrid size={18} />
+             </button>
+          </div>
         </div>
       </div>
 
-      <div style={{ display: 'flex', gap: '10px', marginBottom: '16px', alignItems: 'center' }}>
-        <button
-          onClick={handleNavigateUp}
-          disabled={currentPath === '' || currentPath === '/'}
-          style={{ padding: '8px 15px', cursor: (currentPath === '' || currentPath === '/') ? 'not-allowed' : 'pointer', backgroundColor: '#0e639c', color: 'white', border: 'none', borderRadius: '4px' }}
-        >
-          ⬆️ Up
-        </button>
-        <button
-          onClick={handleRefresh}
-          disabled={loading}
-          style={{ padding: '8px 15px', cursor: loading ? 'not-allowed' : 'pointer', backgroundColor: '#333', color: 'white', border: '1px solid #555', borderRadius: '4px' }}
-        >
-          🔄 Refresh
-        </button>
-        <div style={{ flex: 1, padding: '8px 12px', backgroundColor: '#1e1e1e', border: '1px solid #444', borderRadius: '4px', fontFamily: 'monospace', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap', color: '#ccc' }}>
-          {selectedFs}{currentPath}
-        </div>
-      </div>
-
-      {loading && <div style={{ padding: '20px', textAlign: 'center', fontStyle: 'italic', color: '#666' }}>Loading directory contents...</div>}
-
-      {error && <div style={{ padding: '20px', textAlign: 'center', color: 'red', border: '1px solid red', backgroundColor: '#fee' }}>Error: {error}</div>}
-
-      {!loading && !error && (
-        <div style={{ flex: 1, overflowY: 'auto' }}>
-          <table style={{ width: '100%', borderCollapse: 'collapse', backgroundColor: '#252526', color: '#ccc' }}>
-            <thead style={{ position: 'sticky', top: 0, backgroundColor: '#333', zIndex: 1 }}>
-              <tr style={{ borderBottom: '1px solid #555', textAlign: 'left' }}>
-                <th style={{ padding: '12px 15px', width: '50px', textAlign: 'center' }}>Type</th>
-                <th style={{ padding: '12px 15px' }}>Name</th>
-                <th style={{ padding: '12px 15px', textAlign: 'right' }}>Size</th>
-                <th style={{ padding: '12px 15px', textAlign: 'right' }}>Modified</th>
-              </tr>
-            </thead>
-            <tbody>
-              {files.length === 0 ? (
-                <tr>
-                  <td colSpan={4} style={{ padding: '40px', textAlign: 'center', color: '#888', fontStyle: 'italic' }}>Empty directory</td>
-                </tr>
-              ) : (
-                files.map((file) => (
-                  <tr
-                    key={file.ID || file.Name}
-                    onClick={() => handleRowClick(file)}
-                    style={{ borderBottom: '1px solid #333', cursor: 'pointer', transition: 'background-color 0.1s' }}
-                    onMouseOver={(e) => (e.currentTarget.style.backgroundColor = '#2a2d2e')}
-                    onMouseOut={(e) => (e.currentTarget.style.backgroundColor = 'transparent')}
-                  >
-                    <td style={{ padding: '12px 15px', textAlign: 'center', fontSize: '18px' }}>{file.IsDir ? '📁' : '📄'}</td>
-                    <td style={{ padding: '12px 15px', wordBreak: 'break-all' }}>{file.Name}</td>
-                    <td style={{ padding: '12px 15px', textAlign: 'right', color: '#999' }}>{file.IsDir ? '--' : formatBytes(file.Size)}</td>
-                    <td style={{ padding: '12px 15px', textAlign: 'right', color: '#999', fontSize: '14px' }}>{new Date(file.ModTime).toLocaleString()}</td>
-                  </tr>
-                ))
-              )}
-            </tbody>
-          </table>
+      {error && (
+        <div className="m-4 p-4 bg-destructive/10 border border-destructive/30 rounded-lg text-destructive text-sm flex items-center gap-2">
+          ⚠️ {error}
         </div>
       )}
 
-      {/* Phase 4: MediaPlayer Modal */}
+      {/* File Area */}
+      <div className="flex-1 overflow-hidden relative bg-[url('https://www.transparenttextures.com/patterns/cubes.png')] bg-opacity-5">
+
+        {loading && files.length === 0 && (
+          <div className="absolute inset-0 flex flex-col items-center justify-center bg-background/50 backdrop-blur-sm z-10">
+            <RefreshCw size={32} className="animate-spin text-primary mb-4" />
+            <div className="text-muted-foreground font-mono text-sm tracking-widest uppercase">Scanning Virtual File System...</div>
+          </div>
+        )}
+
+        <div ref={parentRef} className="h-full w-full overflow-auto p-4 custom-scrollbar">
+
+          {files.length === 0 && !loading && !error && (
+             <div className="h-full flex items-center justify-center text-muted-foreground italic border-2 border-dashed border-border/30 rounded-xl p-8">
+                This directory is empty.
+             </div>
+          )}
+
+          {viewMode === 'LIST' && files.length > 0 && (
+            <div style={{ height: `${rowVirtualizer.getTotalSize()}px`, width: '100%', position: 'relative' }}>
+               {/* List Header (Sticky logic can be complex with virtualizers, we'll keep it simple for now) */}
+               <div className="flex items-center text-xs font-semibold text-muted-foreground uppercase tracking-wider mb-2 px-4 border-b border-border/50 pb-2">
+                 <div className="w-10"></div>
+                 <div className="flex-1">Name</div>
+                 <div className="w-24 text-right">Size</div>
+                 <div className="w-40 text-right">Modified</div>
+                 <div className="w-10"></div>
+               </div>
+
+               {rowVirtualizer.getVirtualItems().map((virtualItem) => {
+                 const file = files[virtualItem.index];
+                 return (
+                   <div
+                     key={virtualItem.key}
+                     onClick={() => handleRowClick(file)}
+                     className="absolute top-0 left-0 w-full flex items-center px-4 py-2 border-b border-border/30 hover:bg-white/5 cursor-pointer transition-colors group"
+                     style={{
+                       height: `${virtualItem.size}px`,
+                       transform: `translateY(${virtualItem.start}px)`,
+                     }}
+                   >
+                     <div className="w-10 text-muted-foreground flex justify-center group-hover:text-primary transition-colors">
+                        {file.IsDir ? <Folder size={18} /> : <File size={18} />}
+                     </div>
+                     <div className="flex-1 truncate text-sm text-foreground pr-4">
+                        {file.Name}
+                     </div>
+                     <div className="w-24 text-right text-xs text-muted-foreground font-mono">
+                        {file.IsDir ? '--' : formatBytes(file.Size)}
+                     </div>
+                     <div className="w-40 text-right text-xs text-muted-foreground">
+                        {new Date(file.ModTime).toLocaleDateString()} {new Date(file.ModTime).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}
+                     </div>
+                     <div className="w-10 flex justify-end">
+                        <button className="text-muted-foreground opacity-0 group-hover:opacity-100 hover:text-foreground transition-all">
+                           <MoreVertical size={16} />
+                        </button>
+                     </div>
+                   </div>
+                 );
+               })}
+            </div>
+          )}
+
+          {viewMode === 'GRID' && files.length > 0 && (
+             <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 lg:grid-cols-5 xl:grid-cols-6 gap-4">
+                {files.map(file => (
+                   <div
+                     key={file.ID || file.Name}
+                     onClick={() => handleRowClick(file)}
+                     className="bg-card border border-border hover:border-primary/50 hover:bg-secondary/30 rounded-xl p-4 flex flex-col items-center justify-center gap-3 cursor-pointer transition-all hover:shadow-[0_4px_20px_rgba(170,59,255,0.15)] group"
+                   >
+                     <div className="w-16 h-16 rounded-2xl bg-secondary flex items-center justify-center text-muted-foreground group-hover:text-primary group-hover:scale-110 transition-all duration-300">
+                        {file.IsDir ? <Folder size={32} /> : <File size={32} />}
+                     </div>
+                     <div className="text-center w-full">
+                        <div className="text-sm text-foreground truncate w-full font-medium" title={file.Name}>
+                           {file.Name}
+                        </div>
+                        <div className="text-[10px] text-muted-foreground mt-1">
+                           {file.IsDir ? 'Directory' : formatBytes(file.Size)}
+                        </div>
+                     </div>
+                   </div>
+                ))}
+             </div>
+          )}
+
+        </div>
+      </div>
+
+      {/* Phase 4: MediaPlayer/Downloader Modal */}
       {playingMedia && (
         <MediaPlayerModal
            workerId={workerId}
            fs={playingMedia.fs}
            path={playingMedia.path}
+           action={playingMedia.action}
            userId={useAuthStore.getState().user?.id || 'unknown'}
            onClose={() => setPlayingMedia(null)}
         />

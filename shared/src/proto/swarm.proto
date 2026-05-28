@@ -4,8 +4,16 @@ package swarm;
 
 service SwarmNode {
   // A high-speed, client-to-server streaming RPC to pipe massive binary files
-  // directly between ephemeral workers.
+  // directly between ephemeral workers or to the Relay Server.
   rpc PipeData (stream DataChunk) returns (TransferStatus) {}
+
+  // A high-speed, server-to-client streaming RPC for a firewalled worker
+  // to connect to the Relay Server and pull data from an ongoing transfer.
+  rpc ReceivePipe (ReceivePipeRequest) returns (stream DataChunk) {}
+}
+
+message ReceivePipeRequest {
+  string transfer_id = 1;
 }
 
 message DataChunk {

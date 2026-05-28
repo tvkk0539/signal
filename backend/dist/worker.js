@@ -8,6 +8,7 @@ const server_1 = require("./grpc/server");
 const client_1 = require("./grpc/client");
 const RELAY_SERVER_URL = process.env.RELAY_URL || 'http://localhost:3001';
 const WORKER_SECRET = process.env.WORKER_SECRET || 'fallback_for_dev_only';
+const GRPC_MODE = process.env.GRPC_MODE || 'DIRECT';
 const rcloneManager = new RcloneDaemonManager_1.RcloneDaemonManager();
 const grpcServer = new server_1.GrpcSwarmServer();
 async function bootWorker() {
@@ -34,7 +35,8 @@ async function bootWorker() {
             timestamp: Date.now(),
             role: 'WORKER',
             token: WORKER_SECRET,
-            grpcPort: grpcPort // Phase 5: Tell the Fleet Admiral our gRPC address
+            grpcPort: grpcPort, // Phase 5: Tell the Fleet Admiral our gRPC address
+            grpcMode: GRPC_MODE // Phase 5.5: Tell Relay our capabilities
         };
         socket.emit(shared_1.MessageType.AUTH_REQUEST, authMessage);
     });
@@ -130,10 +132,16 @@ async function bootWorker() {
     // The worker must be able to answer SDP Offers from the UI to establish the P2P pipe
     const peerConnections = new Map();
     const dataChannels = new Map();
+    const RTC_CONFIG = {
+        iceServers: [
+            { urls: 'stun:stun.l.google.com:19302' },
+            { urls: 'stun:stun1.l.google.com:19302' }
+        ]
+    };
     socket.on(shared_1.MessageType.SDP_OFFER, async (msg) => {
         console.log(`[Worker] Received SDP_OFFER from UI Client ${msg.senderId} for Streaming`);
         try {
-            const pc = new werift_1.RTCPeerConnection();
+            const pc = new werift_1.RTCPeerConnection(RTC_CONFIG);
             peerConnections.set(msg.senderId, pc);
             pc.connectionStateChange.subscribe((state) => {
                 console.log(`[Worker] WebRTC State with ${msg.senderId}: ${state}`);
@@ -142,6 +150,24 @@ async function bootWorker() {
                     dataChannels.delete(msg.senderId);
                 }
             });
+            // The backend needs to listen for its own ICE candidates and send them to the UI
+            pc.onicecandidate = (event) => {
+                if (event.candidate) {
+                    socket.emit(shared_1.MessageType.ICE_CANDIDATE, {
+                        type: shared_1.MessageType.ICE_CANDIDATE,
+                        timestamp: Date.now(),
+                        senderId: socket.id,
+                        targetId: msg.senderId,
+                        // werift's candidate might not have .toJSON(), so we manually reconstruct it
+                        candidate: {
+                            candidate: event.candidate.candidate,
+                            sdpMid: event.candidate.sdpMid,
+                            sdpMLineIndex: event.candidate.sdpMLineIndex,
+                            usernameFragment: event.candidate.usernameFragment
+                        }
+                    });
+                }
+            };
             pc.ondatachannel = ({ channel }) => {
                 console.log(`[Worker] Received RTCDataChannel from ${msg.senderId}`);
                 dataChannels.set(msg.senderId, channel);
@@ -183,17 +209,56 @@ async function bootWorker() {
                             // 2. Fetch file stream from rclone
                             const stream = await rcloneManager.streamFile(data.fs, data.path, data.startByte, data.endByte);
                             // 3. Pipe the stream directly into the WebRTC DataChannel (On-The-Fly Memory Streaming)
-                            stream.on('data', (chunk) => {
-                                // Werift DataChannel send accepts Buffer
-                                channel.send(chunk);
+                            // CRITICAL FIX: WebRTC DataChannels have strict message size limits (usually 16-64KB).
+                            // We must chunk the Node stream into smaller buffers before sending.
+                            const CHUNK_SIZE = 16384; // 16KB is extremely safe for all browsers
+                            // CRITICAL FIX 2: Backpressure Management
+                            // If we blast chunks into werift faster than the network can send them,
+                            // werift's buffer overflows and it silently drops packets (resulting in 300 byte files).
+                            const BUFFER_LIMIT = 1024 * 1024; // 1MB buffer limit
+                            const sendChunk = async (slice) => {
+                                // Wait if the buffer is too full
+                                while (channel.bufferedAmount > BUFFER_LIMIT) {
+                                    await new Promise(resolve => setTimeout(resolve, 10)); // Yield event loop
+                                }
+                                try {
+                                    channel.send(slice);
+                                }
+                                catch (e) {
+                                    console.error(`[Worker] WebRTC send failed:`, e);
+                                }
+                            };
+                            stream.on('data', async (rawChunk) => {
+                                // Pause the rclone stream while we process this massive chunk
+                                stream.pause();
+                                let offset = 0;
+                                while (offset < rawChunk.length) {
+                                    const end = Math.min(offset + CHUNK_SIZE, rawChunk.length);
+                                    const slice = rawChunk.subarray(offset, end);
+                                    await sendChunk(slice);
+                                    offset = end;
+                                }
+                                // Resume pulling from rclone
+                                stream.resume();
                             });
-                            stream.on('end', () => {
-                                console.log(`[Worker] Stream complete for ${data.path}`);
-                                channel.send(JSON.stringify({ type: 'STREAM_END' }));
+                            stream.on('end', async () => {
+                                console.log(`[Worker] Stream complete for ${data.path}. Waiting for buffer to flush...`);
+                                // Wait for the WebRTC buffer to completely empty before sending the END signal
+                                while (channel.bufferedAmount > 0) {
+                                    await new Promise(resolve => setTimeout(resolve, 50));
+                                }
+                                console.log(`[Worker] Buffer flushed. Sending STREAM_END.`);
+                                try {
+                                    channel.send(JSON.stringify({ type: 'STREAM_END' }));
+                                }
+                                catch (e) { }
                             });
                             stream.on('error', (err) => {
                                 console.error(`[Worker] Rclone VFS Stream Error:`, err);
-                                channel.send(JSON.stringify({ type: 'STREAM_ERROR', error: err.message }));
+                                try {
+                                    channel.send(JSON.stringify({ type: 'STREAM_ERROR', error: err.message }));
+                                }
+                                catch (e) { }
                             });
                         }
                     }
@@ -231,6 +296,27 @@ async function bootWorker() {
             }
         }
     });
+    // Phase 5.5: Listen for Reverse-Tunnel requests from Relay
+    socket.on(shared_1.MessageType.GRPC_RELAY_TRANSFER_READY, async (msg) => {
+        console.log(`[Worker] Received Reverse-Tunnel request from Relay for transfer ${msg.transferId}`);
+        try {
+            const grpcClient = new client_1.GrpcSwarmClient(msg.relayGrpcIp, msg.relayGrpcPort);
+            // In a real app, you would stream this buffer to disk using fs.createWriteStream.
+            // For MVP, we'll log the receipt of the chunks.
+            let totalReceived = 0;
+            await grpcClient.receivePipe(msg.transferId, (chunk) => {
+                totalReceived += chunk.length;
+                // process.stdout.write(`.`); // Optional visual indicator
+            }, () => {
+                console.log(`\n[Worker] Reverse-Tunnel Transfer Complete! Total bytes: ${totalReceived}`);
+            }, (err) => {
+                console.error(`[Worker] Reverse-Tunnel Transfer Error:`, err);
+            });
+        }
+        catch (e) {
+            console.error(`[Worker] Failed to establish Reverse-Tunnel to Relay:`, e);
+        }
+    });
     socket.on(shared_1.MessageType.TASK_ASSIGNMENT, async (msg) => {
         console.log(`[Worker] Received TASK_ASSIGNMENT: ${msg.taskId} (${msg.taskType})`);
         if (msg.taskType === 'WORKER_TO_WORKER_TRANSFER') {
@@ -253,13 +339,15 @@ async function bootWorker() {
                         console.error(`[Worker] Service Discovery Failed: ${res.error}`);
                         return;
                     }
-                    console.log(`[Worker] Discovered Target Worker gRPC at ${res.ipAddress}:${res.grpcPort}`);
+                    console.log(`[Worker] Discovered Target Worker. Routing Mode: ${res.routingMode || 'DIRECT'}, Target: ${res.ipAddress}:${res.grpcPort}`);
                     try {
                         // 2. Fetch the massive file from Rclone VFS
                         const stream = await rcloneManager.streamFile('/', fileToStream);
                         // 3. Connect gRPC Client and pipe the data!
                         const grpcClient = new client_1.GrpcSwarmClient(res.ipAddress, res.grpcPort);
-                        const status = await grpcClient.pipeStream(`transfer_${Date.now()}`, stream);
+                        // If Relay gave us a transferId, use it. Otherwise generate a local one.
+                        const transferId = res.transferId || `transfer_${Date.now()}`;
+                        const status = await grpcClient.pipeStream(transferId, stream);
                         console.log(`[Worker] gRPC Transfer Complete! Payload Status:`, status);
                         // Notify UI
                         socket.emit(shared_1.MessageType.TASK_PROGRESS, {
