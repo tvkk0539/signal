@@ -10,9 +10,10 @@ import { JobManager } from './components/swarm/JobManager';
 import { ChatBox } from './components/chat/ChatBox';
 import './App.css';
 
-// Use an array join for the placeholder so global search-and-replace in the Docker entrypoint
-// doesn't accidentally replace this source code during compilation, and esbuild doesn't merge it.
-const PLACEHOLDER = ['__VITE_RELAY_URL_', 'PLACEHOLDER__'].join('');
+// Use an object to construct the placeholder so global search-and-replace in the Docker entrypoint
+// doesn't accidentally replace this source code during compilation, and esbuild cannot statically analyze it.
+const p = { a: '__VITE_RELAY_URL_', b: 'PLACEHOLDER__' };
+const PLACEHOLDER = p.a + p.b;
 const RELAY_SERVER_URL = import.meta.env.VITE_RELAY_URL && import.meta.env.VITE_RELAY_URL !== PLACEHOLDER
   ? import.meta.env.VITE_RELAY_URL
   : 'http://localhost:3001';
