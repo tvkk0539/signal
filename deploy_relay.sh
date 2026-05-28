@@ -10,10 +10,24 @@ echo "========================================================"
 echo "🤖 Booting Relay Server (The Central Nervous System)"
 echo "========================================================"
 echo ""
+
+echo "--- 💾 System Optimization ---"
+echo "If you are deploying on a tiny VM (like GCP e2-micro with 1GB RAM), the build process might crash due to low memory."
+read -p "Do you want to create a 1GB Swap File to prevent Out-Of-Memory crashes? (y/n): " SETUP_SWAP
+if [[ "$SETUP_SWAP" == "y" || "$SETUP_SWAP" == "Y" ]]; then
+    echo "Creating 1GB Swap File..."
+    sudo fallocate -l 1G /swapfile || true
+    sudo chmod 600 /swapfile || true
+    sudo mkswap /swapfile || true
+    sudo swapon /swapfile || true
+    echo "✅ Swap enabled."
+fi
+
+echo ""
 echo "This script will deploy the ultra-efficient Relay Server."
 echo "Please select your preferred deployment method:"
 echo "  1) Bare-Metal (Node.js + PM2) - Best for minimal footprint VMs"
-echo "  2) Docker Compose - Best for enterprise scale and isolation"
+echo "  2) Docker Compose - Best for utilizing pre-built GHCR Images"
 echo ""
 read -p "Enter 1 or 2: " DEPLOY_METHOD
 
@@ -59,53 +73,8 @@ if [ "$DEPLOY_METHOD" == "1" ]; then
     pm2 startup
     cd ..
 
-    echo ""
-    echo "--- 🌐 Domain & SSL Configuration ---"
-    read -p "Do you want to configure a Domain Name and get a FREE SSL Certificate? (y/n): " SETUP_SSL
-
-    if [[ "$SETUP_SSL" == "y" || "$SETUP_SSL" == "Y" ]]; then
-        read -p "Enter your Domain Name (e.g., signalrelay.neonlite.cc): " DOMAIN_NAME
-        read -p "Enter an Admin Email (required by Let's Encrypt for renewal notices): " ADMIN_EMAIL
-
-        echo "[5/5] Installing Nginx and Securing with Let's Encrypt SSL..."
-        sudo apt-get install -y nginx certbot python3-certbot-nginx
-
-        sudo cat <<NGINX > /etc/nginx/sites-available/swarm-relay
-server {
-    listen 80;
-    server_name ${DOMAIN_NAME};
-
-    location / {
-        proxy_pass http://127.0.0.1:3001;
-        proxy_http_version 1.1;
-        proxy_set_header Upgrade \$http_upgrade;
-        proxy_set_header Connection "upgrade";
-        proxy_set_header Host \$host;
-        proxy_set_header X-Real-IP \$remote_addr;
-        proxy_set_header X-Forwarded-For \$proxy_add_x_forwarded_for;
-        proxy_set_header X-Forwarded-Proto \$scheme;
-    }
-}
-NGINX
-
-        sudo ln -sf /etc/nginx/sites-available/swarm-relay /etc/nginx/sites-enabled/
-        sudo rm -f /etc/nginx/sites-enabled/default
-        sudo systemctl restart nginx
-
-        sudo certbot --nginx -d "${DOMAIN_NAME}" --non-interactive --agree-tos -m "${ADMIN_EMAIL}" --redirect
-
-        echo "========================================================"
-        echo "✅ Relay Server successfully deployed via Bare-Metal with SSL!"
-        echo "The server is securely running at: https://${DOMAIN_NAME}"
-        echo "Use 'pm2 logs swarm-relay' to view live traffic."
-        echo "========================================================"
-    else
-        echo "========================================================"
-        echo "✅ Relay Server successfully deployed via Bare-Metal!"
-        echo "The server is running in the background on Port 3001."
-        echo "Use 'pm2 logs swarm-relay' to view live traffic."
-        echo "========================================================"
-    fi
+    echo "✅ Relay Server started via PM2."
+    DEPLOY_SUCCESS_MSG="The server is running in the background on Port 3001.\nUse 'pm2 logs swarm-relay' to view live traffic."
 
 elif [ "$DEPLOY_METHOD" == "2" ]; then
     echo ""
@@ -135,7 +104,7 @@ services:
       context: .
       dockerfile: relay/Dockerfile
     ports:
-      - "3001:3001"
+      - "127.0.0.1:3001:3001"
     env_file:
       - relay/.env
     restart: unless-stopped
@@ -148,7 +117,7 @@ services:
   relay-server:
     image: ${GHCR_IMAGE}
     ports:
-      - "3001:3001"
+      - "127.0.0.1:3001:3001"
     env_file:
       - relay/.env
     restart: unless-stopped
@@ -157,13 +126,60 @@ DOCKER
 
     docker compose -f docker-compose-relay.yml up -d $( [ -z "$GHCR_IMAGE" ] && echo "--build" )
 
-    echo "========================================================"
-    echo "✅ Relay Server successfully deployed via Docker!"
-    echo "The container is running on Port 3001."
-    echo "Use 'docker logs -f \$(docker compose -f docker-compose-relay.yml ps -q relay-server)' to view live traffic."
+    echo "✅ Relay Server started via Docker."
+    DEPLOY_SUCCESS_MSG="The container is running internally on Port 3001.\nUse 'docker logs -f \$(docker compose -f docker-compose-relay.yml ps -q relay-server)' to view live traffic."
 
 else
     echo "❌ Invalid selection."
+    exit 1
+fi
+
+echo ""
+echo "--- 🌐 Domain & SSL Configuration ---"
+echo "You can securely proxy traffic to Port 3001 using Nginx & Certbot."
+read -p "Do you want to configure a Domain Name and get a FREE SSL Certificate? (y/n): " SETUP_SSL
+
+if [[ "$SETUP_SSL" == "y" || "$SETUP_SSL" == "Y" ]]; then
+    read -p "Enter your Domain Name (e.g., signalrelay.neonlite.cc): " DOMAIN_NAME
+    read -p "Enter an Admin Email (required by Let's Encrypt for renewal notices): " ADMIN_EMAIL
+
+    echo "Installing Nginx and Securing with Let's Encrypt SSL..."
+    sudo apt-get install -y nginx certbot python3-certbot-nginx
+
+    sudo cat <<NGINX > /etc/nginx/sites-available/swarm-relay
+server {
+    listen 80;
+    server_name ${DOMAIN_NAME};
+
+    location / {
+        proxy_pass http://127.0.0.1:3001;
+        proxy_http_version 1.1;
+        proxy_set_header Upgrade \$http_upgrade;
+        proxy_set_header Connection "upgrade";
+        proxy_set_header Host \$host;
+        proxy_set_header X-Real-IP \$remote_addr;
+        proxy_set_header X-Forwarded-For \$proxy_add_x_forwarded_for;
+        proxy_set_header X-Forwarded-Proto \$scheme;
+    }
+}
+NGINX
+
+    sudo ln -sf /etc/nginx/sites-available/swarm-relay /etc/nginx/sites-enabled/
+    sudo rm -f /etc/nginx/sites-enabled/default
+    sudo systemctl restart nginx
+
+    sudo certbot --nginx -d "${DOMAIN_NAME}" --non-interactive --agree-tos -m "${ADMIN_EMAIL}" --redirect
+
+    echo "========================================================"
+    echo "✅ Relay Server Successfully Deployed with SSL!"
+    echo "The server is securely running at: https://${DOMAIN_NAME}"
+    echo -e "${DEPLOY_SUCCESS_MSG}"
+    echo "========================================================"
+else
+    echo "========================================================"
+    echo "✅ Relay Server Successfully Deployed!"
+    echo -e "${DEPLOY_SUCCESS_MSG}"
+    echo "========================================================"
 fi
 
 echo ""
