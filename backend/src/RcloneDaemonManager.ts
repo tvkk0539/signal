@@ -199,9 +199,23 @@ export class RcloneDaemonManager {
       // or rely on a configured VFS endpoint if available.
       // A robust implementation would use `rcd` with `--vfs-cache-mode full` and access the HTTP server it spawns.
 
+      // Correctly format the target path for rclone cat.
+      // If targetFs is a remote (e.g., "gdrive:"), it already has a colon.
+      // If it's local ("/"), we just use the path.
+      let fullPath = path;
+      if (targetFs !== '/') {
+         // Ensure targetFs has exactly one trailing colon if it's a remote
+         const cleanFs = targetFs.endsWith(':') ? targetFs : `${targetFs}:`;
+         // Remove leading slashes from path when using remotes
+         const cleanPath = path.startsWith('/') ? path.substring(1) : path;
+         fullPath = `${cleanFs}${cleanPath}`;
+      } else {
+         fullPath = path.startsWith('/') ? path : `/${path}`;
+      }
+
       const response = await axios.post(`${RCLONE_RC_BASE_URL}/core/command`, {
         command: "cat",
-        arg: [`${targetFs}${targetFs === '/' ? '' : ':'}${path}`],
+        arg: [fullPath],
         opt: { offset: startByte.toString(), count: endByte ? (endByte - startByte + 1).toString() : undefined }
       }, {
         headers: {
