@@ -6,6 +6,9 @@ Object.defineProperty(exports, "__esModule", { value: true });
 exports.RcloneDaemonManager = void 0;
 const child_process_1 = require("child_process");
 const axios_1 = __importDefault(require("axios"));
+const fs_1 = __importDefault(require("fs"));
+const path_1 = __importDefault(require("path"));
+const os_1 = __importDefault(require("os"));
 const RCLONE_RC_ADDR = '127.0.0.1:5572';
 const RCLONE_RC_USER = 'swarm';
 const RCLONE_RC_PASS = 'swarm-local-secret';
@@ -19,14 +22,30 @@ class RcloneDaemonManager {
             return;
         }
         console.log('[Rclone] Booting Rclone Daemon in the background...');
-        // Using --rc-web-gui for local testing if requested, but mainly enabling rc
-        this.rcloneProcess = (0, child_process_1.spawn)('rclone', [
+        // To prevent "device or resource busy" config lock errors when deploying in Docker
+        // or GitHub Actions where the config file is mapped as a read-only secret mount,
+        // we copy the original config to a writable temporary file before booting rclone.
+        const originalConfigPath = path_1.default.join(os_1.default.homedir(), '.config', 'rclone', 'rclone.conf');
+        const tempConfigPath = '/tmp/rclone.conf';
+        let rcloneArgs = [
             'rcd',
             '--rc-web-gui',
             `--rc-addr`, RCLONE_RC_ADDR,
             `--rc-user`, RCLONE_RC_USER,
             `--rc-pass`, RCLONE_RC_PASS
-        ], {
+        ];
+        try {
+            if (fs_1.default.existsSync(originalConfigPath)) {
+                fs_1.default.copyFileSync(originalConfigPath, tempConfigPath);
+                console.log(`[Rclone] Copied read-only config to writable ${tempConfigPath}`);
+                rcloneArgs.push('--config', tempConfigPath);
+            }
+        }
+        catch (e) {
+            console.warn(`[Rclone] Could not copy config to temp path: ${e.message}`);
+        }
+        // Using --rc-web-gui for local testing if requested, but mainly enabling rc
+        this.rcloneProcess = (0, child_process_1.spawn)('rclone', rcloneArgs, {
             stdio: ['ignore', 'pipe', 'pipe'] // Listen to stdout and stderr
         });
         if (this.rcloneProcess.stdout) {

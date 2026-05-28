@@ -1,5 +1,8 @@
 import { spawn, ChildProcess } from 'child_process';
 import axios from 'axios';
+import fs from 'fs';
+import path from 'path';
+import os from 'os';
 
 const RCLONE_RC_ADDR = '127.0.0.1:5572';
 const RCLONE_RC_USER = 'swarm';
@@ -18,14 +21,31 @@ export class RcloneDaemonManager {
 
     console.log('[Rclone] Booting Rclone Daemon in the background...');
 
-    // Using --rc-web-gui for local testing if requested, but mainly enabling rc
-    this.rcloneProcess = spawn('rclone', [
+    // To prevent "device or resource busy" config lock errors when deploying in Docker
+    // or GitHub Actions where the config file is mapped as a read-only secret mount,
+    // we copy the original config to a writable temporary file before booting rclone.
+    const originalConfigPath = path.join(os.homedir(), '.config', 'rclone', 'rclone.conf');
+    const tempConfigPath = '/tmp/rclone.conf';
+    let rcloneArgs = [
       'rcd',
       '--rc-web-gui',
       `--rc-addr`, RCLONE_RC_ADDR,
       `--rc-user`, RCLONE_RC_USER,
       `--rc-pass`, RCLONE_RC_PASS
-    ], {
+    ];
+
+    try {
+       if (fs.existsSync(originalConfigPath)) {
+          fs.copyFileSync(originalConfigPath, tempConfigPath);
+          console.log(`[Rclone] Copied read-only config to writable ${tempConfigPath}`);
+          rcloneArgs.push('--config', tempConfigPath);
+       }
+    } catch (e: any) {
+       console.warn(`[Rclone] Could not copy config to temp path: ${e.message}`);
+    }
+
+    // Using --rc-web-gui for local testing if requested, but mainly enabling rc
+    this.rcloneProcess = spawn('rclone', rcloneArgs, {
       stdio: ['ignore', 'pipe', 'pipe'] // Listen to stdout and stderr
     });
 
