@@ -119,8 +119,14 @@ class GrpcRelayRouter {
                     bridge.targetStream.write(chunk);
                 }
                 else {
-                    // Buffer it temporarily if Target hasn't connected yet (handle with care in prod!)
-                    bridge.buffer.push(chunk);
+                    // Buffer it temporarily if Target hasn't connected yet
+                    // Add backpressure to prevent Memory OOM crash for massive files
+                    if (bridge.buffer.length > 5000) { // Limit buffer to ~320MB assuming 64KB chunks
+                        console.warn(`[gRPC Relay Router] Buffer limit reached for transfer ${transferId}. Dropping chunks.`);
+                    }
+                    else {
+                        bridge.buffer.push(chunk);
+                    }
                 }
                 if (chunk.is_last) {
                     console.log(`[gRPC Relay Router] Received final chunk from Source for transfer: ${transferId}`);

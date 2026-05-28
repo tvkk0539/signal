@@ -31,59 +31,42 @@ export const FleetSidebar: React.FC<FleetSidebarProps> = ({ targetWorkerId, setT
   }, [targetWorkerId, setTargetWorkerId]);
 
   return (
-    <div style={{
-      width: '300px',
-      backgroundColor: '#2a2d34',
-      color: 'white',
-      padding: '20px',
-      borderRight: '1px solid #444',
-      height: '100%',
-      minHeight: '600px',
-      display: 'flex',
-      flexDirection: 'column'
-    }}>
-      <h2 style={{ marginBottom: '20px', borderBottom: '1px solid #444', paddingBottom: '10px' }}>
-        Swarm Fleet
-      </h2>
-
-      <div style={{ marginBottom: '10px', fontSize: '14px', color: '#aaa' }}>
-        Active Workers: <strong>{workers.length}</strong>
+    <div className="w-full h-full flex flex-col bg-card/30 text-foreground">
+      <div className="p-4 border-b border-border/50">
+        <h2 className="text-xs font-semibold tracking-wider text-muted-foreground uppercase mb-1">
+          Swarm Fleet
+        </h2>
+        <div className="text-xs text-primary font-medium flex items-center gap-2">
+           <div className="w-1.5 h-1.5 rounded-full bg-primary animate-pulse" />
+           {workers.length} Active Nodes
+        </div>
       </div>
 
-      <div style={{ flex: 1, overflowY: 'auto', display: 'flex', flexDirection: 'column', gap: '8px' }}>
+      <div className="flex-1 overflow-y-auto p-2 space-y-1">
         {workers.length === 0 ? (
-          <div style={{ color: '#888', fontStyle: 'italic', padding: '10px' }}>
-            No workers connected to the Swarm.
+          <div className="text-xs text-muted-foreground text-center italic p-4">
+            No workers connected.
           </div>
         ) : (
-          workers.map((id) => (
-            <div
-              key={id}
-              onClick={() => setTargetWorkerId(id)}
-              style={{
-                padding: '12px',
-                backgroundColor: targetWorkerId === id ? '#4a90e2' : '#3a3d45',
-                borderRadius: '6px',
-                cursor: 'pointer',
-                display: 'flex',
-                alignItems: 'center',
-                transition: 'background-color 0.2s',
-                border: targetWorkerId === id ? '1px solid #6ab0ff' : '1px solid transparent'
-              }}
-            >
-              <span style={{
-                width: '10px',
-                height: '10px',
-                borderRadius: '50%',
-                backgroundColor: '#2ecc71',
-                marginRight: '10px',
-                boxShadow: '0 0 5px #2ecc71'
-              }} />
-              <span style={{ fontFamily: 'monospace', fontSize: '12px', overflow: 'hidden', textOverflow: 'ellipsis' }}>
-                {id}
-              </span>
-            </div>
-          ))
+          workers.map((id) => {
+            const isSelected = targetWorkerId === id;
+            return (
+              <div
+                key={id}
+                onClick={() => setTargetWorkerId(id)}
+                className={`p-3 rounded-lg cursor-pointer flex items-center gap-3 transition-all duration-200 border ${
+                  isSelected
+                    ? 'bg-primary/10 border-primary/50 text-primary shadow-sm'
+                    : 'bg-transparent border-transparent text-muted-foreground hover:bg-white/5 hover:text-foreground'
+                }`}
+              >
+                <div className={`w-2 h-2 rounded-full flex-shrink-0 ${isSelected ? 'bg-primary shadow-[0_0_8px_rgba(170,59,255,0.8)]' : 'bg-emerald-500 shadow-[0_0_5px_rgba(46,204,113,0.5)]'}`} />
+                <span className="font-mono text-xs truncate">
+                  {id}
+                </span>
+              </div>
+            );
+          })
         )}
       </div>
     </div>

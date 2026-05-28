@@ -23,23 +23,27 @@ export class GrpcSwarmClient {
   }
 
   // Worker B (RELAY mode) connects to Relay Server to pull data
-  public async receivePipe(transferId: string, onData: (chunk: Buffer) => void, onEnd: () => void, onError: (err: Error) => void) {
-    console.log(`[gRPC Client] Initiating ReceivePipe connection to Relay...`);
+  public async receivePipe(transferId: string, onData: (chunk: Buffer) => void, onEnd: () => void, onError: (err: Error) => void): Promise<void> {
+    return new Promise((resolve, reject) => {
+      console.log(`[gRPC Client] Initiating ReceivePipe connection to Relay...`);
 
-    const call = this.client.ReceivePipe({ transfer_id: transferId });
+      const call = this.client.ReceivePipe({ transfer_id: transferId });
 
-    call.on('data', (chunk: any) => {
-      onData(chunk.content);
-    });
+      call.on('data', (chunk: any) => {
+        onData(chunk.content);
+      });
 
-    call.on('end', () => {
-      console.log(`[gRPC Client] ReceivePipe stream complete.`);
-      onEnd();
-    });
+      call.on('end', () => {
+        console.log(`[gRPC Client] ReceivePipe stream complete.`);
+        onEnd();
+        resolve();
+      });
 
-    call.on('error', (err: Error) => {
-      console.error(`[gRPC Client] ReceivePipe stream error:`, err);
-      onError(err);
+      call.on('error', (err: Error) => {
+        console.error(`[gRPC Client] ReceivePipe stream error:`, err);
+        onError(err);
+        reject(err);
+      });
     });
   }
 
