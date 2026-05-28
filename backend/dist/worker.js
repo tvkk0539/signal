@@ -209,36 +209,47 @@ async function bootWorker() {
                             // 2. Fetch file stream from rclone
                             const stream = await rcloneManager.streamFile(data.fs, data.path, data.startByte, data.endByte);
                             // 3. Pipe the stream directly into the WebRTC DataChannel (On-The-Fly Memory Streaming)
-                            // CRITICAL FIX: WebRTC DataChannels have strict message size limits (usually 16-64KB).
-                            // We must chunk the Node stream into smaller buffers before sending, otherwise
-                            // the WebRTC library drops them or corrupts the stream.
                             const CHUNK_SIZE = 16384; // 16KB is extremely safe for all browsers
-                            stream.on('data', (rawChunk) => {
+                            // CRITICAL FIX: Backpressure Management
+                            // If we blast chunks into werift faster than the network can send them,
+                            // werift's buffer overflows and it silently drops packets.
+                            const BUFFER_LIMIT = 1024 * 1024; // 1MB buffer limit
+                            const sendChunk = async (slice) => {
+                                // Wait if the buffer is too full
+                                while (channel.bufferedAmount > BUFFER_LIMIT) {
+                                    await new Promise(resolve => setTimeout(resolve, 10)); // Yield event loop
+                                }
+                                try {
+                                    channel.send(slice);
+                                }
+                                catch (e) {
+                                    console.error(`[Worker] WebRTC send failed:`, e);
+                                }
+                            };
+                            stream.on('data', async (rawChunk) => {
+                                // Pause the rclone stream while we process this massive chunk
+                                stream.pause();
                                 let offset = 0;
                                 while (offset < rawChunk.length) {
                                     const end = Math.min(offset + CHUNK_SIZE, rawChunk.length);
                                     const slice = rawChunk.subarray(offset, end);
-                                    try {
-                                        channel.send(slice);
-                                    }
-                                    catch (e) {
-                                        console.error(`[Worker] WebRTC send failed (Buffer full?):`, e);
-                                        // A robust production implementation needs backpressure handling here
-                                        // (e.g., waiting for channel.bufferedAmount to decrease).
-                                        // For this phase, we catch to prevent crashing.
-                                    }
+                                    await sendChunk(slice);
                                     offset = end;
                                 }
+                                // Resume pulling from rclone
+                                stream.resume();
                             });
-                            stream.on('end', () => {
-                                console.log(`[Worker] Stream complete for ${data.path}`);
-                                // Give the channel a tiny bit of time to flush the last binary chunks before sending the JSON end marker
-                                setTimeout(() => {
-                                    try {
-                                        channel.send(JSON.stringify({ type: 'STREAM_END' }));
-                                    }
-                                    catch (e) { }
-                                }, 500);
+                            stream.on('end', async () => {
+                                console.log(`[Worker] Stream complete for ${data.path}. Waiting for buffer to flush...`);
+                                // Wait for the WebRTC buffer to completely empty before sending the END signal
+                                while (channel.bufferedAmount > 0) {
+                                    await new Promise(resolve => setTimeout(resolve, 50));
+                                }
+                                console.log(`[Worker] Buffer flushed. Sending STREAM_END.`);
+                                try {
+                                    channel.send(JSON.stringify({ type: 'STREAM_END' }));
+                                }
+                                catch (e) { }
                             });
                             stream.on('error', (err) => {
                                 console.error(`[Worker] Rclone VFS Stream Error:`, err);
