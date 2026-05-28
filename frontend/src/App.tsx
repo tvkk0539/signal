@@ -7,6 +7,7 @@ import { FleetSidebar } from './components/swarm/FleetSidebar';
 import { JobManager } from './components/swarm/JobManager';
 import { ChatBox } from './components/chat/ChatBox';
 import { SocketManager } from './worker/SocketManager';
+import { DatabaseOperationsCenter } from './components/db/DatabaseOperationsCenter';
 import './App.css';
 
 // Use an array join for the placeholder so global search-and-replace in the Docker entrypoint
@@ -125,6 +126,7 @@ function App() {
           <JobManager isConnected={isConnected} />
         </div>
       </div>
+      <DatabaseOperationsCenter />
     </div>
   );
 }

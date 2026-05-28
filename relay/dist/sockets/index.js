@@ -239,6 +239,37 @@ function setupSockets(io) {
                 });
             }
         });
+        // --- Database Operations Center API ---
+        socket.on(shared_1.MessageType.DB_STATE_REQUEST, () => {
+            socket.emit(shared_1.MessageType.DB_STATE_UPDATE, {
+                type: shared_1.MessageType.DB_STATE_UPDATE,
+                timestamp: Date.now(),
+                routing: db_1.dbManager.getRoutingState()
+            });
+        });
+        socket.on(shared_1.MessageType.DB_ROUTE_SWITCH_REQUEST, async (msg) => {
+            console.log(`[DB Operations] Received request to route ${msg.domain} to ${msg.engine}`);
+            try {
+                await db_1.dbManager.hotSwapDomain(msg.domain, {
+                    engine: msg.engine,
+                    connectionString: msg.connectionString,
+                    apiKey: msg.apiKey
+                });
+                // Broadcast new state to all connected UI clients
+                exports.connectedUIClients.forEach((clientSocket) => {
+                    clientSocket.emit(shared_1.MessageType.DB_STATE_UPDATE, {
+                        type: shared_1.MessageType.DB_STATE_UPDATE,
+                        timestamp: Date.now(),
+                        routing: db_1.dbManager.getRoutingState()
+                    });
+                });
+            }
+            catch (e) {
+                console.error(`[DB Operations] Hot-swap failed:`, e.message);
+                // Alert the specific UI client that failed
+                socket.emit('error', { message: `Hot-swap failed: ${e.message}` });
+            }
+        });
         // Ping/Pong capability test
         socket.on(shared_1.MessageType.PING, () => {
             console.log(`[Relay] Received Ping from ${socket.id}, sending Pong`);

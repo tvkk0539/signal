@@ -1,10 +1,16 @@
+import { Connection, Model } from 'mongoose';
 import { IUserRepository, User } from '../../interfaces/IUserRepository';
-import { UserModel } from './schemas/UserSchema';
+import { UserModel, IUserDocument, UserSchema } from './schemas/UserSchema';
 
 export class MongoUserRepository implements IUserRepository {
+  private userModel: Model<IUserDocument>;
+
+  constructor(connection: Connection) {
+    this.userModel = connection.model<IUserDocument>('User', UserSchema);
+  }
 
   async findByEmail(email: string): Promise<User | null> {
-    const userDoc = await UserModel.findOne({ email }).exec();
+    const userDoc = await this.userModel.findOne({ email }).exec();
     if (!userDoc) return null;
 
     return {
@@ -17,7 +23,7 @@ export class MongoUserRepository implements IUserRepository {
   }
 
   async createUser(userData: Omit<User, 'id' | 'createdAt'>): Promise<User> {
-    const newUser = new UserModel(userData);
+    const newUser = new this.userModel(userData);
     const savedUser = await newUser.save();
 
     return {

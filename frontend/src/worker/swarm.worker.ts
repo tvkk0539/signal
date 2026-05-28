@@ -88,11 +88,12 @@ self.onmessage = (event: MessageEvent) => {
         MessageType.CHAT_MESSAGE,
         MessageType.SDP_OFFER,
         MessageType.SDP_ANSWER,
-        MessageType.ICE_CANDIDATE
+        MessageType.ICE_CANDIDATE,
+        MessageType.DB_STATE_UPDATE
       ];
 
       passThroughEvents.forEach(eventType => {
-        socket?.on(eventType, (data) => {
+        socket?.on(eventType, (data: any) => {
           self.postMessage({ type: eventType, payload: data });
         });
       });

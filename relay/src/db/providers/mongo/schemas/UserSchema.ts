@@ -7,7 +7,7 @@ export interface IUserDocument extends Document {
   createdAt: Date;
 }
 
-const UserSchema: Schema = new Schema({
+export const UserSchema: Schema = new Schema({
   email: { type: String, required: true, unique: true, index: true },
   passwordHash: { type: String, required: true },
   role: { type: String, enum: ['ADMIN', 'USER'], default: 'USER' },

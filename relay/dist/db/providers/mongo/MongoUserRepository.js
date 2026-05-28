@@ -3,8 +3,12 @@ Object.defineProperty(exports, "__esModule", { value: true });
 exports.MongoUserRepository = void 0;
 const UserSchema_1 = require("./schemas/UserSchema");
 class MongoUserRepository {
+    userModel;
+    constructor(connection) {
+        this.userModel = connection.model('User', UserSchema_1.UserSchema);
+    }
     async findByEmail(email) {
-        const userDoc = await UserSchema_1.UserModel.findOne({ email }).exec();
+        const userDoc = await this.userModel.findOne({ email }).exec();
         if (!userDoc)
             return null;
         return {
@@ -16,7 +20,7 @@ class MongoUserRepository {
         };
     }
     async createUser(userData) {
-        const newUser = new UserSchema_1.UserModel(userData);
+        const newUser = new this.userModel(userData);
         const savedUser = await newUser.save();
         return {
             id: savedUser._id.toString(),

@@ -43,4 +43,7 @@ var MessageType;
     MessageType["STREAM_METADATA"] = "STREAM_METADATA";
     MessageType["GRPC_DISCOVERY_REQUEST"] = "GRPC_DISCOVERY_REQUEST";
     MessageType["GRPC_DISCOVERY_RESPONSE"] = "GRPC_DISCOVERY_RESPONSE";
+    MessageType["DB_STATE_REQUEST"] = "DB_STATE_REQUEST";
+    MessageType["DB_ROUTE_SWITCH_REQUEST"] = "DB_ROUTE_SWITCH_REQUEST";
+    MessageType["DB_STATE_UPDATE"] = "DB_STATE_UPDATE";
 })(MessageType || (exports.MessageType = MessageType = {}));
