@@ -11,6 +11,8 @@ class ReplicatedAuditLogRepository {
     async createLog(log) {
         const createdLog = await this.primary.createLog(log);
         this.mirrors.forEach(mirror => {
+            // See ReplicatedUserRepository note on `insertWithId`. We pass the full log here
+            // (casting to any) so the mirror can attempt to preserve the primary's ID if the adapter supports it.
             mirror.createLog(createdLog).catch(err => {
                 console.error(`[Replication Engine] Mirror write failed for AuditLog ${createdLog.jobId}:`, err);
             });

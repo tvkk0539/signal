@@ -89,7 +89,8 @@ self.onmessage = (event: MessageEvent) => {
         MessageType.SDP_OFFER,
         MessageType.SDP_ANSWER,
         MessageType.ICE_CANDIDATE,
-        MessageType.DB_STATE_UPDATE
+        MessageType.DB_STATE_UPDATE,
+        MessageType.PUBLIC_KEY_RESPONSE
       ];
 
       passThroughEvents.forEach(eventType => {

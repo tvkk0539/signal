@@ -15,6 +15,9 @@ interface WorkerData {
 export const connectedWorkers = new Map<string, WorkerData>();
 export const connectedUIClients = new Map<string, Socket>();
 
+// Public Key Directory for E2EE (User ID -> Base64 Public Key)
+export const publicKeyRegistry = new Map<string, string>();
+
 let roundRobinIndex = 0;
 
 function broadcastFleetState(io: Server) {
@@ -298,6 +301,22 @@ export function setupSockets(io: Server) {
          // Alert the specific UI client that failed
          socket.emit('error', { message: `Hot-swap failed: ${e.message}` });
        }
+    });
+
+    // --- ECDH Public Key Directory API ---
+    socket.on(MessageType.PUBLIC_KEY_ANNOUNCE, (msg: any) => {
+       console.log(`[E2EE Registry] Storing Public Key for User: ${msg.userId}`);
+       publicKeyRegistry.set(msg.userId, msg.publicKeyBase64);
+    });
+
+    socket.on(MessageType.PUBLIC_KEY_REQUEST, (msg: any) => {
+       const key = publicKeyRegistry.get(msg.targetId);
+       socket.emit(MessageType.PUBLIC_KEY_RESPONSE, {
+         type: MessageType.PUBLIC_KEY_RESPONSE,
+         timestamp: Date.now(),
+         targetId: msg.targetId,
+         publicKeyBase64: key || null
+       });
     });
 
     // Ping/Pong capability test

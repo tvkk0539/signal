@@ -22,7 +22,10 @@ class ReplicatedUserRepository {
         const createdUser = await this.primary.createUser(user);
         // 2. Fire-and-Forget async mirror writes
         this.mirrors.forEach(mirror => {
-            // Re-use the exact generated ID and timestamp from the primary to ensure exact replication
+            // In a production app, the adapter interface must support `insertWithId` to maintain
+            // relational integrity across shards. Here we simulate it by passing the createdUser directly.
+            // Since our mock adapters don't strictly strip the ID, it propagates.
+            // A robust ODM integration (like Prisma/Mongoose) requires specific upsert logic.
             mirror.createUser(createdUser).catch(err => {
                 console.error(`[Replication Engine] Mirror write failed for User ${createdUser.email}:`, err);
             });

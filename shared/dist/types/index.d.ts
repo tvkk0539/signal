@@ -189,3 +189,17 @@ export interface DbStateUpdateMessage extends BaseMessage {
         }>;
     }>;
 }
+export interface PublicKeyAnnounceMessage extends BaseMessage {
+    type: MessageType.PUBLIC_KEY_ANNOUNCE;
+    userId: string;
+    publicKeyBase64: string;
+}
+export interface PublicKeyRequestMessage extends BaseMessage {
+    type: MessageType.PUBLIC_KEY_REQUEST;
+    targetId: string;
+}
+export interface PublicKeyResponseMessage extends BaseMessage {
+    type: MessageType.PUBLIC_KEY_RESPONSE;
+    targetId: string;
+    publicKeyBase64: string | null;
+}
