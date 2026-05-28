@@ -37,8 +37,9 @@ This system leverages five major communication protocols to achieve "magic" func
 
 ## 🧠 Core Features
 
+*   **Sleek IDE Dashboard UI:** A highly-engineered React interface featuring Virtualized Grid/List views (handling 10,000+ files instantly), a collapsible Telemetry Drawer for global task tracking, and a built-in Pluggable DB Switchboard.
 *   **Frontend Web Worker Throttling:** Manages massive WebSocket "data firehoses" (e.g., thousands of progress updates per second) using a background thread (`swarm.worker.ts`), preventing the Main UI React thread from freezing while controlling large swarms.
-*   **On-The-Fly Memory Streaming:** Uses `rclone` VFS and WebRTC Data Channels to stream massive cloud files (50GB+) through low-resource ephemeral workers (14GB GitHub Actions) without ever writing to the physical hard drive. The UI dynamically detects MIME types via `StreamMetadataMessage`.
+*   **On-The-Fly Memory Streaming & Downloading:** Uses `rclone` VFS and WebRTC Data Channels to stream massive cloud files (50GB+) through low-resource ephemeral workers without ever writing to the physical hard drive. Includes a secure P2P local download feature to fetch files directly to the browser.
 *   **Relay Bypass Chat (True E2EE):** An End-to-End Encrypted messaging system utilizing native WebCrypto (ECDH + AES-GCM) for Zero-Knowledge privacy. The server acts purely as a dumb router, incapable of reading intercepted payloads. Intelligently offloads heavy file transfers.
 *   **God-Tier Database Architecture:** Features **Polyglot Persistence** and **Zero-Delay Multi-DB Mirroring**. The Relay Server acts as a domain-level switchboard, allowing the UI to hot-swap database engines (MongoDB, Postgres, SQLite, etc.) on the fly and stream writes to multiple async mirror databases without blocking the main event loop.
 
