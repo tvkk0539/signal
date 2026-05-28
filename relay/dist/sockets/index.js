@@ -3,12 +3,17 @@ var __importDefault = (this && this.__importDefault) || function (mod) {
     return (mod && mod.__esModule) ? mod : { "default": mod };
 };
 Object.defineProperty(exports, "__esModule", { value: true });
-exports.publicKeyRegistry = exports.connectedUIClients = exports.connectedWorkers = void 0;
+exports.publicKeyRegistry = exports.connectedUIClients = exports.connectedWorkers = exports.grpcRouter = void 0;
 exports.setupSockets = setupSockets;
 const shared_1 = require("@swarm/shared");
 const jsonwebtoken_1 = __importDefault(require("jsonwebtoken"));
 const db_1 = require("../db");
 const JWT_SECRET = process.env.JWT_SECRET || 'fallback_insecure_jwt_secret_key';
+const router_1 = require("../grpc/router");
+// Global router instance
+exports.grpcRouter = new router_1.GrpcRelayRouter();
+// Start the gRPC Relay Router when sockets are setup
+exports.grpcRouter.start().catch(e => console.error("Failed to start gRPC Relay Router:", e));
 exports.connectedWorkers = new Map();
 exports.connectedUIClients = new Map();
 // Public Key Directory for E2EE (User ID -> Base64 Public Key)
@@ -38,7 +43,8 @@ function setupSockets(io) {
                     exports.connectedWorkers.set(socket.id, {
                         socket: socket,
                         grpcPort: msg.grpcPort,
-                        ipAddress: typeof ipAddress === 'string' ? ipAddress.split(',')[0] : ipAddress[0]
+                        ipAddress: typeof ipAddress === 'string' ? ipAddress.split(',')[0] : ipAddress[0],
+                        grpcMode: msg.grpcMode || 'DIRECT' // Default to DIRECT if not specified
                     });
                     socket.emit(shared_1.MessageType.AUTH_RESPONSE, { success: true });
                     broadcastFleetState(io); // Broadcast updated state
@@ -169,26 +175,65 @@ function setupSockets(io) {
                 targetSocket.emit(shared_1.MessageType.ICE_CANDIDATE, msg);
             }
         });
-        // Phase 5: gRPC Service Discovery (DNS Router)
+        // Phase 5.5: Dual-Mode gRPC Service Discovery ("Traffic Cop" Router)
         socket.on(shared_1.MessageType.GRPC_DISCOVERY_REQUEST, (msg) => {
             console.log(`[Service Discovery] Worker ${socket.id} looking up gRPC address for ${msg.targetWorkerId}`);
             const targetData = exports.connectedWorkers.get(msg.targetWorkerId);
-            if (targetData && targetData.grpcPort) {
+            if (!targetData) {
                 socket.emit(shared_1.MessageType.GRPC_DISCOVERY_RESPONSE, {
                     type: shared_1.MessageType.GRPC_DISCOVERY_RESPONSE,
                     timestamp: Date.now(),
                     targetWorkerId: msg.targetWorkerId,
-                    ipAddress: targetData.ipAddress,
-                    grpcPort: targetData.grpcPort
+                    error: "Worker offline"
+                });
+                return;
+            }
+            if (targetData.grpcMode === 'RELAY') {
+                // The target is behind a firewall. Route traffic through the Relay Server.
+                console.log(`[Traffic Cop] Target Worker ${msg.targetWorkerId} is RELAY mode. Creating Reverse-Tunnel...`);
+                const transferId = exports.grpcRouter.createTransferSession();
+                const relayIp = exports.grpcRouter.getIp();
+                const relayPort = exports.grpcRouter.getPort();
+                // 1. Tell Target Worker to establish outbound connection to Relay and wait for data
+                targetData.socket.emit(shared_1.MessageType.GRPC_RELAY_TRANSFER_READY, {
+                    type: shared_1.MessageType.GRPC_RELAY_TRANSFER_READY,
+                    timestamp: Date.now(),
+                    transferId: transferId,
+                    relayGrpcIp: relayIp,
+                    relayGrpcPort: relayPort
+                });
+                // 2. Tell Source Worker to stream data to Relay
+                socket.emit(shared_1.MessageType.GRPC_DISCOVERY_RESPONSE, {
+                    type: shared_1.MessageType.GRPC_DISCOVERY_RESPONSE,
+                    timestamp: Date.now(),
+                    targetWorkerId: msg.targetWorkerId,
+                    ipAddress: relayIp,
+                    grpcPort: relayPort,
+                    routingMode: 'RELAYED',
+                    transferId: transferId
                 });
             }
             else {
-                socket.emit(shared_1.MessageType.GRPC_DISCOVERY_RESPONSE, {
-                    type: shared_1.MessageType.GRPC_DISCOVERY_RESPONSE,
-                    timestamp: Date.now(),
-                    targetWorkerId: msg.targetWorkerId,
-                    error: "Worker offline or gRPC port not registered"
-                });
+                // The target has an open port. Instruct source to connect directly.
+                if (targetData.grpcPort) {
+                    console.log(`[Traffic Cop] Target Worker ${msg.targetWorkerId} is DIRECT mode. Routing directly.`);
+                    socket.emit(shared_1.MessageType.GRPC_DISCOVERY_RESPONSE, {
+                        type: shared_1.MessageType.GRPC_DISCOVERY_RESPONSE,
+                        timestamp: Date.now(),
+                        targetWorkerId: msg.targetWorkerId,
+                        ipAddress: targetData.ipAddress,
+                        grpcPort: targetData.grpcPort,
+                        routingMode: 'DIRECT'
+                    });
+                }
+                else {
+                    socket.emit(shared_1.MessageType.GRPC_DISCOVERY_RESPONSE, {
+                        type: shared_1.MessageType.GRPC_DISCOVERY_RESPONSE,
+                        timestamp: Date.now(),
+                        targetWorkerId: msg.targetWorkerId,
+                        error: "Target worker has no gRPC port registered"
+                    });
+                }
             }
         });
         // Global Task Queue: Round-Robin Load Balancing

@@ -6,27 +6,44 @@ While WebSockets are utilized for UI control and WebRTC for media streaming, gRP
 
 ---
 
-## 1. The Concept: The Virtual Network
+## 1. The Dual-Mode Architecture (Direct vs. Relayed)
 
-Ephemeral runners like GitHub Actions execute in isolated, locked-down containers across different data centers. They cannot communicate with each other directly because they have no open inbound ports.
+To support both high-performance internal networks and highly restrictive ephemeral containers, the gRPC architecture operates in a **Dual-Mode** system governed by the Relay Server acting as a "Traffic Cop".
 
-By utilizing the Relay Server as a **gRPC Router**, we create a Virtual Private Network (VPN) for the swarm.
+Workers configure their capabilities using the `GRPC_MODE` environment variable (`DIRECT` or `RELAY`).
 
-1.  **Worker A (GitHub Action)** initiates an outbound connection to the Relay Server.
-2.  **Worker B (AWS Server or a second GitHub Action)** initiates an outbound connection to the Relay Server.
-3.  Because both maintain active TCP connections to the central hub, Worker A can instruct the Relay Server to route a binary gRPC stream directly to Worker B.
+### Mode A: DIRECT P2P (LAN/VPC Optimization)
+If workers are deployed within the same Virtual Private Cloud (e.g., AWS EC2 instances in the same security group) or on a corporate LAN, they do not need the Relay Server to route their massive file transfers.
+*   **The Flow:** Worker A asks the Relay for Worker B's IP address. Worker A connects directly to Worker B's open gRPC port.
+*   **The Benefit:** 100% of the network traffic bypasses the Relay Server, preserving bandwidth on the central hub.
 
-## 2. Overcoming the Hardware Bottleneck (Stream Piping)
+### Mode B: RELAYED (The Virtual Network)
+Ephemeral runners like GitHub Actions execute in isolated containers across different data centers. They cannot communicate directly because they have **no open inbound ports**. By utilizing the Relay Server as a **gRPC Router**, we create a Virtual Private Network (VPN) for the swarm.
+*   **The Flow (Reverse-Tunneling):**
+    1. Worker A wants to send data to firewalled Worker B.
+    2. Relay generates a unique `transfer_id`.
+    3. Relay pings Worker B: *"Connect to me and wait for data."* (Worker B makes an outbound `ReceivePipe` connection).
+    4. Relay tells Worker A: *"Stream your data to me."* (Worker A makes an outbound `PipeData` connection).
+    5. The Relay bridges the two streams in memory.
 
-A critical architectural concern is the capacity of the lightweight Relay Server (e.g., a $5/month VM). If Worker A attempts to send a 50GB file to Worker B, will the Relay Server crash due to CPU or RAM exhaustion?
+## 2. Overcoming the Hardware Bottleneck (Stream Matching)
 
-**The answer is No, due to Stream Piping.**
+A critical architectural concern is the capacity of the lightweight Relay Server (e.g., a $5/month VM) when operating in `RELAYED` mode. If Worker A attempts to route a 50GB file to Worker B, will the Relay Server crash due to RAM exhaustion?
 
-The Relay Server does not process, parse, or hold the data in memory. It operates purely as a network switch.
-*   As the gRPC binary data arrives from Worker A, the Node.js Relay Server reads the routing header.
-*   It immediately opens a Node.js `stream.pipe()` to Worker B.
-*   The binary data flows straight from the incoming network socket to the outgoing network socket.
-*   **Resource Impact:** The RAM utilization remains near 0%. CPU utilization remains under 1%. The only constraint is the network bandwidth limit (NIC speed) of the Relay Server VM (typically 1+ Gbps).
+**The answer is No, due to Stream Matching.**
+
+The Relay Server does not hold the data in memory. It operates purely as a network switch.
+*   The `GrpcRelayRouter` maintains a map of active `transfer_id`s.
+*   As the incoming stream from Worker A arrives, it is immediately written (piped) directly into the outgoing stream to Worker B.
+*   **Resource Impact:** RAM utilization remains near 0%. CPU utilization remains under 1%. The only constraint is the network bandwidth limit (NIC speed) of the Relay Server VM.
+
+## 2.5 The Four Interoperability Scenarios
+The "Traffic Cop" logic in the Relay Server seamlessly handles any combination of worker types:
+
+1.  **DIRECT ➡️ DIRECT:** Source connects directly to Target's open port. (Fastest, zero Relay bandwidth cost).
+2.  **RELAY ➡️ RELAY:** Source streams to Relay, Relay pipes to Target. (Zero inbound ports required).
+3.  **RELAY ➡️ DIRECT:** Target has an open port. Source (firewalled) connects directly outbound to Target.
+4.  **DIRECT ➡️ RELAY:** Target is firewalled. Source streams to Relay, Relay reverse-tunnels to Target.
 
 ## 3. Advanced Capabilities (The Distributed Supercomputer)
 

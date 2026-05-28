@@ -7,6 +7,7 @@ import { GrpcSwarmClient } from './grpc/client';
 
 const RELAY_SERVER_URL = process.env.RELAY_URL || 'http://localhost:3001';
 const WORKER_SECRET = process.env.WORKER_SECRET || 'fallback_for_dev_only';
+const GRPC_MODE = (process.env.GRPC_MODE as 'DIRECT' | 'RELAY') || 'DIRECT';
 
 const rcloneManager = new RcloneDaemonManager();
 const grpcServer = new GrpcSwarmServer();
@@ -41,7 +42,8 @@ async function bootWorker() {
       timestamp: Date.now(),
       role: 'WORKER',
       token: WORKER_SECRET,
-      grpcPort: grpcPort // Phase 5: Tell the Fleet Admiral our gRPC address
+      grpcPort: grpcPort, // Phase 5: Tell the Fleet Admiral our gRPC address
+      grpcMode: GRPC_MODE // Phase 5.5: Tell Relay our capabilities
     };
 
     socket.emit(MessageType.AUTH_REQUEST, authMessage);
@@ -258,6 +260,34 @@ async function bootWorker() {
     }
   });
 
+  // Phase 5.5: Listen for Reverse-Tunnel requests from Relay
+  socket.on(MessageType.GRPC_RELAY_TRANSFER_READY as any, async (msg: any) => {
+     console.log(`[Worker] Received Reverse-Tunnel request from Relay for transfer ${msg.transferId}`);
+     try {
+       const grpcClient = new GrpcSwarmClient(msg.relayGrpcIp, msg.relayGrpcPort);
+
+       // In a real app, you would stream this buffer to disk using fs.createWriteStream.
+       // For MVP, we'll log the receipt of the chunks.
+       let totalReceived = 0;
+
+       await grpcClient.receivePipe(
+         msg.transferId,
+         (chunk: Buffer) => {
+           totalReceived += chunk.length;
+           // process.stdout.write(`.`); // Optional visual indicator
+         },
+         () => {
+           console.log(`\n[Worker] Reverse-Tunnel Transfer Complete! Total bytes: ${totalReceived}`);
+         },
+         (err) => {
+           console.error(`[Worker] Reverse-Tunnel Transfer Error:`, err);
+         }
+       );
+     } catch (e) {
+       console.error(`[Worker] Failed to establish Reverse-Tunnel to Relay:`, e);
+     }
+  });
+
   socket.on(MessageType.TASK_ASSIGNMENT, async (msg: any) => {
     console.log(`[Worker] Received TASK_ASSIGNMENT: ${msg.taskId} (${msg.taskType})`);
 
@@ -286,7 +316,7 @@ async function bootWorker() {
             return;
           }
 
-          console.log(`[Worker] Discovered Target Worker gRPC at ${res.ipAddress}:${res.grpcPort}`);
+          console.log(`[Worker] Discovered Target Worker. Routing Mode: ${res.routingMode || 'DIRECT'}, Target: ${res.ipAddress}:${res.grpcPort}`);
 
           try {
             // 2. Fetch the massive file from Rclone VFS
@@ -294,7 +324,11 @@ async function bootWorker() {
 
             // 3. Connect gRPC Client and pipe the data!
             const grpcClient = new GrpcSwarmClient(res.ipAddress, res.grpcPort);
-            const status = await grpcClient.pipeStream(`transfer_${Date.now()}`, stream);
+
+            // If Relay gave us a transferId, use it. Otherwise generate a local one.
+            const transferId = res.transferId || `transfer_${Date.now()}`;
+
+            const status = await grpcClient.pipeStream(transferId, stream);
 
             console.log(`[Worker] gRPC Transfer Complete! Payload Status:`, status);
 

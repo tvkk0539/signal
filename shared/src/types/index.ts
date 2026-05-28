@@ -10,6 +10,7 @@ export interface AuthRequestMessage extends BaseMessage {
   role: 'UI' | 'WORKER';
   token: string;
   grpcPort?: number; // Phase 5: Workers report their listening port upon boot
+  grpcMode?: 'DIRECT' | 'RELAY'; // Phase 5.5: Worker's capability
 }
 
 export interface GrpcDiscoveryRequestMessage extends BaseMessage {
@@ -22,7 +23,16 @@ export interface GrpcDiscoveryResponseMessage extends BaseMessage {
   targetWorkerId: string;
   ipAddress: string;
   grpcPort: number;
+  routingMode?: 'DIRECT' | 'RELAYED';
+  transferId?: string; // Provided by relay when routingMode is RELAYED
   error?: string;
+}
+
+export interface GrpcRelayTransferReadyMessage extends BaseMessage {
+  type: MessageType.GRPC_RELAY_TRANSFER_READY; // We will add this to enums
+  transferId: string;
+  relayGrpcIp: string;
+  relayGrpcPort: number;
 }
 
 export interface WorkerStatusMessage extends BaseMessage {

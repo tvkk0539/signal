@@ -8,6 +8,7 @@ export interface AuthRequestMessage extends BaseMessage {
     role: 'UI' | 'WORKER';
     token: string;
     grpcPort?: number;
+    grpcMode?: 'DIRECT' | 'RELAY';
 }
 export interface GrpcDiscoveryRequestMessage extends BaseMessage {
     type: MessageType.GRPC_DISCOVERY_REQUEST;
@@ -18,7 +19,15 @@ export interface GrpcDiscoveryResponseMessage extends BaseMessage {
     targetWorkerId: string;
     ipAddress: string;
     grpcPort: number;
+    routingMode?: 'DIRECT' | 'RELAYED';
+    transferId?: string;
     error?: string;
+}
+export interface GrpcRelayTransferReadyMessage extends BaseMessage {
+    type: MessageType.GRPC_RELAY_TRANSFER_READY;
+    transferId: string;
+    relayGrpcIp: string;
+    relayGrpcPort: number;
 }
 export interface WorkerStatusMessage extends BaseMessage {
     type: MessageType.WORKER_STATUS_UPDATE;

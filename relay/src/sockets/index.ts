@@ -5,11 +5,20 @@ import { dbManager } from '../db';
 
 const JWT_SECRET = process.env.JWT_SECRET || 'fallback_insecure_jwt_secret_key';
 
+import { GrpcRelayRouter } from '../grpc/router';
+
+// Global router instance
+export const grpcRouter = new GrpcRelayRouter();
+
+// Start the gRPC Relay Router when sockets are setup
+grpcRouter.start().catch(e => console.error("Failed to start gRPC Relay Router:", e));
+
 // Registry to track connected workers and their gRPC configurations
 interface WorkerData {
   socket: Socket;
   grpcPort?: number;
   ipAddress: string;
+  grpcMode?: 'DIRECT' | 'RELAY';
 }
 
 export const connectedWorkers = new Map<string, WorkerData>();
@@ -49,7 +58,8 @@ export function setupSockets(io: Server) {
            connectedWorkers.set(socket.id, {
              socket: socket,
              grpcPort: msg.grpcPort,
-             ipAddress: typeof ipAddress === 'string' ? ipAddress.split(',')[0] : ipAddress[0]
+             ipAddress: typeof ipAddress === 'string' ? ipAddress.split(',')[0] : ipAddress[0],
+             grpcMode: msg.grpcMode || 'DIRECT' // Default to DIRECT if not specified
            });
 
            socket.emit(MessageType.AUTH_RESPONSE, { success: true });
@@ -187,26 +197,69 @@ export function setupSockets(io: Server) {
       }
     });
 
-    // Phase 5: gRPC Service Discovery (DNS Router)
+    // Phase 5.5: Dual-Mode gRPC Service Discovery ("Traffic Cop" Router)
     socket.on(MessageType.GRPC_DISCOVERY_REQUEST, (msg: any) => {
       console.log(`[Service Discovery] Worker ${socket.id} looking up gRPC address for ${msg.targetWorkerId}`);
       const targetData = connectedWorkers.get(msg.targetWorkerId);
 
-      if (targetData && targetData.grpcPort) {
+      if (!targetData) {
         socket.emit(MessageType.GRPC_DISCOVERY_RESPONSE, {
           type: MessageType.GRPC_DISCOVERY_RESPONSE,
           timestamp: Date.now(),
           targetWorkerId: msg.targetWorkerId,
-          ipAddress: targetData.ipAddress,
-          grpcPort: targetData.grpcPort
+          error: "Worker offline"
         });
+        return;
+      }
+
+      if (targetData.grpcMode === 'RELAY') {
+         // The target is behind a firewall. Route traffic through the Relay Server.
+         console.log(`[Traffic Cop] Target Worker ${msg.targetWorkerId} is RELAY mode. Creating Reverse-Tunnel...`);
+
+         const transferId = grpcRouter.createTransferSession();
+         const relayIp = grpcRouter.getIp();
+         const relayPort = grpcRouter.getPort();
+
+         // 1. Tell Target Worker to establish outbound connection to Relay and wait for data
+         targetData.socket.emit(MessageType.GRPC_RELAY_TRANSFER_READY, {
+           type: MessageType.GRPC_RELAY_TRANSFER_READY,
+           timestamp: Date.now(),
+           transferId: transferId,
+           relayGrpcIp: relayIp,
+           relayGrpcPort: relayPort
+         });
+
+         // 2. Tell Source Worker to stream data to Relay
+         socket.emit(MessageType.GRPC_DISCOVERY_RESPONSE, {
+           type: MessageType.GRPC_DISCOVERY_RESPONSE,
+           timestamp: Date.now(),
+           targetWorkerId: msg.targetWorkerId,
+           ipAddress: relayIp,
+           grpcPort: relayPort,
+           routingMode: 'RELAYED',
+           transferId: transferId
+         });
+
       } else {
-        socket.emit(MessageType.GRPC_DISCOVERY_RESPONSE, {
-          type: MessageType.GRPC_DISCOVERY_RESPONSE,
-          timestamp: Date.now(),
-          targetWorkerId: msg.targetWorkerId,
-          error: "Worker offline or gRPC port not registered"
-        });
+         // The target has an open port. Instruct source to connect directly.
+         if (targetData.grpcPort) {
+             console.log(`[Traffic Cop] Target Worker ${msg.targetWorkerId} is DIRECT mode. Routing directly.`);
+             socket.emit(MessageType.GRPC_DISCOVERY_RESPONSE, {
+               type: MessageType.GRPC_DISCOVERY_RESPONSE,
+               timestamp: Date.now(),
+               targetWorkerId: msg.targetWorkerId,
+               ipAddress: targetData.ipAddress,
+               grpcPort: targetData.grpcPort,
+               routingMode: 'DIRECT'
+             });
+         } else {
+             socket.emit(MessageType.GRPC_DISCOVERY_RESPONSE, {
+               type: MessageType.GRPC_DISCOVERY_RESPONSE,
+               timestamp: Date.now(),
+               targetWorkerId: msg.targetWorkerId,
+               error: "Target worker has no gRPC port registered"
+             });
+         }
       }
     });
 

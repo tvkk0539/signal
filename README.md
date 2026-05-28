@@ -30,7 +30,7 @@ This system leverages five major communication protocols to achieve "magic" func
 1.  **WebSockets (The Telemetry Pipe):** Provides real-time UI updates (e.g., live progress bars) between the Swarm and the Command Center.
 2.  **WebTransport / QUIC (The Mobile Pipe):** Ensures mobile clients never disconnect, even when rapidly switching between Wi-Fi and 4G networks.
 3.  **WebRTC (The Media & P2P Pipe):** Utilizes STUN/TURN hole-punching to bypass the Relay Server entirely, allowing users to stream 50GB videos or share massive files Peer-to-Peer with zero central bandwidth cost.
-4.  **gRPC (The Swarm Engine):** Allows isolated GitHub Action workers to stream binary data directly to each other, forming a "Virtual Network" for distributed MapReduce tasks.
+4.  **gRPC (The Dual-Mode Swarm Engine):** Allows workers to stream massive binary data to each other. It operates in two modes: `DIRECT` (P2P for LAN/VPC optimizing bandwidth) and `RELAYED` (Reverse-Tunneling through the central hub for completely firewalled GitHub Actions). The Relay acts as an intelligent "Traffic Cop" to bridge any combination of environments automatically.
 5.  **REST (The Authentication Gateway):** Secures the entry points utilizing a Database-Agnostic Manager and JSON Web Tokens (JWT).
 
 ---
