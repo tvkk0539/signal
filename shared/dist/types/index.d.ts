@@ -159,3 +159,47 @@ export interface JobAuditLog {
     bytesTransferred?: number;
     timestamp: Date;
 }
+export interface DbStateRequestMessage extends BaseMessage {
+    type: MessageType.DB_STATE_REQUEST;
+}
+export interface DbRouteSwitchRequestMessage extends BaseMessage {
+    type: MessageType.DB_ROUTE_SWITCH_REQUEST;
+    domain: 'AUTH' | 'AUDIT' | 'CHAT';
+    engine: 'MONGODB' | 'POSTGRES' | 'SUPABASE' | 'FIREBASE' | 'SQLITE' | 'MOCK';
+    connectionString?: string;
+    apiKey?: string;
+    mirrors?: Array<{
+        engine: string;
+        connectionString?: string;
+        apiKey?: string;
+    }>;
+}
+export interface DbStateUpdateMessage extends BaseMessage {
+    type: MessageType.DB_STATE_UPDATE;
+    routing: Record<string, {
+        primary: {
+            engine: string;
+            connectionString?: string;
+            apiKey?: string;
+        };
+        mirrors: Array<{
+            engine: string;
+            connectionString?: string;
+            apiKey?: string;
+        }>;
+    }>;
+}
+export interface PublicKeyAnnounceMessage extends BaseMessage {
+    type: MessageType.PUBLIC_KEY_ANNOUNCE;
+    userId: string;
+    publicKeyBase64: string;
+}
+export interface PublicKeyRequestMessage extends BaseMessage {
+    type: MessageType.PUBLIC_KEY_REQUEST;
+    targetId: string;
+}
+export interface PublicKeyResponseMessage extends BaseMessage {
+    type: MessageType.PUBLIC_KEY_RESPONSE;
+    targetId: string;
+    publicKeyBase64: string | null;
+}

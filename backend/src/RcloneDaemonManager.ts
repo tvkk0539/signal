@@ -149,6 +149,32 @@ export class RcloneDaemonManager {
     }
   }
 
+  public async statFile(fs: string, path: string): Promise<any> {
+    if (!this.isRunning) {
+      throw new Error('Rclone daemon is not running');
+    }
+
+    const targetFs = fs || '/';
+    try {
+      console.log(`[Rclone] Executing stat on fs: "${targetFs}", path: "${path}"`);
+      const auth = Buffer.from(`${RCLONE_RC_USER}:${RCLONE_RC_PASS}`).toString('base64');
+      const response = await axios.post(`${RCLONE_RC_BASE_URL}/operations/stat`, {
+        fs: targetFs,
+        remote: path
+      }, {
+        headers: {
+          'Authorization': `Basic ${auth}`,
+          'Content-Type': 'application/json'
+        }
+      });
+
+      return response.data.item;
+    } catch (error: any) {
+      console.error(`[Rclone] statFile Error: ${error.response?.data?.error || error.message}`);
+      throw new Error(error.response?.data?.error || error.message);
+    }
+  }
+
   // Phase 4: On-The-Fly Memory Streaming
   // Streams a file from rclone VFS as a buffer stream, allowing us to pipe it into WebRTC
   public async streamFile(fs: string, path: string, startByte: number = 0, endByte?: number): Promise<NodeJS.ReadableStream> {

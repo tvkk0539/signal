@@ -1,7 +1,7 @@
 import React, { useEffect, useRef, useState } from 'react';
-import { Socket } from 'socket.io-client';
 import { MessageType } from '@swarm/shared';
 import type { StreamRequestMessage, SdpAnswerMessage, IceCandidateMessage } from '@swarm/shared';
+import { SocketManager } from '../../worker/SocketManager';
 
 const RTC_CONFIG: RTCConfiguration = {
   iceServers: [
@@ -10,7 +10,6 @@ const RTC_CONFIG: RTCConfiguration = {
 };
 
 interface MediaPlayerModalProps {
-  socket: Socket | null;
   workerId: string;
   fs: string;
   path: string;
@@ -18,7 +17,8 @@ interface MediaPlayerModalProps {
   userId: string;
 }
 
-export const MediaPlayerModal: React.FC<MediaPlayerModalProps> = ({ socket, workerId, fs, path, onClose, userId }) => {
+export const MediaPlayerModal: React.FC<MediaPlayerModalProps> = ({ workerId, fs, path, onClose, userId }) => {
+  const socketManager = SocketManager.getInstance();
   const videoRef = useRef<HTMLVideoElement>(null);
   const pcRef = useRef<RTCPeerConnection | null>(null);
   const dcRef = useRef<RTCDataChannel | null>(null);
@@ -30,7 +30,7 @@ export const MediaPlayerModal: React.FC<MediaPlayerModalProps> = ({ socket, work
   const [status, setStatus] = useState<string>('Connecting to Swarm Worker...');
 
   useEffect(() => {
-    if (!socket || !workerId) return;
+    if (!workerId) return;
 
     let pc = new RTCPeerConnection(RTC_CONFIG);
     pcRef.current = pc;
@@ -47,21 +47,8 @@ export const MediaPlayerModal: React.FC<MediaPlayerModalProps> = ({ socket, work
        videoRef.current.src = URL.createObjectURL(mediaSource);
     }
 
-    mediaSource.addEventListener('sourceopen', () => {
-      // Hardcoded mime type for MVP. Prod would require the StreamMetadataMessage first.
-      const mimeCodec = 'video/mp4; codecs="avc1.42E01E, mp4a.40.2"';
-      if (MediaSource.isTypeSupported(mimeCodec)) {
-        sourceBufferRef.current = mediaSource.addSourceBuffer(mimeCodec);
-
-        sourceBufferRef.current.addEventListener('updateend', () => {
-          if (queueRef.current.length > 0 && sourceBufferRef.current && !sourceBufferRef.current.updating) {
-            sourceBufferRef.current.appendBuffer(queueRef.current.shift()!);
-          }
-        });
-      } else {
-        setStatus(`Unsupported MIME type or codec: ${mimeCodec}`);
-      }
-    });
+    // We no longer hardcode the codec on sourceopen.
+    // We wait for the STREAM_METADATA message from the backend over the WebRTC Data Channel.
 
     // --- WebRTC Data Channel Handlers ---
     channel.onopen = () => {
@@ -74,7 +61,7 @@ export const MediaPlayerModal: React.FC<MediaPlayerModalProps> = ({ socket, work
         fs: fs,
         path: path,
         action: 'PLAY',
-        startByte: 0 // Start from beginning for MVP
+        startByte: 0 // Start from beginning
       };
 
       channel.send(JSON.stringify(streamReq));
@@ -84,7 +71,28 @@ export const MediaPlayerModal: React.FC<MediaPlayerModalProps> = ({ socket, work
       if (typeof event.data === 'string') {
         try {
           const msg = JSON.parse(event.data);
-          if (msg.type === 'STREAM_END') {
+
+          if (msg.type === MessageType.STREAM_METADATA) {
+             console.log(`[UI] Received Stream Metadata:`, msg);
+             const mimeCodec = msg.mimeType;
+
+             if (mediaSource.readyState === 'open') {
+                if (MediaSource.isTypeSupported(mimeCodec)) {
+                  sourceBufferRef.current = mediaSource.addSourceBuffer(mimeCodec);
+
+                  sourceBufferRef.current.addEventListener('updateend', () => {
+                    if (queueRef.current.length > 0 && sourceBufferRef.current && !sourceBufferRef.current.updating) {
+                      sourceBufferRef.current.appendBuffer(queueRef.current.shift()!);
+                    }
+                  });
+                  setStatus('Metadata Received. Buffering stream...');
+                } else {
+                  setStatus(`Unsupported format by browser: ${mimeCodec}`);
+                }
+             } else {
+                console.error("[UI] MediaSource not open when metadata arrived.");
+             }
+          } else if (msg.type === 'STREAM_END') {
             setStatus('Stream Complete');
             if (mediaSourceRef.current?.readyState === 'open') {
                mediaSourceRef.current.endOfStream();
@@ -111,7 +119,7 @@ export const MediaPlayerModal: React.FC<MediaPlayerModalProps> = ({ socket, work
     // --- Signaling Handlers ---
     pc.onicecandidate = (event) => {
       if (event.candidate) {
-        socket.emit(MessageType.ICE_CANDIDATE, {
+        socketManager.emit(MessageType.ICE_CANDIDATE, {
           type: MessageType.ICE_CANDIDATE,
           timestamp: Date.now(),
           senderId: userId,
@@ -133,13 +141,13 @@ export const MediaPlayerModal: React.FC<MediaPlayerModalProps> = ({ socket, work
        }
     };
 
-    socket.on(MessageType.SDP_ANSWER, handleSdpAnswer);
-    socket.on(MessageType.ICE_CANDIDATE, handleIceCandidate);
+    socketManager.on(MessageType.SDP_ANSWER, handleSdpAnswer);
+    socketManager.on(MessageType.ICE_CANDIDATE, handleIceCandidate);
 
     // Initiate the connection by sending an Offer
     pc.createOffer().then(offer => {
       pc.setLocalDescription(offer);
-      socket.emit(MessageType.SDP_OFFER, {
+      socketManager.emit(MessageType.SDP_OFFER, {
         type: MessageType.SDP_OFFER,
         timestamp: Date.now(),
         senderId: userId,
@@ -149,12 +157,12 @@ export const MediaPlayerModal: React.FC<MediaPlayerModalProps> = ({ socket, work
     });
 
     return () => {
-      socket.off(MessageType.SDP_ANSWER, handleSdpAnswer);
-      socket.off(MessageType.ICE_CANDIDATE, handleIceCandidate);
+      socketManager.off(MessageType.SDP_ANSWER, handleSdpAnswer);
+      socketManager.off(MessageType.ICE_CANDIDATE, handleIceCandidate);
       channel.close();
       pc.close();
     };
-  }, [socket, workerId, fs, path, userId]);
+  }, [workerId, fs, path, userId]);
 
   return (
     <div style={{

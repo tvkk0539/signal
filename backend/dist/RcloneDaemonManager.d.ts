@@ -6,5 +6,6 @@ export declare class RcloneDaemonManager {
     ping(): Promise<boolean>;
     listFiles(fs?: string, path?: string): Promise<any[]>;
     getRemotes(): Promise<any[]>;
+    statFile(fs: string, path: string): Promise<any>;
     streamFile(fs: string, path: string, startByte?: number, endByte?: number): Promise<NodeJS.ReadableStream>;
 }

@@ -1,20 +1,18 @@
 import React, { useEffect, useState } from 'react';
-import { Socket } from 'socket.io-client';
 import { MessageType } from '@swarm/shared';
 import type { FleetStateUpdateMessage } from '@swarm/shared';
+import { SocketManager } from '../../worker/SocketManager';
 
 interface FleetSidebarProps {
-  socket: Socket | null;
   targetWorkerId: string;
   setTargetWorkerId: (id: string) => void;
 }
 
-export const FleetSidebar: React.FC<FleetSidebarProps> = ({ socket, targetWorkerId, setTargetWorkerId }) => {
+export const FleetSidebar: React.FC<FleetSidebarProps> = ({ targetWorkerId, setTargetWorkerId }) => {
   const [workers, setWorkers] = useState<string[]>([]);
+  const socketManager = SocketManager.getInstance();
 
   useEffect(() => {
-    if (!socket) return;
-
     const handleFleetUpdate = (msg: FleetStateUpdateMessage) => {
       console.log(`[UI] Fleet State Updated. Active Workers: ${msg.workers.length}`);
       setWorkers(msg.workers);
@@ -25,12 +23,12 @@ export const FleetSidebar: React.FC<FleetSidebarProps> = ({ socket, targetWorker
       }
     };
 
-    socket.on(MessageType.FLEET_STATE_UPDATE, handleFleetUpdate);
+    socketManager.on(MessageType.FLEET_STATE_UPDATE, handleFleetUpdate);
 
     return () => {
-      socket.off(MessageType.FLEET_STATE_UPDATE, handleFleetUpdate);
+      socketManager.off(MessageType.FLEET_STATE_UPDATE, handleFleetUpdate);
     };
-  }, [socket, targetWorkerId, setTargetWorkerId]);
+  }, [targetWorkerId, setTargetWorkerId]);
 
   return (
     <div style={{

@@ -1,6 +1,6 @@
-import { Socket } from 'socket.io-client';
 import { MessageType } from '@swarm/shared';
 import type { SdpOfferMessage, SdpAnswerMessage, IceCandidateMessage } from '@swarm/shared';
+import { SocketManager } from '../../worker/SocketManager';
 
 // WebRTC Configuration using public STUN servers for hole punching
 const RTC_CONFIG: RTCConfiguration = {
@@ -11,19 +11,24 @@ const RTC_CONFIG: RTCConfiguration = {
 };
 
 export class WebRTCManager {
-  private socket: Socket;
+  private socketManager: SocketManager;
   private localUserId: string;
   private peerConnections: Map<string, RTCPeerConnection> = new Map();
   private dataChannels: Map<string, RTCDataChannel> = new Map();
 
-  constructor(socket: Socket, localUserId: string) {
-    this.socket = socket;
+  // Reference bounded functions so we can remove them cleanly
+  private handleSdpOfferBound = this.handleSdpOffer.bind(this);
+  private handleSdpAnswerBound = this.handleSdpAnswer.bind(this);
+  private handleIceCandidateBound = this.handleIceCandidate.bind(this);
+
+  constructor(socketManager: SocketManager, localUserId: string) {
+    this.socketManager = socketManager;
     this.localUserId = localUserId;
 
     // Register signaling listeners
-    this.socket.on(MessageType.SDP_OFFER, this.handleSdpOffer.bind(this));
-    this.socket.on(MessageType.SDP_ANSWER, this.handleSdpAnswer.bind(this));
-    this.socket.on(MessageType.ICE_CANDIDATE, this.handleIceCandidate.bind(this));
+    this.socketManager.on(MessageType.SDP_OFFER, this.handleSdpOfferBound);
+    this.socketManager.on(MessageType.SDP_ANSWER, this.handleSdpAnswerBound);
+    this.socketManager.on(MessageType.ICE_CANDIDATE, this.handleIceCandidateBound);
 
     console.log(`[WebRTC] Manager initialized for user ${this.localUserId}`);
   }
@@ -41,7 +46,7 @@ export class WebRTCManager {
           targetId: targetId,
           candidate: event.candidate.toJSON()
         };
-        this.socket.emit(MessageType.ICE_CANDIDATE, payload);
+        this.socketManager.emit(MessageType.ICE_CANDIDATE, payload);
       }
     };
 
@@ -121,7 +126,7 @@ export class WebRTCManager {
     };
 
     console.log(`[WebRTC] Sending SDP_OFFER to ${targetId}`);
-    this.socket.emit(MessageType.SDP_OFFER, payload);
+    this.socketManager.emit(MessageType.SDP_OFFER, payload);
 
     // Wait for channel to open before sending data
     channel.addEventListener('open', () => {
@@ -167,7 +172,7 @@ export class WebRTCManager {
     };
 
     console.log(`[WebRTC] Sending SDP_ANSWER back to ${msg.senderId}`);
-    this.socket.emit(MessageType.SDP_ANSWER, payload);
+    this.socketManager.emit(MessageType.SDP_ANSWER, payload);
   }
 
   private async handleSdpAnswer(msg: SdpAnswerMessage) {
@@ -206,9 +211,9 @@ export class WebRTCManager {
   }
 
   public close() {
-    this.socket.off(MessageType.SDP_OFFER);
-    this.socket.off(MessageType.SDP_ANSWER);
-    this.socket.off(MessageType.ICE_CANDIDATE);
+    this.socketManager.off(MessageType.SDP_OFFER, this.handleSdpOfferBound);
+    this.socketManager.off(MessageType.SDP_ANSWER, this.handleSdpAnswerBound);
+    this.socketManager.off(MessageType.ICE_CANDIDATE, this.handleIceCandidateBound);
 
     this.peerConnections.forEach((_, id) => this.cleanup(id));
     console.log(`[WebRTC] Manager closed and connections cleaned up.`);

@@ -3,7 +3,7 @@ var __importDefault = (this && this.__importDefault) || function (mod) {
     return (mod && mod.__esModule) ? mod : { "default": mod };
 };
 Object.defineProperty(exports, "__esModule", { value: true });
-exports.connectedUIClients = exports.connectedWorkers = void 0;
+exports.publicKeyRegistry = exports.connectedUIClients = exports.connectedWorkers = void 0;
 exports.setupSockets = setupSockets;
 const shared_1 = require("@swarm/shared");
 const jsonwebtoken_1 = __importDefault(require("jsonwebtoken"));
@@ -11,6 +11,8 @@ const db_1 = require("../db");
 const JWT_SECRET = process.env.JWT_SECRET || 'fallback_insecure_jwt_secret_key';
 exports.connectedWorkers = new Map();
 exports.connectedUIClients = new Map();
+// Public Key Directory for E2EE (User ID -> Base64 Public Key)
+exports.publicKeyRegistry = new Map();
 let roundRobinIndex = 0;
 function broadcastFleetState(io) {
     const workers = Array.from(exports.connectedWorkers.keys());
@@ -238,6 +240,56 @@ function setupSockets(io) {
                     console.error(`[Audit Logger] Failed to save audit log for task ${msg.taskId}`, err);
                 });
             }
+        });
+        // --- Database Operations Center API ---
+        socket.on(shared_1.MessageType.DB_STATE_REQUEST, () => {
+            socket.emit(shared_1.MessageType.DB_STATE_UPDATE, {
+                type: shared_1.MessageType.DB_STATE_UPDATE,
+                timestamp: Date.now(),
+                routing: db_1.dbManager.getRoutingState()
+            });
+        });
+        socket.on(shared_1.MessageType.DB_ROUTE_SWITCH_REQUEST, async (msg) => {
+            console.log(`[DB Operations] Received request to route ${msg.domain} to ${msg.engine} with ${msg.mirrors?.length || 0} mirrors`);
+            try {
+                // UI payload mapping to DomainRoutingConfig
+                const config = {
+                    primary: {
+                        engine: msg.engine,
+                        connectionString: msg.connectionString,
+                        apiKey: msg.apiKey
+                    },
+                    mirrors: msg.mirrors || []
+                };
+                await db_1.dbManager.hotSwapDomain(msg.domain, config);
+                // Broadcast new state to all connected UI clients
+                exports.connectedUIClients.forEach((clientSocket) => {
+                    clientSocket.emit(shared_1.MessageType.DB_STATE_UPDATE, {
+                        type: shared_1.MessageType.DB_STATE_UPDATE,
+                        timestamp: Date.now(),
+                        routing: db_1.dbManager.getRoutingState()
+                    });
+                });
+            }
+            catch (e) {
+                console.error(`[DB Operations] Hot-swap failed:`, e.message);
+                // Alert the specific UI client that failed
+                socket.emit('error', { message: `Hot-swap failed: ${e.message}` });
+            }
+        });
+        // --- ECDH Public Key Directory API ---
+        socket.on(shared_1.MessageType.PUBLIC_KEY_ANNOUNCE, (msg) => {
+            console.log(`[E2EE Registry] Storing Public Key for User: ${msg.userId}`);
+            exports.publicKeyRegistry.set(msg.userId, msg.publicKeyBase64);
+        });
+        socket.on(shared_1.MessageType.PUBLIC_KEY_REQUEST, (msg) => {
+            const key = exports.publicKeyRegistry.get(msg.targetId);
+            socket.emit(shared_1.MessageType.PUBLIC_KEY_RESPONSE, {
+                type: shared_1.MessageType.PUBLIC_KEY_RESPONSE,
+                timestamp: Date.now(),
+                targetId: msg.targetId,
+                publicKeyBase64: key || null
+            });
         });
         // Ping/Pong capability test
         socket.on(shared_1.MessageType.PING, () => {

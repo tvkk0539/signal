@@ -15,6 +15,9 @@ interface WorkerData {
 export const connectedWorkers = new Map<string, WorkerData>();
 export const connectedUIClients = new Map<string, Socket>();
 
+// Public Key Directory for E2EE (User ID -> Base64 Public Key)
+export const publicKeyRegistry = new Map<string, string>();
+
 let roundRobinIndex = 0;
 
 function broadcastFleetState(io: Server) {
@@ -259,6 +262,61 @@ export function setupSockets(io: Server) {
           console.error(`[Audit Logger] Failed to save audit log for task ${msg.taskId}`, err);
         });
       }
+    });
+
+    // --- Database Operations Center API ---
+    socket.on(MessageType.DB_STATE_REQUEST, () => {
+       socket.emit(MessageType.DB_STATE_UPDATE, {
+         type: MessageType.DB_STATE_UPDATE,
+         timestamp: Date.now(),
+         routing: dbManager.getRoutingState()
+       });
+    });
+
+    socket.on(MessageType.DB_ROUTE_SWITCH_REQUEST, async (msg: any) => {
+       console.log(`[DB Operations] Received request to route ${msg.domain} to ${msg.engine} with ${msg.mirrors?.length || 0} mirrors`);
+       try {
+         // UI payload mapping to DomainRoutingConfig
+         const config = {
+           primary: {
+             engine: msg.engine,
+             connectionString: msg.connectionString,
+             apiKey: msg.apiKey
+           },
+           mirrors: msg.mirrors || []
+         };
+
+         await dbManager.hotSwapDomain(msg.domain, config);
+
+         // Broadcast new state to all connected UI clients
+         connectedUIClients.forEach((clientSocket) => {
+           clientSocket.emit(MessageType.DB_STATE_UPDATE, {
+             type: MessageType.DB_STATE_UPDATE,
+             timestamp: Date.now(),
+             routing: dbManager.getRoutingState()
+           });
+         });
+       } catch (e: any) {
+         console.error(`[DB Operations] Hot-swap failed:`, e.message);
+         // Alert the specific UI client that failed
+         socket.emit('error', { message: `Hot-swap failed: ${e.message}` });
+       }
+    });
+
+    // --- ECDH Public Key Directory API ---
+    socket.on(MessageType.PUBLIC_KEY_ANNOUNCE, (msg: any) => {
+       console.log(`[E2EE Registry] Storing Public Key for User: ${msg.userId}`);
+       publicKeyRegistry.set(msg.userId, msg.publicKeyBase64);
+    });
+
+    socket.on(MessageType.PUBLIC_KEY_REQUEST, (msg: any) => {
+       const key = publicKeyRegistry.get(msg.targetId);
+       socket.emit(MessageType.PUBLIC_KEY_RESPONSE, {
+         type: MessageType.PUBLIC_KEY_RESPONSE,
+         timestamp: Date.now(),
+         targetId: msg.targetId,
+         publicKeyBase64: key || null
+       });
     });
 
     // Ping/Pong capability test

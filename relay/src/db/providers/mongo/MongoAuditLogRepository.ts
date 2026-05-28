@@ -1,10 +1,17 @@
+import { Connection, Model } from 'mongoose';
 import { IAuditLogRepository } from '../../interfaces/IAuditLogRepository';
-import { JobAuditLogModel } from './schemas/AuditLogSchema';
+import { JobAuditLogSchema, IJobAuditLogDocument } from './schemas/AuditLogSchema';
 import { JobAuditLog } from '@swarm/shared';
 
 export class MongoAuditLogRepository implements IAuditLogRepository {
+  private logModel: Model<IJobAuditLogDocument>;
+
+  constructor(connection: Connection) {
+    this.logModel = connection.model<IJobAuditLogDocument>('JobAuditLog', JobAuditLogSchema);
+  }
+
   async createLog(log: Omit<JobAuditLog, 'id'>): Promise<JobAuditLog> {
-    const newLog = new JobAuditLogModel(log);
+    const newLog = new this.logModel(log);
     const saved = await newLog.save();
     return {
       id: saved._id.toString(),
@@ -18,7 +25,7 @@ export class MongoAuditLogRepository implements IAuditLogRepository {
   }
 
   async getLogsByJobId(jobId: string): Promise<JobAuditLog[]> {
-    const logs = await JobAuditLogModel.find({ jobId }).sort({ timestamp: -1 });
+    const logs = await this.logModel.find({ jobId }).sort({ timestamp: -1 });
     return logs.map(saved => ({
       id: saved._id.toString(),
       jobId: saved.jobId,
@@ -31,7 +38,7 @@ export class MongoAuditLogRepository implements IAuditLogRepository {
   }
 
   async getLogsByWorkerId(workerId: string): Promise<JobAuditLog[]> {
-    const logs = await JobAuditLogModel.find({ workerId }).sort({ timestamp: -1 });
+    const logs = await this.logModel.find({ workerId }).sort({ timestamp: -1 });
     return logs.map(saved => ({
       id: saved._id.toString(),
       jobId: saved.jobId,

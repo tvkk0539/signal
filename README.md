@@ -37,25 +37,27 @@ This system leverages five major communication protocols to achieve "magic" func
 
 ## 🧠 Core Features
 
-*   **On-The-Fly Memory Streaming:** Uses `rclone` VFS and HTTP Range requests to stream massive cloud files through low-resource workers without touching physical hard drives.
-*   **Relay Bypass Chat:** An end-to-end encrypted messaging system that intelligently offloads heavy file transfers to cloud workers, keeping the central Relay Server safe from OOM crashes.
-*   **Zero-Trust Security:** Workers must authenticate via strict API Keys before joining the swarm.
-*   **Pluggable Databases:** Built utilizing the Clean Architecture Repository Pattern. Currently configured for MongoDB, but designed to swap to PostgreSQL or Firebase with zero business logic rewrites.
-
----
+*   **Frontend Web Worker Throttling:** Manages massive WebSocket "data firehoses" (e.g., thousands of progress updates per second) using a background thread (`swarm.worker.ts`), preventing the Main UI React thread from freezing while controlling large swarms.
+*   **On-The-Fly Memory Streaming:** Uses `rclone` VFS and WebRTC Data Channels to stream massive cloud files (50GB+) through low-resource ephemeral workers (14GB GitHub Actions) without ever writing to the physical hard drive. The UI dynamically detects MIME types via `StreamMetadataMessage`.
+*   **Relay Bypass Chat (True E2EE):** An End-to-End Encrypted messaging system utilizing native WebCrypto (ECDH + AES-GCM) for Zero-Knowledge privacy. The server acts purely as a dumb router, incapable of reading intercepted payloads. Intelligently offloads heavy file transfers.
+*   **God-Tier Database Architecture:** Features **Polyglot Persistence** and **Zero-Delay Multi-DB Mirroring**. The Relay Server acts as a domain-level switchboard, allowing the UI to hot-swap database engines (MongoDB, Postgres, SQLite, etc.) on the fly and stream writes to multiple async mirror databases without blocking the main event loop.
 
 ---
 
 ## 🧠 Core Features & Current Phase Status
 
-The Monorepo is being developed in strict, highly-engineered phases. The current codebase supports up to **Phase 5**.
+The Monorepo is being developed in strict, highly-engineered phases. The current codebase supports up to **Phase 7**.
 
 *   **Phase 1 & 2: Rclone Engine & Swarm Orchestration (✅ Active):** The Node.js worker dynamically controls the `rclone rcd` daemon. The React UI displays a live Fleet Sidebar of connected workers and features a global Job Manager that uses Round-Robin load balancing via the Relay.
 *   **Phase 3: Chat System & Cloud Handoff (✅ Active):** Users can chat and share files. Online users punch STUN holes to stream P2P. Offline users trigger a Cloud Worker Handoff, where an ephemeral worker accepts the base64 payload and generates a cloud download link.
-*   **Phase 4: WebRTC Media Engine (✅ Active):** The worker uses `werift` to intercept WebRTC `SDP_OFFER`s. When a user streams a massive 50GB file, the worker pulls the VFS HTTP stream from `rclone` and pipes it directly into the `RTCDataChannel`, achieving zero-disk memory streaming.
+*   **Phase 4: WebRTC Media Engine (✅ Active):** The worker dynamically `stats` files for metadata, intercepts WebRTC `SDP_OFFER`s, and pipes the VFS HTTP stream from `rclone` directly into the `RTCDataChannel`. The UI dynamically configures the `MediaSource` buffer, achieving true zero-disk memory streaming for any video format.
 *   **Phase 5: gRPC Swarm Engine (✅ Active):** Ephemeral workers use the Relay Server as a DNS discovery mechanism to find each other's dynamic gRPC ports. Workers can pipe binary data directly to other workers via protobuf streams, forming a Virtual MapReduce Network.
-*   **Zero-Trust Security:** Workers must authenticate via strict API Keys (`WORKER_SECRET`) before joining the swarm.
-*   **Pluggable Databases:** Built utilizing the Clean Architecture Repository Pattern. Currently configured for MongoDB, but designed to gracefully fallback to an InMemory mock DB during development.
+*   **Phase 6: Advanced Swarm Engineering (✅ Active):**
+    *   **Zero-Trust Security:** Workers must authenticate via strict API Keys (`WORKER_SECRET`) before joining the swarm.
+    *   **Frontend Web Workers:** `SocketManager` offloads WebSocket heavy-lifting to background threads.
+    *   **Polyglot DB Switchboard:** The `DatabaseOperationsCenter` UI allows runtime hot-swapping of individual domains (AUTH, AUDIT, CHAT) to different database engines (e.g., Auth to MongoDB, Audit to Postgres).
+    *   **Asynchronous Database Mirrors:** Supports Zero-Delay write-behind mirroring, allowing a single domain to replicate data synchronously to a primary DB and asynchronously to N-mirrors without blocking the Relay Server CPU or user UI.
+*   **Phase 7: True Zero-Knowledge E2EE (✅ Active):** The UI uses native browser `WebCrypto` to generate ECDH key pairs and derive AES-GCM shared secrets. The Relay Server acts as a dumb Public Key registry, completely blind to the actual encrypted payloads flowing through the chat system.
 
 ---
 

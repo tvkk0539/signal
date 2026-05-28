@@ -1,1 +1,2 @@
-export declare const connectMongo: () => Promise<void>;
+import { Connection } from 'mongoose';
+export declare const createMongoConnection: (connectionString?: string) => Promise<Connection>;

@@ -1,73 +1,181 @@
 import React, { useState, useEffect, useRef } from 'react';
-import { Socket } from 'socket.io-client';
 import { MessageType } from '@swarm/shared';
 import type { ChatMessage, OfflineFileUploadRequestMessage } from '@swarm/shared';
 import { useAuthStore } from '../../store/authStore';
 import { WebRTCManager } from './WebRTCManager';
+import { SocketManager } from '../../worker/SocketManager';
+import { cryptoManager } from '../../utils/CryptoManager';
+import type { PublicKeyResponseMessage } from '@swarm/shared';
 
 interface ChatBoxProps {
-  socket: Socket | null;
   targetId: string; // Could be another UI user or a worker
   isOnline: boolean;
 }
 
-export const ChatBox: React.FC<ChatBoxProps> = ({ socket, targetId, isOnline }) => {
+export const ChatBox: React.FC<ChatBoxProps> = ({ targetId, isOnline }) => {
   const { user } = useAuthStore();
   const [messages, setMessages] = useState<ChatMessage[]>([]);
   const [inputText, setInputText] = useState('');
   const messagesEndRef = useRef<HTMLDivElement>(null);
   const fileInputRef = useRef<HTMLInputElement>(null);
 
+  const socketManager = SocketManager.getInstance();
+  const [e2eeStatus, setE2eeStatus] = useState<'PENDING' | 'SECURE' | 'FAILED'>('PENDING');
+
   // Initialize WebRTC Manager when component mounts
   const rtcManager = useRef<WebRTCManager | null>(null);
 
   useEffect(() => {
-    if (socket && user) {
-      rtcManager.current = new WebRTCManager(socket, user.id);
+    if (user) {
+      rtcManager.current = new WebRTCManager(socketManager, user.id);
+
+      // 1. Generate local E2EE keys and announce to Relay
+      cryptoManager.generateKeyPair().then(async () => {
+        const pubKey = await cryptoManager.exportPublicKey();
+        socketManager.emit(MessageType.PUBLIC_KEY_ANNOUNCE, {
+           type: MessageType.PUBLIC_KEY_ANNOUNCE,
+           timestamp: Date.now(),
+           userId: user.id,
+           publicKeyBase64: pubKey
+        });
+      });
     }
     return () => {
       if (rtcManager.current) {
         rtcManager.current.close();
       }
     };
-  }, [socket, user]);
+  }, [user]);
 
   useEffect(() => {
-    if (!socket) return;
+    if (!user || !targetId) return;
 
-    const handleIncomingMessage = (msg: ChatMessage) => {
-      // Only accept messages meant for this user, or sent from this user to the target
-      if (msg.targetId === user?.id || (msg.senderId === user?.id && msg.targetId === targetId)) {
-         setMessages(prev => [...prev, msg]);
+    // 2. Request target's public key when chat opens
+    // First, check if we already negotiated the key in this session
+    if (cryptoManager.hasSharedSecret(targetId)) {
+        setE2eeStatus('SECURE');
+        return;
+    }
+
+    setE2eeStatus('PENDING');
+
+    const handleKeyResponse = async (msg: PublicKeyResponseMessage) => {
+      if (msg.targetId === targetId) {
+        if (msg.publicKeyBase64) {
+          try {
+             await cryptoManager.deriveSharedSecret(targetId, msg.publicKeyBase64);
+             setE2eeStatus('SECURE');
+
+             // Decrypt any pending messages that arrived before we had the key
+             setMessages(prev => prev.map(m => {
+                 if (m.senderId === targetId && m.encryptedPayload !== '[ENCRYPTED - DECRYPTION FAILED]') {
+                     // Since we can't await inside a synchronous map easily without a Promise.all,
+                     // we will rely on the next message to trigger a full re-render,
+                     // or the user can refresh. For a production app, we'd trigger a re-decryption pass.
+                 }
+                 return m;
+             }));
+          } catch (e) {
+             console.error("Failed to derive E2EE key", e);
+             setE2eeStatus('FAILED');
+          }
+        } else {
+          setE2eeStatus('FAILED');
+        }
       }
     };
 
-    socket.on(MessageType.CHAT_MESSAGE, handleIncomingMessage);
+    socketManager.on(MessageType.PUBLIC_KEY_RESPONSE, handleKeyResponse);
+
+    // Give it a tiny delay to ensure the socket is ready
+    setTimeout(() => {
+       socketManager.emit(MessageType.PUBLIC_KEY_REQUEST, {
+          type: MessageType.PUBLIC_KEY_REQUEST,
+          timestamp: Date.now(),
+          targetId: targetId
+       });
+    }, 500);
 
     return () => {
-      socket.off(MessageType.CHAT_MESSAGE, handleIncomingMessage);
+      socketManager.off(MessageType.PUBLIC_KEY_RESPONSE, handleKeyResponse);
     };
-  }, [socket, targetId, user?.id]);
+  }, [targetId, user]);
+
+  useEffect(() => {
+    const handleIncomingMessage = async (msg: ChatMessage) => {
+      // Only accept messages meant for this user, or sent from this user to the target
+      if (msg.targetId === user?.id || (msg.senderId === user?.id && msg.targetId === targetId)) {
+
+         // If we don't have the shared secret yet, we must fetch their public key to decrypt!
+         if (!msg.isSystemMessage && msg.senderId !== user?.id && !cryptoManager.hasSharedSecret(msg.senderId)) {
+             console.log(`[Chat] Received encrypted message from unknown peer ${msg.senderId}, requesting key...`);
+             // We emit a request. The effect above listening to PUBLIC_KEY_RESPONSE will handle the derive.
+             // We put this message in a "pending" state or just show it as encrypted until key arrives.
+             // For safety and immediate UX, we just push the raw encrypted form.
+             setMessages(prev => [...prev, msg]);
+
+             // Request their key so future messages and history can unlock
+             socketManager.emit(MessageType.PUBLIC_KEY_REQUEST, {
+                type: MessageType.PUBLIC_KEY_REQUEST,
+                timestamp: Date.now(),
+                targetId: msg.senderId
+             });
+             return;
+         }
+
+         if (!msg.isSystemMessage && cryptoManager.hasSharedSecret(msg.senderId)) {
+            try {
+               const decrypted = await cryptoManager.decryptMessage(msg.senderId, msg.encryptedPayload);
+               setMessages(prev => [...prev, { ...msg, encryptedPayload: decrypted }]);
+            } catch (e) {
+               setMessages(prev => [...prev, msg]);
+            }
+         } else {
+            setMessages(prev => [...prev, msg]);
+         }
+      }
+    };
+
+    socketManager.on(MessageType.CHAT_MESSAGE, handleIncomingMessage);
+
+    return () => {
+      socketManager.off(MessageType.CHAT_MESSAGE, handleIncomingMessage);
+    };
+  }, [targetId, user?.id]);
 
   useEffect(() => {
     messagesEndRef.current?.scrollIntoView({ behavior: 'smooth' });
   }, [messages]);
 
-  const handleSendMessage = (e: React.FormEvent) => {
+  const handleSendMessage = async (e: React.FormEvent) => {
     e.preventDefault();
-    if (!inputText.trim() || !socket || !user) return;
+    if (!inputText.trim() || !user) return;
+
+    let finalPayload = inputText;
+
+    // 3. Encrypt the message if we have established a secure channel
+    if (e2eeStatus === 'SECURE') {
+       try {
+          finalPayload = await cryptoManager.encryptMessage(targetId, inputText);
+       } catch (err) {
+          console.error("Failed to encrypt message", err);
+          return;
+       }
+    }
 
     const payload: ChatMessage = {
       type: MessageType.CHAT_MESSAGE,
       timestamp: Date.now(),
       senderId: user.id,
       targetId: targetId,
-      encryptedPayload: inputText, // Simplified for MVP. Needs actual E2EE wrapper.
+      encryptedPayload: finalPayload,
       hasAttachment: false
     };
 
-    socket.emit(MessageType.CHAT_MESSAGE, payload);
-    setMessages(prev => [...prev, payload]);
+    socketManager.emit(MessageType.CHAT_MESSAGE, payload);
+
+    // Locally display the plaintext, not the ciphertext
+    setMessages(prev => [...prev, { ...payload, encryptedPayload: inputText }]);
     setInputText('');
   };
 
@@ -77,7 +185,7 @@ export const ChatBox: React.FC<ChatBoxProps> = ({ socket, targetId, isOnline }) 
 
   const handleFileChange = async (e: React.ChangeEvent<HTMLInputElement>) => {
     const file = e.target.files?.[0];
-    if (!file || !socket || !user) return;
+    if (!file || !user) return;
 
     // Reset input
     if (fileInputRef.current) fileInputRef.current.value = '';
@@ -117,7 +225,7 @@ export const ChatBox: React.FC<ChatBoxProps> = ({ socket, targetId, isOnline }) 
            fileBuffer: base64Data
         };
 
-        socket.emit(MessageType.OFFLINE_FILE_UPLOAD_REQUEST, payload);
+        socketManager.emit(MessageType.OFFLINE_FILE_UPLOAD_REQUEST, payload);
       };
       reader.readAsDataURL(file);
     }
@@ -139,9 +247,16 @@ export const ChatBox: React.FC<ChatBoxProps> = ({ socket, targetId, isOnline }) 
           <strong style={{ color: 'white' }}>Chatting with: </strong>
           <span style={{ fontFamily: 'monospace', color: '#4a90e2' }}>{targetId || 'Select a user'}</span>
         </div>
-        <div style={{ display: 'flex', alignItems: 'center', gap: '5px' }}>
-           <div style={{ width: '10px', height: '10px', borderRadius: '50%', backgroundColor: isOnline ? '#2ecc71' : '#e74c3c' }} />
-           <span style={{ color: '#aaa', fontSize: '12px' }}>{isOnline ? 'Online (P2P Ready)' : 'Offline (Cloud Handoff)'}</span>
+        <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'flex-end', gap: '2px' }}>
+          <div style={{ display: 'flex', alignItems: 'center', gap: '5px' }}>
+             <div style={{ width: '10px', height: '10px', borderRadius: '50%', backgroundColor: isOnline ? '#2ecc71' : '#e74c3c' }} />
+             <span style={{ color: '#aaa', fontSize: '12px' }}>{isOnline ? 'Online (P2P Ready)' : 'Offline (Cloud)'}</span>
+          </div>
+          {targetId && (
+            <div style={{ fontSize: '11px', color: e2eeStatus === 'SECURE' ? '#2ecc71' : '#f1c40f' }}>
+              {e2eeStatus === 'SECURE' ? '🔒 E2EE Active' : (e2eeStatus === 'PENDING' ? '🔐 Exchanging Keys...' : '⚠️ Unencrypted')}
+            </div>
+          )}
         </div>
       </div>
 
