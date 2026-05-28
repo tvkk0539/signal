@@ -22,7 +22,8 @@ interface WorkerData {
 }
 
 export const connectedWorkers = new Map<string, WorkerData>();
-export const connectedUIClients = new Map<string, Socket>();
+export const connectedUIClients = new Map<string, Socket>(); // Maps socket.id to Socket
+export const uiUserSocketMap = new Map<string, string>();    // Maps userId to socket.id
 
 // Public Key Directory for E2EE (User ID -> Base64 Public Key)
 export const publicKeyRegistry = new Map<string, string>();
@@ -72,8 +73,12 @@ export function setupSockets(io: Server) {
         try {
           // Cryptographically verify the JWT sent by the frontend
           const decoded = jwt.verify(msg.token, JWT_SECRET);
-          console.log(`[Gatekeeper] UI Dashboard Authorized for user: ${(decoded as any).email}`);
+          const userId = (decoded as any).id;
+          console.log(`[Gatekeeper] UI Dashboard Authorized for user: ${(decoded as any).email} (ID: ${userId})`);
+
           connectedUIClients.set(socket.id, socket);
+          uiUserSocketMap.set(userId, socket.id);
+
           socket.emit(MessageType.AUTH_RESPONSE, { success: true });
 
           // Send current state to newly connected UI client
@@ -98,6 +103,14 @@ export function setupSockets(io: Server) {
       } else if (connectedUIClients.has(socket.id)) {
         console.log(`[Gatekeeper] UI Client disconnected: ${socket.id}`);
         connectedUIClients.delete(socket.id);
+
+        // Clean up user mapping
+        for (const [userId, sockId] of uiUserSocketMap.entries()) {
+           if (sockId === socket.id) {
+              uiUserSocketMap.delete(userId);
+              break;
+           }
+        }
       } else {
         console.log(`[Gatekeeper] Client disconnected: ${socket.id}`);
       }
@@ -133,12 +146,20 @@ export function setupSockets(io: Server) {
 
     // --- Phase 3: Chat Router & WebRTC Matchmaker ---
 
+    // Helper to get socket by UI User ID or Worker ID
+    const getTargetSocket = (targetId: string): Socket | undefined => {
+       const workerData = connectedWorkers.get(targetId);
+       if (workerData) return workerData.socket;
+
+       const uiSocketId = uiUserSocketMap.get(targetId);
+       if (uiSocketId) return connectedUIClients.get(uiSocketId);
+
+       return undefined;
+    };
+
     // Chat Message Routing
     socket.on(MessageType.CHAT_MESSAGE, (msg: any) => {
-      // In a real implementation, we would map User IDs to Socket IDs using a robust registry.
-      // For MVP, we route directly if we can find the socket by ID, or broadcast it
-      // (which the client will filter based on targetId).
-      const targetSocket = connectedUIClients.get(msg.targetId);
+      const targetSocket = getTargetSocket(msg.targetId);
       if (targetSocket) {
         targetSocket.emit(MessageType.CHAT_MESSAGE, msg);
         // Optionally send a delivery receipt back to sender
@@ -176,22 +197,26 @@ export function setupSockets(io: Server) {
     // WebRTC Signaling Matchmaker
     socket.on(MessageType.SDP_OFFER, (msg: any) => {
       console.log(`[Matchmaker] Routing SDP_OFFER from ${msg.senderId} to ${msg.targetId}`);
-      const targetSocket = connectedUIClients.get(msg.targetId) || connectedWorkers.get(msg.targetId)?.socket;
+      const targetSocket = getTargetSocket(msg.targetId);
       if (targetSocket) {
         targetSocket.emit(MessageType.SDP_OFFER, msg);
+      } else {
+        console.error(`[Matchmaker] Target ${msg.targetId} not found for SDP_OFFER`);
       }
     });
 
     socket.on(MessageType.SDP_ANSWER, (msg: any) => {
       console.log(`[Matchmaker] Routing SDP_ANSWER from ${msg.senderId} to ${msg.targetId}`);
-      const targetSocket = connectedUIClients.get(msg.targetId) || connectedWorkers.get(msg.targetId)?.socket;
+      const targetSocket = getTargetSocket(msg.targetId);
       if (targetSocket) {
         targetSocket.emit(MessageType.SDP_ANSWER, msg);
+      } else {
+        console.error(`[Matchmaker] Target ${msg.targetId} not found for SDP_ANSWER`);
       }
     });
 
     socket.on(MessageType.ICE_CANDIDATE, (msg: any) => {
-      const targetSocket = connectedUIClients.get(msg.targetId) || connectedWorkers.get(msg.targetId)?.socket;
+      const targetSocket = getTargetSocket(msg.targetId);
       if (targetSocket) {
         targetSocket.emit(MessageType.ICE_CANDIDATE, msg);
       }

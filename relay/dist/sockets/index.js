@@ -3,7 +3,7 @@ var __importDefault = (this && this.__importDefault) || function (mod) {
     return (mod && mod.__esModule) ? mod : { "default": mod };
 };
 Object.defineProperty(exports, "__esModule", { value: true });
-exports.publicKeyRegistry = exports.connectedUIClients = exports.connectedWorkers = exports.grpcRouter = void 0;
+exports.publicKeyRegistry = exports.uiUserSocketMap = exports.connectedUIClients = exports.connectedWorkers = exports.grpcRouter = void 0;
 exports.setupSockets = setupSockets;
 const shared_1 = require("@swarm/shared");
 const jsonwebtoken_1 = __importDefault(require("jsonwebtoken"));
@@ -15,7 +15,8 @@ exports.grpcRouter = new router_1.GrpcRelayRouter();
 // Start the gRPC Relay Router when sockets are setup
 exports.grpcRouter.start().catch(e => console.error("Failed to start gRPC Relay Router:", e));
 exports.connectedWorkers = new Map();
-exports.connectedUIClients = new Map();
+exports.connectedUIClients = new Map(); // Maps socket.id to Socket
+exports.uiUserSocketMap = new Map(); // Maps userId to socket.id
 // Public Key Directory for E2EE (User ID -> Base64 Public Key)
 exports.publicKeyRegistry = new Map();
 let roundRobinIndex = 0;
@@ -58,8 +59,10 @@ function setupSockets(io) {
                 try {
                     // Cryptographically verify the JWT sent by the frontend
                     const decoded = jsonwebtoken_1.default.verify(msg.token, JWT_SECRET);
-                    console.log(`[Gatekeeper] UI Dashboard Authorized for user: ${decoded.email}`);
+                    const userId = decoded.id;
+                    console.log(`[Gatekeeper] UI Dashboard Authorized for user: ${decoded.email} (ID: ${userId})`);
                     exports.connectedUIClients.set(socket.id, socket);
+                    exports.uiUserSocketMap.set(userId, socket.id);
                     socket.emit(shared_1.MessageType.AUTH_RESPONSE, { success: true });
                     // Send current state to newly connected UI client
                     const workers = Array.from(exports.connectedWorkers.keys());
@@ -84,6 +87,13 @@ function setupSockets(io) {
             else if (exports.connectedUIClients.has(socket.id)) {
                 console.log(`[Gatekeeper] UI Client disconnected: ${socket.id}`);
                 exports.connectedUIClients.delete(socket.id);
+                // Clean up user mapping
+                for (const [userId, sockId] of exports.uiUserSocketMap.entries()) {
+                    if (sockId === socket.id) {
+                        exports.uiUserSocketMap.delete(userId);
+                        break;
+                    }
+                }
             }
             else {
                 console.log(`[Gatekeeper] Client disconnected: ${socket.id}`);
@@ -114,12 +124,19 @@ function setupSockets(io) {
             });
         });
         // --- Phase 3: Chat Router & WebRTC Matchmaker ---
+        // Helper to get socket by UI User ID or Worker ID
+        const getTargetSocket = (targetId) => {
+            const workerData = exports.connectedWorkers.get(targetId);
+            if (workerData)
+                return workerData.socket;
+            const uiSocketId = exports.uiUserSocketMap.get(targetId);
+            if (uiSocketId)
+                return exports.connectedUIClients.get(uiSocketId);
+            return undefined;
+        };
         // Chat Message Routing
         socket.on(shared_1.MessageType.CHAT_MESSAGE, (msg) => {
-            // In a real implementation, we would map User IDs to Socket IDs using a robust registry.
-            // For MVP, we route directly if we can find the socket by ID, or broadcast it
-            // (which the client will filter based on targetId).
-            const targetSocket = exports.connectedUIClients.get(msg.targetId);
+            const targetSocket = getTargetSocket(msg.targetId);
             if (targetSocket) {
                 targetSocket.emit(shared_1.MessageType.CHAT_MESSAGE, msg);
                 // Optionally send a delivery receipt back to sender
@@ -157,20 +174,26 @@ function setupSockets(io) {
         // WebRTC Signaling Matchmaker
         socket.on(shared_1.MessageType.SDP_OFFER, (msg) => {
             console.log(`[Matchmaker] Routing SDP_OFFER from ${msg.senderId} to ${msg.targetId}`);
-            const targetSocket = exports.connectedUIClients.get(msg.targetId) || exports.connectedWorkers.get(msg.targetId)?.socket;
+            const targetSocket = getTargetSocket(msg.targetId);
             if (targetSocket) {
                 targetSocket.emit(shared_1.MessageType.SDP_OFFER, msg);
+            }
+            else {
+                console.error(`[Matchmaker] Target ${msg.targetId} not found for SDP_OFFER`);
             }
         });
         socket.on(shared_1.MessageType.SDP_ANSWER, (msg) => {
             console.log(`[Matchmaker] Routing SDP_ANSWER from ${msg.senderId} to ${msg.targetId}`);
-            const targetSocket = exports.connectedUIClients.get(msg.targetId) || exports.connectedWorkers.get(msg.targetId)?.socket;
+            const targetSocket = getTargetSocket(msg.targetId);
             if (targetSocket) {
                 targetSocket.emit(shared_1.MessageType.SDP_ANSWER, msg);
             }
+            else {
+                console.error(`[Matchmaker] Target ${msg.targetId} not found for SDP_ANSWER`);
+            }
         });
         socket.on(shared_1.MessageType.ICE_CANDIDATE, (msg) => {
-            const targetSocket = exports.connectedUIClients.get(msg.targetId) || exports.connectedWorkers.get(msg.targetId)?.socket;
+            const targetSocket = getTargetSocket(msg.targetId);
             if (targetSocket) {
                 targetSocket.emit(shared_1.MessageType.ICE_CANDIDATE, msg);
             }

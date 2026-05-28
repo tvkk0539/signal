@@ -176,7 +176,13 @@ async function bootWorker() {
             timestamp: Date.now(),
             senderId: socket.id,
             targetId: msg.senderId,
-            candidate: event.candidate.toJSON()
+            // werift's candidate might not have .toJSON(), so we manually reconstruct it
+            candidate: {
+               candidate: event.candidate.candidate,
+               sdpMid: event.candidate.sdpMid,
+               sdpMLineIndex: event.candidate.sdpMLineIndex,
+               usernameFragment: event.candidate.usernameFragment
+            }
           });
         }
       };
