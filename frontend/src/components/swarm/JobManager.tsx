@@ -1,51 +1,41 @@
 import React, { useEffect, useState } from 'react';
-import { Socket } from 'socket.io-client';
 import { MessageType } from '@swarm/shared';
-import type { TaskProgressMessage, BatchTaskRequestMessage } from '@swarm/shared';
+import type { BatchTaskRequestMessage } from '@swarm/shared';
 import { useProgressStore } from '../../store/progressStore';
+import { SocketManager } from '../../worker/SocketManager';
 
 interface JobManagerProps {
-  socket: Socket | null;
   isConnected: boolean;
 }
 
-export const JobManager: React.FC<JobManagerProps> = ({ socket, isConnected }) => {
-  // Only subscribe to the actions to prevent re-rendering on every task update
-  const updateTaskProgress = useProgressStore((state) => state.updateTaskProgress);
+export const JobManager: React.FC<JobManagerProps> = ({ isConnected }) => {
+  // We subscribe directly to the store now.
+  // The Web Worker manages the 100ms flush, so the store is only updated safely.
+  const uiTasks = useProgressStore((state) => state.tasks);
+  const setTasks = useProgressStore((state) => state.setTasks);
   const clearTasks = useProgressStore((state) => state.clearTasks);
 
   const [tasksToSubmit, setTasksToSubmit] = useState<number>(10);
-
-  // The throttled UI state to prevent re-render crashes
-  const [uiTasks, setUiTasks] = useState(useProgressStore.getState().tasks);
+  const socketManager = SocketManager.getInstance();
 
   useEffect(() => {
-    if (!socket) return;
-
-    const handleProgress = (msg: TaskProgressMessage) => {
-      updateTaskProgress(msg.taskId, msg.workerId, msg.progress, msg.status);
+    const handleBatchProgress = (batch: any) => {
+      // The Web Worker passes the whole aggregated dictionary
+      setTasks(batch);
     };
 
-    socket.on(MessageType.TASK_PROGRESS, handleProgress);
+    socketManager.on('TASK_PROGRESS_BATCH', handleBatchProgress);
 
     return () => {
-      socket.off(MessageType.TASK_PROGRESS, handleProgress);
+      socketManager.off('TASK_PROGRESS_BATCH', handleBatchProgress);
     };
-  }, [socket, updateTaskProgress]);
-
-  // Throttling logic: Only update React UI every 100ms
-  useEffect(() => {
-    const intervalId = setInterval(() => {
-      setUiTasks(useProgressStore.getState().tasks);
-    }, 100);
-
-    return () => clearInterval(intervalId);
-  }, []);
+  }, [setTasks]);
 
   const handleStartBatch = () => {
-    if (!socket || !isConnected) return;
+    if (!isConnected) return;
 
     clearTasks();
+    socketManager.clearTasks(); // Clear the worker's buffer too
 
     const batch: Array<{ id: string; action: string; payload: any }> = [];
     for (let i = 0; i < tasksToSubmit; i++) {
@@ -63,7 +53,7 @@ export const JobManager: React.FC<JobManagerProps> = ({ socket, isConnected }) =
     };
 
     console.log(`[Job Manager] Submitting BATCH_TASK_REQUEST with ${batch.length} tasks`);
-    socket.emit(MessageType.BATCH_TASK_REQUEST, payload);
+    socketManager.emit(MessageType.BATCH_TASK_REQUEST, payload);
   };
 
   const taskEntries = Object.entries(uiTasks);

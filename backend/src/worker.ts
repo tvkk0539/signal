@@ -170,10 +170,42 @@ async function bootWorker() {
             if (data.type === MessageType.STREAM_REQUEST) {
               console.log(`[Worker] Stream requested via P2P for ${data.path}`);
 
-              // 1. Fetch file stream from rclone
+              // 1. First, stat the file to get its metadata
+              try {
+                const stat = await rcloneManager.statFile(data.fs, data.path);
+
+                // Determine MIME type dynamically based on extension
+                let mimeType = 'video/mp4; codecs="avc1.42E01E, mp4a.40.2"'; // Default
+                const lowerPath = data.path.toLowerCase();
+                if (lowerPath.endsWith('.webm')) {
+                   mimeType = 'video/webm; codecs="vp9, opus"';
+                } else if (lowerPath.endsWith('.mkv')) {
+                   // MKV often uses WebM's codecs or similar, but browser support varies.
+                   mimeType = 'video/webm; codecs="vp9, opus"';
+                }
+
+                const metadataMsg = {
+                  type: MessageType.STREAM_METADATA,
+                  timestamp: Date.now(),
+                  workerId: socket.id,
+                  fileName: stat.Name || data.path.split('/').pop(),
+                  fileSize: stat.Size || 0,
+                  mimeType: mimeType
+                };
+
+                // Send metadata BEFORE starting the binary stream
+                console.log(`[Worker] Sending STREAM_METADATA for ${metadataMsg.fileName} (${metadataMsg.mimeType})`);
+                channel.send(JSON.stringify(metadataMsg));
+
+              } catch (e: any) {
+                console.error(`[Worker] Failed to stat file:`, e.message);
+                // We could send an error or proceed without metadata. Proceeding for resilience.
+              }
+
+              // 2. Fetch file stream from rclone
               const stream = await rcloneManager.streamFile(data.fs, data.path, data.startByte, data.endByte);
 
-              // 2. Pipe the stream directly into the WebRTC DataChannel (On-The-Fly Memory Streaming)
+              // 3. Pipe the stream directly into the WebRTC DataChannel (On-The-Fly Memory Streaming)
               stream.on('data', (chunk: Buffer) => {
                 // Werift DataChannel send accepts Buffer
                 channel.send(chunk);

@@ -1,40 +1,39 @@
 import React, { useState, useEffect, useRef } from 'react';
-import { Socket } from 'socket.io-client';
 import { MessageType } from '@swarm/shared';
 import type { ChatMessage, OfflineFileUploadRequestMessage } from '@swarm/shared';
 import { useAuthStore } from '../../store/authStore';
 import { WebRTCManager } from './WebRTCManager';
+import { SocketManager } from '../../worker/SocketManager';
 
 interface ChatBoxProps {
-  socket: Socket | null;
   targetId: string; // Could be another UI user or a worker
   isOnline: boolean;
 }
 
-export const ChatBox: React.FC<ChatBoxProps> = ({ socket, targetId, isOnline }) => {
+export const ChatBox: React.FC<ChatBoxProps> = ({ targetId, isOnline }) => {
   const { user } = useAuthStore();
   const [messages, setMessages] = useState<ChatMessage[]>([]);
   const [inputText, setInputText] = useState('');
   const messagesEndRef = useRef<HTMLDivElement>(null);
   const fileInputRef = useRef<HTMLInputElement>(null);
 
+  const socketManager = SocketManager.getInstance();
+
   // Initialize WebRTC Manager when component mounts
   const rtcManager = useRef<WebRTCManager | null>(null);
 
   useEffect(() => {
-    if (socket && user) {
-      rtcManager.current = new WebRTCManager(socket, user.id);
+    if (user) {
+      rtcManager.current = new WebRTCManager(socketManager, user.id);
     }
     return () => {
       if (rtcManager.current) {
         rtcManager.current.close();
       }
     };
-  }, [socket, user]);
+  }, [user]);
 
   useEffect(() => {
-    if (!socket) return;
-
     const handleIncomingMessage = (msg: ChatMessage) => {
       // Only accept messages meant for this user, or sent from this user to the target
       if (msg.targetId === user?.id || (msg.senderId === user?.id && msg.targetId === targetId)) {
@@ -42,12 +41,12 @@ export const ChatBox: React.FC<ChatBoxProps> = ({ socket, targetId, isOnline }) 
       }
     };
 
-    socket.on(MessageType.CHAT_MESSAGE, handleIncomingMessage);
+    socketManager.on(MessageType.CHAT_MESSAGE, handleIncomingMessage);
 
     return () => {
-      socket.off(MessageType.CHAT_MESSAGE, handleIncomingMessage);
+      socketManager.off(MessageType.CHAT_MESSAGE, handleIncomingMessage);
     };
-  }, [socket, targetId, user?.id]);
+  }, [targetId, user?.id]);
 
   useEffect(() => {
     messagesEndRef.current?.scrollIntoView({ behavior: 'smooth' });
@@ -55,7 +54,7 @@ export const ChatBox: React.FC<ChatBoxProps> = ({ socket, targetId, isOnline }) 
 
   const handleSendMessage = (e: React.FormEvent) => {
     e.preventDefault();
-    if (!inputText.trim() || !socket || !user) return;
+    if (!inputText.trim() || !user) return;
 
     const payload: ChatMessage = {
       type: MessageType.CHAT_MESSAGE,
@@ -66,7 +65,7 @@ export const ChatBox: React.FC<ChatBoxProps> = ({ socket, targetId, isOnline }) 
       hasAttachment: false
     };
 
-    socket.emit(MessageType.CHAT_MESSAGE, payload);
+    socketManager.emit(MessageType.CHAT_MESSAGE, payload);
     setMessages(prev => [...prev, payload]);
     setInputText('');
   };
@@ -77,7 +76,7 @@ export const ChatBox: React.FC<ChatBoxProps> = ({ socket, targetId, isOnline }) 
 
   const handleFileChange = async (e: React.ChangeEvent<HTMLInputElement>) => {
     const file = e.target.files?.[0];
-    if (!file || !socket || !user) return;
+    if (!file || !user) return;
 
     // Reset input
     if (fileInputRef.current) fileInputRef.current.value = '';
@@ -117,7 +116,7 @@ export const ChatBox: React.FC<ChatBoxProps> = ({ socket, targetId, isOnline }) 
            fileBuffer: base64Data
         };
 
-        socket.emit(MessageType.OFFLINE_FILE_UPLOAD_REQUEST, payload);
+        socketManager.emit(MessageType.OFFLINE_FILE_UPLOAD_REQUEST, payload);
       };
       reader.readAsDataURL(file);
     }

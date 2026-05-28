@@ -1,17 +1,16 @@
 import React, { useState, useEffect } from 'react';
-import { Socket } from 'socket.io-client';
 import { MessageType } from '@swarm/shared';
 import type { FileItem, FileListRequestMessage, FileListResponseMessage, RemoteItem, RemoteListRequestMessage, RemoteListResponseMessage } from '@swarm/shared';
 import { MediaPlayerModal } from '../media/MediaPlayerModal';
 import { useAuthStore } from '../../store/authStore';
+import { SocketManager } from '../../worker/SocketManager';
 
 interface FileExplorerProps {
-  socket: Socket | null;
   isConnected: boolean;
   workerId: string;
 }
 
-export const FileExplorer: React.FC<FileExplorerProps> = ({ socket, isConnected, workerId }) => {
+export const FileExplorer: React.FC<FileExplorerProps> = ({ isConnected, workerId }) => {
   const [currentPath, setCurrentPath] = useState<string>('');
   const [files, setFiles] = useState<FileItem[]>([]);
   const [remotes, setRemotes] = useState<RemoteItem[]>([]);
@@ -19,9 +18,11 @@ export const FileExplorer: React.FC<FileExplorerProps> = ({ socket, isConnected,
   const [loading, setLoading] = useState<boolean>(false);
   const [error, setError] = useState<string | null>(null);
 
+  const socketManager = SocketManager.getInstance();
+
   // Fetch Available Remotes when the worker changes
   useEffect(() => {
-    if (!socket || !isConnected || !workerId) return;
+    if (!isConnected || !workerId) return;
 
     console.log(`[UI] Requesting remotes list from worker ${workerId}`);
     const payload: RemoteListRequestMessage = {
@@ -29,11 +30,11 @@ export const FileExplorer: React.FC<FileExplorerProps> = ({ socket, isConnected,
       timestamp: Date.now(),
       workerId
     };
-    socket.emit(MessageType.REMOTE_LIST_REQUEST, payload);
-  }, [socket, isConnected, workerId]);
+    socketManager.emit(MessageType.REMOTE_LIST_REQUEST, payload);
+  }, [isConnected, workerId]);
 
   const fetchDirectory = (fs: string, path: string) => {
-    if (!socket || !isConnected || !workerId) return;
+    if (!isConnected || !workerId) return;
 
     setLoading(true);
     setError(null);
@@ -48,7 +49,7 @@ export const FileExplorer: React.FC<FileExplorerProps> = ({ socket, isConnected,
     };
 
     console.log(`[UI] Requesting directory: ${path} on fs: ${fs} from worker ${workerId}`);
-    socket.emit(MessageType.FILE_LIST_REQUEST, payload);
+    socketManager.emit(MessageType.FILE_LIST_REQUEST, payload);
   };
 
   useEffect(() => {
@@ -58,8 +59,6 @@ export const FileExplorer: React.FC<FileExplorerProps> = ({ socket, isConnected,
   }, [isConnected, workerId, currentPath, selectedFs]);
 
   useEffect(() => {
-    if (!socket) return;
-
     const handleFileListResponse = (msg: FileListResponseMessage) => {
       // Only process the response if it matches the current worker and requested path and fs
       if (msg.workerId === workerId && msg.directory === currentPath && msg.fs === selectedFs) {
@@ -89,14 +88,14 @@ export const FileExplorer: React.FC<FileExplorerProps> = ({ socket, isConnected,
       }
     };
 
-    socket.on(MessageType.FILE_LIST_RESPONSE, handleFileListResponse);
-    socket.on(MessageType.REMOTE_LIST_RESPONSE, handleRemoteListResponse);
+    socketManager.on(MessageType.FILE_LIST_RESPONSE, handleFileListResponse);
+    socketManager.on(MessageType.REMOTE_LIST_RESPONSE, handleRemoteListResponse);
 
     return () => {
-      socket.off(MessageType.FILE_LIST_RESPONSE, handleFileListResponse);
-      socket.off(MessageType.REMOTE_LIST_RESPONSE, handleRemoteListResponse);
+      socketManager.off(MessageType.FILE_LIST_RESPONSE, handleFileListResponse);
+      socketManager.off(MessageType.REMOTE_LIST_RESPONSE, handleRemoteListResponse);
     };
-  }, [socket, workerId, currentPath, selectedFs]);
+  }, [workerId, currentPath, selectedFs]);
 
   const handleNavigateUp = () => {
     if (currentPath === '' || currentPath === '/') return;
@@ -231,7 +230,6 @@ export const FileExplorer: React.FC<FileExplorerProps> = ({ socket, isConnected,
       {/* Phase 4: MediaPlayer Modal */}
       {playingMedia && (
         <MediaPlayerModal
-           socket={socket}
            workerId={workerId}
            fs={playingMedia.fs}
            path={playingMedia.path}

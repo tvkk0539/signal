@@ -1,13 +1,12 @@
 import { useEffect, useState } from 'react';
-import { io, Socket } from 'socket.io-client';
 import { MessageType } from '@swarm/shared';
-import type { AuthRequestMessage } from '@swarm/shared';
 import { useAuthStore } from './store/authStore';
 import { AuthScreen } from './components/auth/AuthScreen';
 import { FileExplorer } from './components/explorer/FileExplorer';
 import { FleetSidebar } from './components/swarm/FleetSidebar';
 import { JobManager } from './components/swarm/JobManager';
 import { ChatBox } from './components/chat/ChatBox';
+import { SocketManager } from './worker/SocketManager';
 import './App.css';
 
 // Use an array join for the placeholder so global search-and-replace in the Docker entrypoint
@@ -20,49 +19,44 @@ const RELAY_SERVER_URL = import.meta.env.VITE_RELAY_URL && import.meta.env.VITE_
 function App() {
   const { token, user, isAuthenticated, logout } = useAuthStore();
 
-  const [socket, setSocket] = useState<Socket | null>(null);
   const [isConnected, setIsConnected] = useState(false);
   const [targetWorkerId, setTargetWorkerId] = useState<string>('');
+
+  const socketManager = SocketManager.getInstance();
 
   useEffect(() => {
     if (!isAuthenticated || !token) return;
 
-    console.log(`[UI] Booting up. Connecting to Relay Server at ${RELAY_SERVER_URL}`);
-    const newSocket = io(RELAY_SERVER_URL);
-    setSocket(newSocket);
+    socketManager.connect(RELAY_SERVER_URL, token);
 
-    newSocket.on('connect', () => {
-      console.log(`[UI] Connected to Relay Server. Authenticating...`);
+    const handleConnected = () => console.log(`[UI] Socket connected to Relay.`);
+    const handleAuthSuccess = () => {
+       setIsConnected(true);
+       console.log(`[UI] Authentication Successful! Ready to control swarm.`);
+    };
+    const handleAuthFailed = () => console.error(`[UI] Authentication Failed.`);
+    const handleDisconnected = () => {
+       setIsConnected(false);
+       console.log(`[UI] Disconnected from Relay Server.`);
+    };
+    const handlePong = (data: { timestamp: number }) => {
+       const latency = Date.now() - data.timestamp;
+       console.log(`[UI] Received PONG from Relay Server (Latency: ${latency}ms)`);
+    };
 
-      const authMessage: AuthRequestMessage = {
-        type: MessageType.AUTH_REQUEST,
-        timestamp: Date.now(),
-        role: 'UI',
-        token: token
-      };
-
-      newSocket.emit(MessageType.AUTH_REQUEST, authMessage);
-    });
-
-    newSocket.on(MessageType.AUTH_RESPONSE, (res: { success: boolean }) => {
-      if (res.success) {
-        setIsConnected(true);
-        console.log(`[UI] Authentication Successful! Ready to control swarm.`);
-      }
-    });
-
-    newSocket.on(MessageType.PONG, (data: { timestamp: number }) => {
-      const latency = Date.now() - data.timestamp;
-      console.log(`[UI] Received PONG from Relay Server (Latency: ${latency}ms)`);
-    });
-
-    newSocket.on('disconnect', () => {
-      setIsConnected(false);
-      console.log(`[UI] Disconnected from Relay Server.`);
-    });
+    socketManager.on('SOCKET_CONNECTED', handleConnected);
+    socketManager.on('AUTH_SUCCESS', handleAuthSuccess);
+    socketManager.on('AUTH_FAILED', handleAuthFailed);
+    socketManager.on('SOCKET_DISCONNECTED', handleDisconnected);
+    socketManager.on(MessageType.PONG, handlePong);
 
     return () => {
-      newSocket.close();
+      socketManager.off('SOCKET_CONNECTED', handleConnected);
+      socketManager.off('AUTH_SUCCESS', handleAuthSuccess);
+      socketManager.off('AUTH_FAILED', handleAuthFailed);
+      socketManager.off('SOCKET_DISCONNECTED', handleDisconnected);
+      socketManager.off(MessageType.PONG, handlePong);
+      socketManager.disconnect();
     };
   }, [isAuthenticated, token]);
 
@@ -75,7 +69,6 @@ function App() {
 
       {/* Sidebar: The Fleet Registry */}
       <FleetSidebar
-        socket={socket}
         targetWorkerId={targetWorkerId}
         setTargetWorkerId={setTargetWorkerId}
       />
@@ -104,14 +97,13 @@ function App() {
               <>
                 <div style={{ flex: 1 }}>
                   <FileExplorer
-                    socket={socket}
                     isConnected={isConnected}
                     workerId={targetWorkerId}
                   />
                 </div>
                 <div style={{ flex: 1 }}>
                   {/* Note: targetWorkerId is used for MVP Phase 3 to show the UI. In full prod, we'd select a targetUserId */}
-                  <ChatBox socket={socket} targetId={targetWorkerId} isOnline={false} />
+                  <ChatBox targetId={targetWorkerId} isOnline={false} />
                 </div>
               </>
             ) : (
@@ -130,7 +122,7 @@ function App() {
           </div>
 
           {/* Job Manager Sidebar */}
-          <JobManager socket={socket} isConnected={isConnected} />
+          <JobManager isConnected={isConnected} />
         </div>
       </div>
     </div>
