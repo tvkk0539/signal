@@ -147,10 +147,17 @@ async function bootWorker() {
   const peerConnections = new Map<string, RTCPeerConnection>();
   const dataChannels = new Map<string, RTCDataChannel>();
 
+  const RTC_CONFIG = {
+    iceServers: [
+      { urls: 'stun:stun.l.google.com:19302' },
+      { urls: 'stun:stun1.l.google.com:19302' }
+    ]
+  };
+
   socket.on(MessageType.SDP_OFFER, async (msg: any) => {
     console.log(`[Worker] Received SDP_OFFER from UI Client ${msg.senderId} for Streaming`);
     try {
-      const pc = new RTCPeerConnection();
+      const pc = new RTCPeerConnection(RTC_CONFIG);
       peerConnections.set(msg.senderId, pc);
 
       pc.connectionStateChange.subscribe((state: any) => {
@@ -160,6 +167,19 @@ async function bootWorker() {
           dataChannels.delete(msg.senderId);
         }
       });
+
+      // The backend needs to listen for its own ICE candidates and send them to the UI
+      pc.onicecandidate = (event) => {
+        if (event.candidate) {
+          socket.emit(MessageType.ICE_CANDIDATE, {
+            type: MessageType.ICE_CANDIDATE,
+            timestamp: Date.now(),
+            senderId: socket.id,
+            targetId: msg.senderId,
+            candidate: event.candidate.toJSON()
+          });
+        }
+      };
 
       pc.ondatachannel = ({ channel }) => {
         console.log(`[Worker] Received RTCDataChannel from ${msg.senderId}`);

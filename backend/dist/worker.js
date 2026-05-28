@@ -132,10 +132,16 @@ async function bootWorker() {
     // The worker must be able to answer SDP Offers from the UI to establish the P2P pipe
     const peerConnections = new Map();
     const dataChannels = new Map();
+    const RTC_CONFIG = {
+        iceServers: [
+            { urls: 'stun:stun.l.google.com:19302' },
+            { urls: 'stun:stun1.l.google.com:19302' }
+        ]
+    };
     socket.on(shared_1.MessageType.SDP_OFFER, async (msg) => {
         console.log(`[Worker] Received SDP_OFFER from UI Client ${msg.senderId} for Streaming`);
         try {
-            const pc = new werift_1.RTCPeerConnection();
+            const pc = new werift_1.RTCPeerConnection(RTC_CONFIG);
             peerConnections.set(msg.senderId, pc);
             pc.connectionStateChange.subscribe((state) => {
                 console.log(`[Worker] WebRTC State with ${msg.senderId}: ${state}`);
@@ -144,6 +150,18 @@ async function bootWorker() {
                     dataChannels.delete(msg.senderId);
                 }
             });
+            // The backend needs to listen for its own ICE candidates and send them to the UI
+            pc.onicecandidate = (event) => {
+                if (event.candidate) {
+                    socket.emit(shared_1.MessageType.ICE_CANDIDATE, {
+                        type: shared_1.MessageType.ICE_CANDIDATE,
+                        timestamp: Date.now(),
+                        senderId: socket.id,
+                        targetId: msg.senderId,
+                        candidate: event.candidate.toJSON()
+                    });
+                }
+            };
             pc.ondatachannel = ({ channel }) => {
                 console.log(`[Worker] Received RTCDataChannel from ${msg.senderId}`);
                 dataChannels.set(msg.senderId, channel);

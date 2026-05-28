@@ -117,7 +117,7 @@ export const FileExplorer: React.FC<FileExplorerProps> = ({ isConnected, workerI
     setCurrentPath(''); // Reset path to root when changing file systems
   };
 
-  const [playingMedia, setPlayingMedia] = useState<{ fs: string; path: string } | null>(null);
+  const [playingMedia, setPlayingMedia] = useState<{ fs: string; path: string; action: 'PLAY' | 'DOWNLOAD' } | null>(null);
 
   const handleRowClick = (item: FileItem) => {
     if (item.IsDir) {
@@ -129,10 +129,18 @@ export const FileExplorer: React.FC<FileExplorerProps> = ({ isConnected, workerI
       if (isMedia) {
          setPlayingMedia({
            fs: selectedFs,
-           path: currentPath === '' ? item.Name : `${currentPath}/${item.Name}`
+           path: currentPath === '' ? item.Name : `${currentPath}/${item.Name}`,
+           action: 'PLAY'
          });
       } else {
-        alert(`File Details:\nName: ${item.Name}\nSize: ${formatBytes(item.Size)}\nModified: ${new Date(item.ModTime).toLocaleString()}`);
+         // Initiate a P2P download instead of just showing an alert
+         if (window.confirm(`Do you want to download ${item.Name} (${formatBytes(item.Size)}) via P2P Relay Bypass?`)) {
+            setPlayingMedia({
+               fs: selectedFs,
+               path: currentPath === '' ? item.Name : `${currentPath}/${item.Name}`,
+               action: 'DOWNLOAD'
+            });
+         }
       }
     }
   };
@@ -329,12 +337,13 @@ export const FileExplorer: React.FC<FileExplorerProps> = ({ isConnected, workerI
         </div>
       </div>
 
-      {/* Phase 4: MediaPlayer Modal */}
+      {/* Phase 4: MediaPlayer/Downloader Modal */}
       {playingMedia && (
         <MediaPlayerModal
            workerId={workerId}
            fs={playingMedia.fs}
            path={playingMedia.path}
+           action={playingMedia.action}
            userId={useAuthStore.getState().user?.id || 'unknown'}
            onClose={() => setPlayingMedia(null)}
         />

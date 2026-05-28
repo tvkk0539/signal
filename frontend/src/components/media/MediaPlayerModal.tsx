@@ -13,11 +13,12 @@ interface MediaPlayerModalProps {
   workerId: string;
   fs: string;
   path: string;
+  action: 'PLAY' | 'DOWNLOAD';
   onClose: () => void;
   userId: string;
 }
 
-export const MediaPlayerModal: React.FC<MediaPlayerModalProps> = ({ workerId, fs, path, onClose, userId }) => {
+export const MediaPlayerModal: React.FC<MediaPlayerModalProps> = ({ workerId, fs, path, action, onClose, userId }) => {
   const socketManager = SocketManager.getInstance();
   const videoRef = useRef<HTMLVideoElement>(null);
   const pcRef = useRef<RTCPeerConnection | null>(null);
@@ -26,6 +27,7 @@ export const MediaPlayerModal: React.FC<MediaPlayerModalProps> = ({ workerId, fs
   const mediaSourceRef = useRef<MediaSource | null>(null);
   const sourceBufferRef = useRef<SourceBuffer | null>(null);
   const queueRef = useRef<ArrayBuffer[]>([]);
+  const downloadBufferRef = useRef<ArrayBuffer[]>([]);
 
   const [status, setStatus] = useState<string>('Connecting to Swarm Worker...');
 
@@ -60,7 +62,7 @@ export const MediaPlayerModal: React.FC<MediaPlayerModalProps> = ({ workerId, fs
         workerId: workerId,
         fs: fs,
         path: path,
-        action: 'PLAY',
+        action: action, // Pass action to backend (currently backend treats all as stream, but this is good for future proofing)
         startByte: 0 // Start from beginning
       };
 
@@ -76,27 +78,48 @@ export const MediaPlayerModal: React.FC<MediaPlayerModalProps> = ({ workerId, fs
              console.log(`[UI] Received Stream Metadata:`, msg);
              const mimeCodec = msg.mimeType;
 
-             if (mediaSource.readyState === 'open') {
-                if (MediaSource.isTypeSupported(mimeCodec)) {
-                  sourceBufferRef.current = mediaSource.addSourceBuffer(mimeCodec);
+             if (action === 'PLAY') {
+                 if (mediaSource.readyState === 'open') {
+                    if (MediaSource.isTypeSupported(mimeCodec)) {
+                      sourceBufferRef.current = mediaSource.addSourceBuffer(mimeCodec);
 
-                  sourceBufferRef.current.addEventListener('updateend', () => {
-                    if (queueRef.current.length > 0 && sourceBufferRef.current && !sourceBufferRef.current.updating) {
-                      sourceBufferRef.current.appendBuffer(queueRef.current.shift()!);
+                      sourceBufferRef.current.addEventListener('updateend', () => {
+                        if (queueRef.current.length > 0 && sourceBufferRef.current && !sourceBufferRef.current.updating) {
+                          sourceBufferRef.current.appendBuffer(queueRef.current.shift()!);
+                        }
+                      });
+                      setStatus('Metadata Received. Buffering stream...');
+                    } else {
+                      setStatus(`Unsupported format by browser: ${mimeCodec}`);
                     }
-                  });
-                  setStatus('Metadata Received. Buffering stream...');
-                } else {
-                  setStatus(`Unsupported format by browser: ${mimeCodec}`);
-                }
+                 } else {
+                    console.error("[UI] MediaSource not open when metadata arrived.");
+                 }
              } else {
-                console.error("[UI] MediaSource not open when metadata arrived.");
+                 setStatus('Downloading in background...');
              }
+
           } else if (msg.type === 'STREAM_END') {
-            setStatus('Stream Complete');
-            if (mediaSourceRef.current?.readyState === 'open') {
-               mediaSourceRef.current.endOfStream();
+            if (action === 'PLAY') {
+                setStatus('Stream Complete');
+                if (mediaSourceRef.current?.readyState === 'open') {
+                   mediaSourceRef.current.endOfStream();
+                }
+            } else {
+                setStatus('Download Complete. Saving file...');
+                // Combine chunks and trigger browser download
+                const blob = new Blob(downloadBufferRef.current);
+                const url = window.URL.createObjectURL(blob);
+                const a = document.createElement('a');
+                a.href = url;
+                a.download = path.split('/').pop() || 'download';
+                document.body.appendChild(a);
+                a.click();
+                window.URL.revokeObjectURL(url);
+                a.remove();
+                setTimeout(() => onClose(), 2000); // Auto close after 2 seconds
             }
+
           } else if (msg.type === 'STREAM_ERROR') {
             setStatus(`Stream Error: ${msg.error}`);
           }
@@ -105,13 +128,30 @@ export const MediaPlayerModal: React.FC<MediaPlayerModalProps> = ({ workerId, fs
         }
       } else {
         // Binary Chunk Received!
-        // Feed it directly into the MSE buffer to play instantly, bypassing RAM limits
-        setStatus('Streaming from Worker...');
         const buffer = event.data as ArrayBuffer;
-        if (sourceBufferRef.current && !sourceBufferRef.current.updating) {
-          sourceBufferRef.current.appendBuffer(buffer);
+
+        if (action === 'PLAY') {
+            setStatus('Streaming from Worker...');
+            if (sourceBufferRef.current && !sourceBufferRef.current.updating) {
+              sourceBufferRef.current.appendBuffer(buffer);
+            } else {
+              queueRef.current.push(buffer);
+            }
         } else {
-          queueRef.current.push(buffer);
+            // DOWNLOAD mode: To avoid RAM OOM crashes on massive files (e.g. 50GB),
+            // we use the File System Access API (StreamSaver pattern) to stream directly to disk.
+            // For MVP simplicity and cross-browser support without external libs,
+            // we will buffer chunks into an array and trigger standard Blob download,
+            // BUT we add a warning status if the file gets too large.
+            // Note: In production Phase 8, replace this with a proper ServiceWorker + WritableStream.
+            downloadBufferRef.current.push(buffer);
+
+            const mbDownloaded = (downloadBufferRef.current.length * 64) / 1024; // Assuming ~64KB chunks
+            if (mbDownloaded > 500) {
+               setStatus(`Downloading... (${Math.round(mbDownloaded)} MB) - WARNING: High RAM usage`);
+            } else {
+               setStatus(`Downloading... (${Math.round(mbDownloaded)} MB received)`);
+            }
         }
       }
     };
@@ -165,40 +205,56 @@ export const MediaPlayerModal: React.FC<MediaPlayerModalProps> = ({ workerId, fs
   }, [workerId, fs, path, userId]);
 
   return (
-    <div style={{
-      position: 'fixed',
-      top: 0, left: 0, right: 0, bottom: 0,
-      backgroundColor: 'rgba(0, 0, 0, 0.9)',
-      display: 'flex',
-      flexDirection: 'column',
-      justifyContent: 'center',
-      alignItems: 'center',
-      zIndex: 1000
-    }}>
-      <div style={{ width: '80%', maxWidth: '1000px', backgroundColor: '#222', borderRadius: '10px', overflow: 'hidden' }}>
-        <div style={{ padding: '15px 20px', display: 'flex', justifyContent: 'space-between', borderBottom: '1px solid #444' }}>
-          <h3 style={{ margin: 0, color: 'white' }}>Now Playing: {path.split('/').pop()}</h3>
-          <button onClick={onClose} style={{ background: 'none', border: 'none', color: '#ff4757', fontSize: '20px', cursor: 'pointer' }}>✖</button>
+    <div className="fixed inset-0 bg-background/90 backdrop-blur-sm z-50 flex flex-col items-center justify-center p-4">
+      <div className="w-full max-w-4xl bg-card border border-border/50 rounded-2xl shadow-2xl overflow-hidden flex flex-col">
+
+        {/* Header */}
+        <div className="px-6 py-4 border-b border-border/50 flex justify-between items-center bg-secondary/30">
+          <div className="flex items-center gap-3">
+             <div className="w-2.5 h-2.5 rounded-full bg-emerald-500 shadow-[0_0_8px_rgba(46,204,113,0.6)] animate-pulse" />
+             <h3 className="m-0 text-foreground font-semibold">
+               {action === 'PLAY' ? 'Live Stream' : 'Secure P2P Download'}: <span className="text-primary font-mono ml-2">{path.split('/').pop()}</span>
+             </h3>
+          </div>
+          <button onClick={onClose} className="text-muted-foreground hover:text-destructive transition-colors">
+            ✖
+          </button>
         </div>
 
-        <div style={{ position: 'relative', width: '100%', aspectRatio: '16/9', backgroundColor: 'black' }}>
-          <video
-            ref={videoRef}
-            controls
-            autoPlay
-            style={{ width: '100%', height: '100%' }}
-          />
+        {/* Content Area */}
+        <div className="relative w-full bg-black flex items-center justify-center min-h-[300px]" style={{ aspectRatio: action === 'PLAY' ? '16/9' : 'auto' }}>
 
-          {status !== 'Streaming from Worker...' && status !== 'Stream Complete' && (
-            <div style={{ position: 'absolute', inset: 0, display: 'flex', alignItems: 'center', justifyContent: 'center', backgroundColor: 'rgba(0,0,0,0.7)', color: 'white' }}>
-              <p>{status}</p>
+          {action === 'PLAY' && (
+            <video
+              ref={videoRef}
+              controls
+              autoPlay
+              className="w-full h-full object-contain"
+            />
+          )}
+
+          {/* Status Overlay for both Play and Download */}
+          {(!videoRef.current || status !== 'Streaming from Worker...') && status !== 'Stream Complete' && (
+            <div className="absolute inset-0 flex flex-col items-center justify-center bg-black/80 text-foreground gap-4">
+              {status.includes('Error') ? (
+                 <div className="text-4xl">⚠️</div>
+              ) : status.includes('Complete') ? (
+                 <div className="text-4xl text-emerald-500">✅</div>
+              ) : (
+                 <div className="w-8 h-8 border-4 border-primary border-t-transparent rounded-full animate-spin" />
+              )}
+              <p className="font-mono text-sm tracking-wide">{status}</p>
             </div>
           )}
         </div>
 
-        <div style={{ padding: '10px 20px', backgroundColor: '#111', color: '#aaa', fontSize: '12px', display: 'flex', justifyContent: 'space-between' }}>
-           <span>Source: {fs}</span>
-           <span>Provider: {workerId} (Relay Bypass Active)</span>
+        {/* Footer */}
+        <div className="px-6 py-3 bg-secondary/30 border-t border-border/50 text-xs text-muted-foreground flex justify-between items-center font-mono">
+           <span className="truncate max-w-[50%]">Source: {fs}</span>
+           <span className="text-emerald-500 flex items-center gap-2">
+             <span className="w-1.5 h-1.5 bg-emerald-500 rounded-full" />
+             Direct P2P Relay Bypass Active
+           </span>
         </div>
       </div>
     </div>
