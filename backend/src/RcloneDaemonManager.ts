@@ -205,20 +205,7 @@ export class RcloneDaemonManager {
     const targetFs = fs || '/';
     console.log(`[Rclone] Initiating VFS stream for fs: "${targetFs}", path: "${path}", Range: bytes=${startByte}-${endByte || ''}`);
 
-    const auth = Buffer.from(`${RCLONE_RC_USER}:${RCLONE_RC_PASS}`).toString('base64');
-
-    let rangeHeader = `bytes=${startByte}-`;
-    if (endByte !== undefined) {
-      rangeHeader += endByte.toString();
-    }
-
     try {
-      // We use axios to make an HTTP GET request to the local rclone WebDAV or HTTP VFS endpoint.
-      // Note: To properly support GET streaming, the rclone command must include standard VFS flags or we hit the operations/publicLink API.
-      // For this Phase 4 MVP, we will hit the internal core/command to `cat` the file directly into the stream,
-      // or rely on a configured VFS endpoint if available.
-      // A robust implementation would use `rcd` with `--vfs-cache-mode full` and access the HTTP server it spawns.
-
       // Correctly format the target path for rclone cat.
       // If targetFs is a remote (e.g., "gdrive:"), it already has a colon.
       // If it's local ("/"), we just use the path.
@@ -233,19 +220,39 @@ export class RcloneDaemonManager {
          fullPath = path.startsWith('/') ? path : `/${path}`;
       }
 
-      const response = await axios.post(`${RCLONE_RC_BASE_URL}/core/command`, {
-        command: "cat",
-        arg: [fullPath],
-        opt: { offset: startByte.toString(), count: endByte ? (endByte - startByte + 1).toString() : undefined }
-      }, {
-        headers: {
-          'Authorization': `Basic ${auth}`,
-          'Content-Type': 'application/json'
-        },
-        responseType: 'stream'
+      const args = [
+        'cat', fullPath,
+        '--config', '/tmp/rclone.conf',
+        '--offset', startByte.toString()
+      ];
+
+      if (endByte !== undefined) {
+        args.push('--count', (endByte - startByte + 1).toString());
+      }
+
+      // We spawn a child process to stream raw binary data directly, avoiding JSON wrappers
+      // from the rclone rc core/command API.
+      const child = spawn('rclone', args);
+
+      child.on('error', (err) => {
+        console.error(`[Rclone] streamFile child process error:`, err);
       });
 
-      return response.data;
+      child.stderr.on('data', (data) => {
+         console.warn(`[Rclone cat stderr]: ${data.toString()}`);
+      });
+
+      // Handle cases where rclone fails immediately (e.g., file not found)
+      child.on('exit', (code) => {
+         if (code !== 0) {
+            console.error(`[Rclone] cat process exited with code ${code} for ${fullPath}`);
+            // If the stream is already returned, we should somehow emit an error.
+            // Since we return child.stdout, we can emit an error on it.
+            child.stdout.emit('error', new Error(`rclone cat exited with code ${code}`));
+         }
+      });
+
+      return child.stdout;
     } catch (error: any) {
       console.error(`[Rclone] streamFile Error: ${error.message}`);
       throw error;

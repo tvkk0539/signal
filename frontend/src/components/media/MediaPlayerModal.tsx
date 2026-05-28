@@ -28,6 +28,7 @@ export const MediaPlayerModal: React.FC<MediaPlayerModalProps> = ({ workerId, fs
   const sourceBufferRef = useRef<SourceBuffer | null>(null);
   const queueRef = useRef<ArrayBuffer[]>([]);
   const downloadBufferRef = useRef<ArrayBuffer[]>([]);
+  const bytesReceivedRef = useRef<number>(0);
 
   const [status, setStatus] = useState<string>('Connecting to Swarm Worker...');
 
@@ -155,12 +156,13 @@ export const MediaPlayerModal: React.FC<MediaPlayerModalProps> = ({ workerId, fs
             // BUT we add a warning status if the file gets too large.
             // Note: In production Phase 8, replace this with a proper ServiceWorker + WritableStream.
             downloadBufferRef.current.push(buffer);
+            bytesReceivedRef.current += buffer.byteLength;
 
-            const mbDownloaded = (downloadBufferRef.current.length * 64) / 1024; // Assuming ~64KB chunks
+            const mbDownloaded = bytesReceivedRef.current / (1024 * 1024);
             if (mbDownloaded > 500) {
-               setStatus(`Downloading... (${Math.round(mbDownloaded)} MB) - WARNING: High RAM usage`);
+               setStatus(`Downloading... (${mbDownloaded.toFixed(1)} MB) - WARNING: High RAM usage`);
             } else {
-               setStatus(`Downloading... (${Math.round(mbDownloaded)} MB received)`);
+               setStatus(`Downloading... (${mbDownloaded.toFixed(1)} MB received)`);
             }
         }
       }
