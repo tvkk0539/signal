@@ -248,13 +248,18 @@ function setupSockets(io) {
             });
         });
         socket.on(shared_1.MessageType.DB_ROUTE_SWITCH_REQUEST, async (msg) => {
-            console.log(`[DB Operations] Received request to route ${msg.domain} to ${msg.engine}`);
+            console.log(`[DB Operations] Received request to route ${msg.domain} to ${msg.engine} with ${msg.mirrors?.length || 0} mirrors`);
             try {
-                await db_1.dbManager.hotSwapDomain(msg.domain, {
-                    engine: msg.engine,
-                    connectionString: msg.connectionString,
-                    apiKey: msg.apiKey
-                });
+                // UI payload mapping to DomainRoutingConfig
+                const config = {
+                    primary: {
+                        engine: msg.engine,
+                        connectionString: msg.connectionString,
+                        apiKey: msg.apiKey
+                    },
+                    mirrors: msg.mirrors || []
+                };
+                await db_1.dbManager.hotSwapDomain(msg.domain, config);
                 // Broadcast new state to all connected UI clients
                 exports.connectedUIClients.forEach((clientSocket) => {
                     clientSocket.emit(shared_1.MessageType.DB_STATE_UPDATE, {

@@ -271,13 +271,19 @@ export function setupSockets(io: Server) {
     });
 
     socket.on(MessageType.DB_ROUTE_SWITCH_REQUEST, async (msg: any) => {
-       console.log(`[DB Operations] Received request to route ${msg.domain} to ${msg.engine}`);
+       console.log(`[DB Operations] Received request to route ${msg.domain} to ${msg.engine} with ${msg.mirrors?.length || 0} mirrors`);
        try {
-         await dbManager.hotSwapDomain(msg.domain, {
-           engine: msg.engine,
-           connectionString: msg.connectionString,
-           apiKey: msg.apiKey
-         });
+         // UI payload mapping to DomainRoutingConfig
+         const config = {
+           primary: {
+             engine: msg.engine,
+             connectionString: msg.connectionString,
+             apiKey: msg.apiKey
+           },
+           mirrors: msg.mirrors || []
+         };
+
+         await dbManager.hotSwapDomain(msg.domain, config);
 
          // Broadcast new state to all connected UI clients
          connectedUIClients.forEach((clientSocket) => {

@@ -7,6 +7,11 @@ export interface DatabaseConfig {
     engine: DatabaseEngine;
     connectionString?: string;
     apiKey?: string;
+    isMirror?: boolean;
+}
+export interface DomainRoutingConfig {
+    primary: DatabaseConfig;
+    mirrors: DatabaseConfig[];
 }
 declare class DatabaseManager {
     private userRepository;
@@ -14,10 +19,16 @@ declare class DatabaseManager {
     private chatRepository;
     private currentRouting;
     initialize(): Promise<void>;
-    hotSwapDomain(domain: DomainService, config: DatabaseConfig): Promise<void>;
+    hotSwapDomain(domain: DomainService, config: DomainRoutingConfig): Promise<void>;
     getRoutingState(): Record<string, {
-        engine: string;
+        primary: {
+            engine: string;
+        };
+        mirrors: {
+            engine: string;
+        }[];
     }>;
+    private instantiateDomainRepository;
     private instantiateUserRepository;
     private instantiateAuditRepository;
     private instantiateChatRepository;

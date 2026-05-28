@@ -8,6 +8,10 @@ import { InMemoryUserRepository } from './providers/mock/InMemoryUserRepository'
 import { InMemoryAuditLogRepository } from './providers/mock/InMemoryAuditLogRepository';
 import { createMongoConnection } from './providers/mongo/connection';
 
+import { ReplicatedUserRepository } from './core/ReplicatedUserRepository';
+import { ReplicatedAuditLogRepository } from './core/ReplicatedAuditLogRepository';
+import { ReplicatedChatRepository } from './core/ReplicatedChatRepository';
+
 export type DatabaseEngine = 'MONGODB' | 'POSTGRES' | 'SUPABASE' | 'FIREBASE' | 'SQLITE' | 'MOCK';
 export type DomainService = 'AUTH' | 'AUDIT' | 'CHAT';
 
@@ -15,6 +19,12 @@ export interface DatabaseConfig {
   engine: DatabaseEngine;
   connectionString?: string;
   apiKey?: string;
+  isMirror?: boolean;
+}
+
+export interface DomainRoutingConfig {
+  primary: DatabaseConfig;
+  mirrors: DatabaseConfig[];
 }
 
 class DatabaseManager {
@@ -22,11 +32,11 @@ class DatabaseManager {
   private auditLogRepository!: IAuditLogRepository;
   private chatRepository!: IChatRepository;
 
-  // The state map to track which engine is running which domain
-  private currentRouting: Record<DomainService, DatabaseConfig> = {
-    AUTH: { engine: 'MOCK' },
-    AUDIT: { engine: 'MOCK' },
-    CHAT: { engine: 'MOCK' }
+  // The state map to track which engines are running which domain (Primary + Mirrors)
+  private currentRouting: Record<DomainService, DomainRoutingConfig> = {
+    AUTH: { primary: { engine: 'MOCK' }, mirrors: [] },
+    AUDIT: { primary: { engine: 'MOCK' }, mirrors: [] },
+    CHAT: { primary: { engine: 'MOCK' }, mirrors: [] }
   };
 
   async initialize() {
@@ -35,41 +45,57 @@ class DatabaseManager {
     const defaultEngine = (process.env.DB_TYPE as DatabaseEngine) || 'MONGODB';
 
     try {
-       await this.hotSwapDomain('AUTH', { engine: defaultEngine });
-       await this.hotSwapDomain('AUDIT', { engine: defaultEngine });
-       await this.hotSwapDomain('CHAT', { engine: defaultEngine });
+       await this.hotSwapDomain('AUTH', { primary: { engine: defaultEngine }, mirrors: [] });
+       await this.hotSwapDomain('AUDIT', { primary: { engine: defaultEngine }, mirrors: [] });
+       await this.hotSwapDomain('CHAT', { primary: { engine: defaultEngine }, mirrors: [] });
     } catch (e) {
        console.warn(`[DB Manager] Primary initialize failed, falling back to MOCK universally.`);
-       await this.hotSwapDomain('AUTH', { engine: 'MOCK' });
-       await this.hotSwapDomain('AUDIT', { engine: 'MOCK' });
-       await this.hotSwapDomain('CHAT', { engine: 'MOCK' });
+       await this.hotSwapDomain('AUTH', { primary: { engine: 'MOCK' }, mirrors: [] });
+       await this.hotSwapDomain('AUDIT', { primary: { engine: 'MOCK' }, mirrors: [] });
+       await this.hotSwapDomain('CHAT', { primary: { engine: 'MOCK' }, mirrors: [] });
     }
   }
 
-  // The Magic Function: Hot-Swaps a specific domain's database engine at runtime
-  async hotSwapDomain(domain: DomainService, config: DatabaseConfig) {
-    console.log(`[DB Manager] Hot-swapping ${domain} domain to ${config.engine}...`);
+  // The Magic Function: Hot-Swaps a specific domain's database engine (and its mirrors) at runtime
+  async hotSwapDomain(domain: DomainService, config: DomainRoutingConfig) {
+    console.log(`[DB Manager] Hot-swapping ${domain} domain to Primary: ${config.primary.engine} with ${config.mirrors.length} mirrors...`);
 
     try {
+      // 1. Instantiate the Primary
+      const primaryRepo = await this.instantiateDomainRepository(domain, config.primary);
+
+      // 2. Instantiate all Mirrors
+      const mirrorRepos = [];
+      for (const mirrorConfig of config.mirrors) {
+        try {
+          mirrorRepos.push(await this.instantiateDomainRepository(domain, mirrorConfig));
+        } catch (mirrorErr: any) {
+          console.error(`[DB Manager] Failed to instantiate mirror ${mirrorConfig.engine} for ${domain}: ${mirrorErr.message}`);
+          // We don't throw here; we let the primary continue working even if a mirror is offline.
+        }
+      }
+
+      // 3. Wrap them in the Replication Engine and hot-swap the live pointer
       switch (domain) {
         case 'AUTH':
-          this.userRepository = await this.instantiateUserRepository(config);
+          this.userRepository = new ReplicatedUserRepository(primaryRepo as IUserRepository, mirrorRepos as IUserRepository[]);
           break;
         case 'AUDIT':
-          this.auditLogRepository = await this.instantiateAuditRepository(config);
+          this.auditLogRepository = new ReplicatedAuditLogRepository(primaryRepo as IAuditLogRepository, mirrorRepos as IAuditLogRepository[]);
           break;
         case 'CHAT':
-          this.chatRepository = await this.instantiateChatRepository(config);
+          this.chatRepository = new ReplicatedChatRepository(primaryRepo as IChatRepository, mirrorRepos as IChatRepository[]);
           break;
       }
+
       this.currentRouting[domain] = config;
-      console.log(`[DB Manager] Successfully routed ${domain} to ${config.engine}.`);
+      console.log(`[DB Manager] Successfully routed ${domain} to Replication Engine (Primary: ${config.primary.engine}, Mirrors: ${mirrorRepos.length}).`);
     } catch (err: any) {
-       console.error(`[DB Manager] Failed to hot-swap ${domain} to ${config.engine}: ${err.message}`);
+       console.error(`[DB Manager] Failed to hot-swap Primary ${domain} to ${config.primary.engine}: ${err.message}`);
        // Fallback to mock if it completely fails to avoid crashing the server
-       if (config.engine !== 'MOCK') {
+       if (config.primary.engine !== 'MOCK') {
           console.log(`[DB Manager] Falling back ${domain} to MOCK.`);
-          await this.hotSwapDomain(domain, { engine: 'MOCK' });
+          await this.hotSwapDomain(domain, { primary: { engine: 'MOCK' }, mirrors: [] });
        }
        throw err; // Re-throw so the UI knows the connection failed
     }
@@ -77,11 +103,24 @@ class DatabaseManager {
 
   public getRoutingState() {
      // Redact sensitive connection strings and API keys before broadcasting to UI
-     const safeRouting: Record<string, { engine: string }> = {};
+     const safeRouting: Record<string, { primary: { engine: string }, mirrors: { engine: string }[] }> = {};
      for (const [domain, config] of Object.entries(this.currentRouting)) {
-        safeRouting[domain] = { engine: config.engine };
+        safeRouting[domain] = {
+          primary: { engine: config.primary.engine },
+          mirrors: config.mirrors.map(m => ({ engine: m.engine }))
+        };
      }
      return safeRouting;
+  }
+
+  // --- Dynamic Instantiator Router ---
+
+  private async instantiateDomainRepository(domain: DomainService, config: DatabaseConfig): Promise<any> {
+    switch (domain) {
+      case 'AUTH': return this.instantiateUserRepository(config);
+      case 'AUDIT': return this.instantiateAuditRepository(config);
+      case 'CHAT': return this.instantiateChatRepository(config);
+    }
   }
 
   // --- Adapter Factories ---

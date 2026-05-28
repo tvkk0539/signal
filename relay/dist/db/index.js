@@ -6,56 +6,73 @@ const MongoAuditLogRepository_1 = require("./providers/mongo/MongoAuditLogReposi
 const InMemoryUserRepository_1 = require("./providers/mock/InMemoryUserRepository");
 const InMemoryAuditLogRepository_1 = require("./providers/mock/InMemoryAuditLogRepository");
 const connection_1 = require("./providers/mongo/connection");
+const ReplicatedUserRepository_1 = require("./core/ReplicatedUserRepository");
+const ReplicatedAuditLogRepository_1 = require("./core/ReplicatedAuditLogRepository");
+const ReplicatedChatRepository_1 = require("./core/ReplicatedChatRepository");
 class DatabaseManager {
     userRepository;
     auditLogRepository;
     chatRepository;
-    // The state map to track which engine is running which domain
+    // The state map to track which engines are running which domain (Primary + Mirrors)
     currentRouting = {
-        AUTH: { engine: 'MOCK' },
-        AUDIT: { engine: 'MOCK' },
-        CHAT: { engine: 'MOCK' }
+        AUTH: { primary: { engine: 'MOCK' }, mirrors: [] },
+        AUDIT: { primary: { engine: 'MOCK' }, mirrors: [] },
+        CHAT: { primary: { engine: 'MOCK' }, mirrors: [] }
     };
     async initialize() {
         console.log(`[DB Manager] Initializing Polyglot Switchboard...`);
         // On first boot, we default to MONGODB if requested via env, else MOCK
         const defaultEngine = process.env.DB_TYPE || 'MONGODB';
         try {
-            await this.hotSwapDomain('AUTH', { engine: defaultEngine });
-            await this.hotSwapDomain('AUDIT', { engine: defaultEngine });
-            await this.hotSwapDomain('CHAT', { engine: defaultEngine });
+            await this.hotSwapDomain('AUTH', { primary: { engine: defaultEngine }, mirrors: [] });
+            await this.hotSwapDomain('AUDIT', { primary: { engine: defaultEngine }, mirrors: [] });
+            await this.hotSwapDomain('CHAT', { primary: { engine: defaultEngine }, mirrors: [] });
         }
         catch (e) {
             console.warn(`[DB Manager] Primary initialize failed, falling back to MOCK universally.`);
-            await this.hotSwapDomain('AUTH', { engine: 'MOCK' });
-            await this.hotSwapDomain('AUDIT', { engine: 'MOCK' });
-            await this.hotSwapDomain('CHAT', { engine: 'MOCK' });
+            await this.hotSwapDomain('AUTH', { primary: { engine: 'MOCK' }, mirrors: [] });
+            await this.hotSwapDomain('AUDIT', { primary: { engine: 'MOCK' }, mirrors: [] });
+            await this.hotSwapDomain('CHAT', { primary: { engine: 'MOCK' }, mirrors: [] });
         }
     }
-    // The Magic Function: Hot-Swaps a specific domain's database engine at runtime
+    // The Magic Function: Hot-Swaps a specific domain's database engine (and its mirrors) at runtime
     async hotSwapDomain(domain, config) {
-        console.log(`[DB Manager] Hot-swapping ${domain} domain to ${config.engine}...`);
+        console.log(`[DB Manager] Hot-swapping ${domain} domain to Primary: ${config.primary.engine} with ${config.mirrors.length} mirrors...`);
         try {
+            // 1. Instantiate the Primary
+            const primaryRepo = await this.instantiateDomainRepository(domain, config.primary);
+            // 2. Instantiate all Mirrors
+            const mirrorRepos = [];
+            for (const mirrorConfig of config.mirrors) {
+                try {
+                    mirrorRepos.push(await this.instantiateDomainRepository(domain, mirrorConfig));
+                }
+                catch (mirrorErr) {
+                    console.error(`[DB Manager] Failed to instantiate mirror ${mirrorConfig.engine} for ${domain}: ${mirrorErr.message}`);
+                    // We don't throw here; we let the primary continue working even if a mirror is offline.
+                }
+            }
+            // 3. Wrap them in the Replication Engine and hot-swap the live pointer
             switch (domain) {
                 case 'AUTH':
-                    this.userRepository = await this.instantiateUserRepository(config);
+                    this.userRepository = new ReplicatedUserRepository_1.ReplicatedUserRepository(primaryRepo, mirrorRepos);
                     break;
                 case 'AUDIT':
-                    this.auditLogRepository = await this.instantiateAuditRepository(config);
+                    this.auditLogRepository = new ReplicatedAuditLogRepository_1.ReplicatedAuditLogRepository(primaryRepo, mirrorRepos);
                     break;
                 case 'CHAT':
-                    this.chatRepository = await this.instantiateChatRepository(config);
+                    this.chatRepository = new ReplicatedChatRepository_1.ReplicatedChatRepository(primaryRepo, mirrorRepos);
                     break;
             }
             this.currentRouting[domain] = config;
-            console.log(`[DB Manager] Successfully routed ${domain} to ${config.engine}.`);
+            console.log(`[DB Manager] Successfully routed ${domain} to Replication Engine (Primary: ${config.primary.engine}, Mirrors: ${mirrorRepos.length}).`);
         }
         catch (err) {
-            console.error(`[DB Manager] Failed to hot-swap ${domain} to ${config.engine}: ${err.message}`);
+            console.error(`[DB Manager] Failed to hot-swap Primary ${domain} to ${config.primary.engine}: ${err.message}`);
             // Fallback to mock if it completely fails to avoid crashing the server
-            if (config.engine !== 'MOCK') {
+            if (config.primary.engine !== 'MOCK') {
                 console.log(`[DB Manager] Falling back ${domain} to MOCK.`);
-                await this.hotSwapDomain(domain, { engine: 'MOCK' });
+                await this.hotSwapDomain(domain, { primary: { engine: 'MOCK' }, mirrors: [] });
             }
             throw err; // Re-throw so the UI knows the connection failed
         }
@@ -64,9 +81,20 @@ class DatabaseManager {
         // Redact sensitive connection strings and API keys before broadcasting to UI
         const safeRouting = {};
         for (const [domain, config] of Object.entries(this.currentRouting)) {
-            safeRouting[domain] = { engine: config.engine };
+            safeRouting[domain] = {
+                primary: { engine: config.primary.engine },
+                mirrors: config.mirrors.map(m => ({ engine: m.engine }))
+            };
         }
         return safeRouting;
+    }
+    // --- Dynamic Instantiator Router ---
+    async instantiateDomainRepository(domain, config) {
+        switch (domain) {
+            case 'AUTH': return this.instantiateUserRepository(config);
+            case 'AUDIT': return this.instantiateAuditRepository(config);
+            case 'CHAT': return this.instantiateChatRepository(config);
+        }
     }
     // --- Adapter Factories ---
     async instantiateUserRepository(config) {

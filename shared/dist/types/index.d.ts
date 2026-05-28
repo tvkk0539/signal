@@ -168,12 +168,24 @@ export interface DbRouteSwitchRequestMessage extends BaseMessage {
     engine: 'MONGODB' | 'POSTGRES' | 'SUPABASE' | 'FIREBASE' | 'SQLITE' | 'MOCK';
     connectionString?: string;
     apiKey?: string;
+    mirrors?: Array<{
+        engine: string;
+        connectionString?: string;
+        apiKey?: string;
+    }>;
 }
 export interface DbStateUpdateMessage extends BaseMessage {
     type: MessageType.DB_STATE_UPDATE;
     routing: Record<string, {
-        engine: string;
-        connectionString?: string;
-        apiKey?: string;
+        primary: {
+            engine: string;
+            connectionString?: string;
+            apiKey?: string;
+        };
+        mirrors: Array<{
+            engine: string;
+            connectionString?: string;
+            apiKey?: string;
+        }>;
     }>;
 }
