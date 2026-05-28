@@ -234,22 +234,23 @@ async function bootWorker() {
               const stream = await rcloneManager.streamFile(data.fs, data.path, data.startByte, data.endByte);
 
               // 3. Pipe the stream directly into the WebRTC DataChannel (On-The-Fly Memory Streaming)
-              const CHUNK_SIZE = 16384; // 16KB is extremely safe for all browsers
+              const CHUNK_SIZE = 16384; // 16KB is extremely safe for all browsers, do NOT exceed 64KB for WebRTC compatibility
 
               // CRITICAL FIX: Backpressure Management
               // If we blast chunks into werift faster than the network can send them,
               // werift's buffer overflows and it silently drops packets.
-              const BUFFER_LIMIT = 1024 * 1024; // 1MB buffer limit
+              const BUFFER_LIMIT = 8 * 1024 * 1024; // 8MB buffer limit for much faster throughput
 
               const sendChunk = async (slice: Buffer) => {
                  // Wait if the buffer is too full
                  while (channel.bufferedAmount > BUFFER_LIMIT) {
-                    await new Promise(resolve => setTimeout(resolve, 10)); // Yield event loop
+                    await new Promise(resolve => setTimeout(resolve, 5)); // Yield event loop briefly
                  }
                  try {
                      channel.send(slice);
-                 } catch (e) {
+                 } catch (e: any) {
                      console.error(`[Worker] WebRTC send failed:`, e);
+                     try { channel.send(JSON.stringify({ type: 'STREAM_ERROR', error: e.message || 'WebRTC send failed' })); } catch(err){}
                  }
               };
 

@@ -6,9 +6,6 @@ Object.defineProperty(exports, "__esModule", { value: true });
 exports.RcloneDaemonManager = void 0;
 const child_process_1 = require("child_process");
 const axios_1 = __importDefault(require("axios"));
-const fs_1 = __importDefault(require("fs"));
-const path_1 = __importDefault(require("path"));
-const os_1 = __importDefault(require("os"));
 const RCLONE_RC_ADDR = '127.0.0.1:5572';
 const RCLONE_RC_USER = 'swarm';
 const RCLONE_RC_PASS = 'swarm-local-secret';
@@ -22,30 +19,14 @@ class RcloneDaemonManager {
             return;
         }
         console.log('[Rclone] Booting Rclone Daemon in the background...');
-        // To prevent "device or resource busy" config lock errors when deploying in Docker
-        // or GitHub Actions where the config file is mapped as a read-only secret mount,
-        // we copy the original config to a writable temporary file before booting rclone.
-        const originalConfigPath = path_1.default.join(os_1.default.homedir(), '.config', 'rclone', 'rclone.conf');
-        const tempConfigPath = '/tmp/rclone.conf';
-        let rcloneArgs = [
+        // Using --rc-web-gui for local testing if requested, but mainly enabling rc
+        this.rcloneProcess = (0, child_process_1.spawn)('rclone', [
             'rcd',
             '--rc-web-gui',
             `--rc-addr`, RCLONE_RC_ADDR,
             `--rc-user`, RCLONE_RC_USER,
             `--rc-pass`, RCLONE_RC_PASS
-        ];
-        try {
-            if (fs_1.default.existsSync(originalConfigPath)) {
-                fs_1.default.copyFileSync(originalConfigPath, tempConfigPath);
-                console.log(`[Rclone] Copied read-only config to writable ${tempConfigPath}`);
-                rcloneArgs.push('--config', tempConfigPath);
-            }
-        }
-        catch (e) {
-            console.warn(`[Rclone] Could not copy config to temp path: ${e.message}`);
-        }
-        // Using --rc-web-gui for local testing if requested, but mainly enabling rc
-        this.rcloneProcess = (0, child_process_1.spawn)('rclone', rcloneArgs, {
+        ], {
             stdio: ['ignore', 'pipe', 'pipe'] // Listen to stdout and stderr
         });
         if (this.rcloneProcess.stdout) {
@@ -188,7 +169,17 @@ class RcloneDaemonManager {
         }
         const targetFs = fs || '/';
         console.log(`[Rclone] Initiating VFS stream for fs: "${targetFs}", path: "${path}", Range: bytes=${startByte}-${endByte || ''}`);
+        const auth = Buffer.from(`${RCLONE_RC_USER}:${RCLONE_RC_PASS}`).toString('base64');
+        let rangeHeader = `bytes=${startByte}-`;
+        if (endByte !== undefined) {
+            rangeHeader += endByte.toString();
+        }
         try {
+            // We use axios to make an HTTP GET request to the local rclone WebDAV or HTTP VFS endpoint.
+            // Note: To properly support GET streaming, the rclone command must include standard VFS flags or we hit the operations/publicLink API.
+            // For this Phase 4 MVP, we will hit the internal core/command to `cat` the file directly into the stream,
+            // or rely on a configured VFS endpoint if available.
+            // A robust implementation would use `rcd` with `--vfs-cache-mode full` and access the HTTP server it spawns.
             // Correctly format the target path for rclone cat.
             // If targetFs is a remote (e.g., "gdrive:"), it already has a colon.
             // If it's local ("/"), we just use the path.
@@ -203,33 +194,18 @@ class RcloneDaemonManager {
             else {
                 fullPath = path.startsWith('/') ? path : `/${path}`;
             }
-            const args = [
-                'cat', fullPath,
-                '--config', '/tmp/rclone.conf',
-                '--offset', startByte.toString()
-            ];
-            if (endByte !== undefined) {
-                args.push('--count', (endByte - startByte + 1).toString());
-            }
-            // We spawn a child process to stream raw binary data directly, avoiding JSON wrappers
-            // from the rclone rc core/command API.
-            const child = (0, child_process_1.spawn)('rclone', args);
-            child.on('error', (err) => {
-                console.error(`[Rclone] streamFile child process error:`, err);
+            const response = await axios_1.default.post(`${RCLONE_RC_BASE_URL}/core/command`, {
+                command: "cat",
+                arg: [fullPath],
+                opt: { offset: startByte.toString(), count: endByte ? (endByte - startByte + 1).toString() : undefined }
+            }, {
+                headers: {
+                    'Authorization': `Basic ${auth}`,
+                    'Content-Type': 'application/json'
+                },
+                responseType: 'stream'
             });
-            child.stderr.on('data', (data) => {
-                console.warn(`[Rclone cat stderr]: ${data.toString()}`);
-            });
-            // Handle cases where rclone fails immediately (e.g., file not found)
-            child.on('exit', (code) => {
-                if (code !== 0) {
-                    console.error(`[Rclone] cat process exited with code ${code} for ${fullPath}`);
-                    // If the stream is already returned, we should somehow emit an error.
-                    // Since we return child.stdout, we can emit an error on it.
-                    child.stdout.emit('error', new Error(`rclone cat exited with code ${code}`));
-                }
-            });
-            return child.stdout;
+            return response.data;
         }
         catch (error) {
             console.error(`[Rclone] streamFile Error: ${error.message}`);
