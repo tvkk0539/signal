@@ -24,12 +24,13 @@ self.addEventListener('message', (event) => {
         const portData = portEvent.data;
 
         if (portData.type === 'INIT_STREAM') {
-          const { streamId, mimeType } = portData;
-          console.log(`[ServiceWorker] Initializing stream: ${streamId}`);
+          const { streamId, mimeType, fileSize } = portData;
+          console.log(`[ServiceWorker] Initializing stream: ${streamId} (Size: ${fileSize})`);
 
           // Store metadata so the fetch handler knows how to respond
           streamControllers.set(streamId, {
             mimeType,
+            fileSize,
             controller: null,
             buffer: [], // Temporary buffer in case fetch happens before chunks arrive
             isFinished: false,
@@ -122,14 +123,52 @@ self.addEventListener('fetch', (event) => {
       }
     });
 
-    // We must return a 200 OK Response with the stream and correct MIME type.
-    // The native <video> tag will read this stream as if it's a normal HTTP download.
+    // Safari and iOS native video players enforce strict HTTP Range requests.
+    // We must intercept the Range header and respond with a 206 Partial Content,
+    // otherwise Safari aborts playback with a "slash" play icon.
+    const rangeHeader = event.request.headers.get('Range');
+
     const responseHeaders = new Headers({
       'Content-Type': streamInfo.mimeType || 'application/octet-stream',
       'Cache-Control': 'no-store, no-cache, must-revalidate, proxy-revalidate',
-      'Accept-Ranges': 'none' // Important: We are sending a continuous stream, we cannot support seeking/range requests yet.
+      'Accept-Ranges': 'bytes',
     });
 
-    event.respondWith(new Response(readableStream, { headers: responseHeaders }));
+    // Provide the content length if we have it
+    if (streamInfo.fileSize) {
+      responseHeaders.set('Content-Length', streamInfo.fileSize.toString());
+    }
+
+    if (rangeHeader && streamInfo.fileSize) {
+      // Very basic Range handling to satisfy Safari's initial probe
+      // We are streaming sequentially, so we claim to return the whole remaining file
+      // A true random-seek implementation would require upstream chunk requesting.
+      let start = 0;
+      let end = streamInfo.fileSize - 1;
+
+      const match = rangeHeader.match(/bytes=(\d+)-(.*)/);
+      if (match) {
+         start = parseInt(match[1], 10);
+         if (match[2]) {
+             end = parseInt(match[2], 10);
+         }
+      }
+
+      responseHeaders.set('Content-Range', `bytes ${start}-${end}/${streamInfo.fileSize}`);
+      // Set content length to the actual size being returned in this 206 response
+      responseHeaders.set('Content-Length', (end - start + 1).toString());
+
+      event.respondWith(new Response(readableStream, {
+        status: 206,
+        statusText: 'Partial Content',
+        headers: responseHeaders
+      }));
+    } else {
+      // Standard 200 OK for browsers that don't enforce Range probing
+      event.respondWith(new Response(readableStream, {
+        status: 200,
+        headers: responseHeaders
+      }));
+    }
   }
 });
