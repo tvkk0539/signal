@@ -222,9 +222,15 @@ export class RcloneDaemonManager {
 
       const args = [
         'cat', fullPath,
-        '--config', '/tmp/rclone.conf',
         '--offset', startByte.toString()
       ];
+
+      // Only use the temp config if it was successfully created during start()
+      // Otherwise let rclone use its default config resolution logic.
+      // We must use require('fs') here because the 'fs' parameter shadows the 'fs' module.
+      if (require('fs').existsSync('/tmp/rclone.conf')) {
+         args.push('--config', '/tmp/rclone.conf');
+      }
 
       if (endByte !== undefined) {
         args.push('--count', (endByte - startByte + 1).toString());
