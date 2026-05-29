@@ -236,54 +236,73 @@ async function bootWorker() {
               // 3. Pipe the stream directly into the WebRTC DataChannel (On-The-Fly Memory Streaming)
               const CHUNK_SIZE = 16384; // 16KB is extremely safe for all browsers, do NOT exceed 64KB for WebRTC compatibility
 
-              // CRITICAL FIX: Backpressure Management
-              // If we blast chunks into werift faster than the network can send them,
-              // werift's buffer overflows and it silently drops packets.
-              const BUFFER_LIMIT = 8 * 1024 * 1024; // 8MB buffer limit for much faster throughput
+              // CRITICAL FIX: Strict Asynchronous Backpressure Management
+              // We must use `for await` to prevent event loop interleaving that causes
+              // out-of-order packet delivery and stream corruption.
+              const BUFFER_LIMIT = 8 * 1024 * 1024; // 8MB buffer limit
 
-              const sendChunk = async (slice: Buffer) => {
-                 // Wait if the buffer is too full
-                 while (channel.bufferedAmount > BUFFER_LIMIT) {
-                    await new Promise(resolve => setTimeout(resolve, 5)); // Yield event loop briefly
-                 }
-                 try {
-                     channel.send(slice);
-                 } catch (e: any) {
-                     console.error(`[Worker] WebRTC send failed:`, e);
-                     try { channel.send(JSON.stringify({ type: 'STREAM_ERROR', error: e.message || 'WebRTC send failed' })); } catch(err){}
-                 }
+              const processStream = async () => {
+                try {
+                  for await (const chunk of stream) {
+                    // Ensure the chunk is treated as a Buffer (rclone spawn stream outputs Buffers, but typing can be broad)
+                    const rawChunk: Buffer = Buffer.isBuffer(chunk) ? chunk : Buffer.from(chunk as any);
+
+                    // If the browser disconnected or stream closed, abort pulling from rclone
+                    if (channel.readyState !== 'open') {
+                      console.log(`[Worker] WebRTC channel closed mid-stream. Aborting rclone pipe.`);
+                      if ('destroy' in stream) {
+                         (stream as any).destroy();
+                      }
+                      return;
+                    }
+
+                    let offset = 0;
+                    while (offset < rawChunk.length) {
+                      const end = Math.min(offset + CHUNK_SIZE, rawChunk.length);
+                      const slice = rawChunk.subarray(offset, end);
+
+                      // Strict Wait Loop
+                      while (channel.bufferedAmount > BUFFER_LIMIT) {
+                         if (channel.readyState !== 'open') {
+                           if ('destroy' in stream) (stream as any).destroy();
+                           return;
+                         }
+                         await new Promise(resolve => setTimeout(resolve, 10)); // Yield to network I/O
+                      }
+
+                      try {
+                          channel.send(slice);
+                      } catch (e: any) {
+                          console.error(`[Worker] WebRTC send failed:`, e);
+                          try { channel.send(JSON.stringify({ type: 'STREAM_ERROR', error: e.message })); } catch(err){}
+                          if ('destroy' in stream) (stream as any).destroy();
+                          return;
+                      }
+                      offset = end;
+                    }
+                  }
+
+                  // Stream successfully finished downloading from rclone
+                  console.log(`[Worker] Stream pull complete for ${data.path}. Waiting for WebRTC buffer to flush...`);
+                  while (channel.bufferedAmount > 0 && channel.readyState === 'open') {
+                      await new Promise(resolve => setTimeout(resolve, 50));
+                  }
+
+                  if (channel.readyState === 'open') {
+                     console.log(`[Worker] Buffer flushed. Sending STREAM_END.`);
+                     try { channel.send(JSON.stringify({ type: 'STREAM_END' })); } catch(e){}
+                  }
+
+                } catch (err: any) {
+                  console.error(`[Worker] Rclone VFS Stream Error/Abort:`, err);
+                  if (channel.readyState === 'open') {
+                     try { channel.send(JSON.stringify({ type: 'STREAM_ERROR', error: err.message })); } catch(e){}
+                  }
+                }
               };
 
-              stream.on('data', async (rawChunk: Buffer) => {
-                // Pause the rclone stream while we process this massive chunk
-                stream.pause();
-
-                let offset = 0;
-                while (offset < rawChunk.length) {
-                   const end = Math.min(offset + CHUNK_SIZE, rawChunk.length);
-                   const slice = rawChunk.subarray(offset, end);
-                   await sendChunk(slice);
-                   offset = end;
-                }
-
-                // Resume pulling from rclone
-                stream.resume();
-              });
-
-              stream.on('end', async () => {
-                console.log(`[Worker] Stream complete for ${data.path}. Waiting for buffer to flush...`);
-                // Wait for the WebRTC buffer to completely empty before sending the END signal
-                while (channel.bufferedAmount > 0) {
-                    await new Promise(resolve => setTimeout(resolve, 50));
-                }
-                console.log(`[Worker] Buffer flushed. Sending STREAM_END.`);
-                try { channel.send(JSON.stringify({ type: 'STREAM_END' })); } catch(e){}
-              });
-
-              stream.on('error', (err) => {
-                console.error(`[Worker] Rclone VFS Stream Error:`, err);
-                try { channel.send(JSON.stringify({ type: 'STREAM_ERROR', error: err.message })); } catch(e){}
-              });
+              // Start the async processing
+              processStream();
             }
           } catch (e) {
             // Not a JSON message, ignore
