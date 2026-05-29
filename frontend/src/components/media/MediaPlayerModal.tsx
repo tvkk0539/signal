@@ -34,11 +34,21 @@ export const MediaPlayerModal: React.FC<MediaPlayerModalProps> = ({ workerId, fs
   const [status, setStatus] = useState<string>('Registering Service Worker Bridge...');
   const [isVideoSrcSet, setIsVideoSrcSet] = useState(false);
 
+  // Use a ref to prevent double-initialization in React 18 Strict Mode
+  const isInitializing = useRef(false);
+
   useEffect(() => {
     if (!workerId) return;
 
+    // Prevent double execution in strict mode
+    if (isInitializing.current) return;
+    isInitializing.current = true;
+
     let pc: RTCPeerConnection;
     let channel: RTCDataChannel;
+
+    let hasSentOffer = false;
+    let pendingCandidates: RTCIceCandidateInit[] = [];
 
     const initWebRTC = () => {
       setStatus('Connecting to Swarm Worker...');
@@ -170,13 +180,30 @@ export const MediaPlayerModal: React.FC<MediaPlayerModalProps> = ({ workerId, fs
 
       const handleSdpAnswer = async (msg: SdpAnswerMessage) => {
         if (msg.senderId === workerId && msg.targetId === userId) {
-          await pc.setRemoteDescription(new RTCSessionDescription({ type: 'answer', sdp: msg.sdp }));
+          // Check if we are actually expecting an answer
+          if (pc.signalingState === 'have-local-offer') {
+             try {
+               await pc.setRemoteDescription(new RTCSessionDescription({ type: 'answer', sdp: msg.sdp }));
+               // Flush pending ICE candidates now that remote description is set
+               for (const candidate of pendingCandidates) {
+                  await pc.addIceCandidate(new RTCIceCandidate(candidate));
+               }
+               pendingCandidates = [];
+             } catch (e) {
+               console.error('[UI] Error setting remote description:', e);
+             }
+          }
         }
       };
 
       const handleIceCandidate = async (msg: IceCandidateMessage) => {
          if (msg.senderId === workerId && msg.targetId === userId && msg.candidate) {
-            await pc.addIceCandidate(new RTCIceCandidate(msg.candidate));
+            if (pc.remoteDescription) {
+               await pc.addIceCandidate(new RTCIceCandidate(msg.candidate));
+            } else {
+               // Buffer the candidate until the Answer is set
+               pendingCandidates.push(msg.candidate);
+            }
          }
       };
 
@@ -187,17 +214,20 @@ export const MediaPlayerModal: React.FC<MediaPlayerModalProps> = ({ workerId, fs
       (pc as any)._sdpAnswerListener = handleSdpAnswer;
       (pc as any)._iceCandidateListener = handleIceCandidate;
 
-      // Initiate the connection by sending an Offer
-      pc.createOffer().then(offer => {
-        pc.setLocalDescription(offer);
-        socketManager.emit(MessageType.SDP_OFFER, {
-          type: MessageType.SDP_OFFER,
-          timestamp: Date.now(),
-          senderId: userId,
-          targetId: workerId,
-          sdp: offer.sdp
-        });
-      });
+      // Initiate the connection by sending an Offer, ensuring we only do it ONCE per component mount
+      if (!hasSentOffer) {
+         hasSentOffer = true;
+         pc.createOffer().then(offer => {
+           pc.setLocalDescription(offer);
+           socketManager.emit(MessageType.SDP_OFFER, {
+             type: MessageType.SDP_OFFER,
+             timestamp: Date.now(),
+             senderId: userId,
+             targetId: workerId,
+             sdp: offer.sdp
+           });
+         });
+      }
     };
 
     // Register Service Worker for Video Stream Interception
@@ -246,6 +276,8 @@ export const MediaPlayerModal: React.FC<MediaPlayerModalProps> = ({ workerId, fs
     }
 
     return () => {
+      isInitializing.current = false;
+
       if (pcRef.current) {
          if ((pcRef.current as any)._sdpAnswerListener) {
             socketManager.off(MessageType.SDP_ANSWER, (pcRef.current as any)._sdpAnswerListener);
