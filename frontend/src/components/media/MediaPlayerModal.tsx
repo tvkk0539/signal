@@ -24,9 +24,7 @@ export const MediaPlayerModal: React.FC<MediaPlayerModalProps> = ({ workerId, fs
   const pcRef = useRef<RTCPeerConnection | null>(null);
   const dcRef = useRef<RTCDataChannel | null>(null);
 
-  const mediaSourceRef = useRef<MediaSource | null>(null);
-  const sourceBufferRef = useRef<SourceBuffer | null>(null);
-  const queueRef = useRef<ArrayBuffer[]>([]);
+  const swPortRef = useRef<MessagePort | null>(null);
   const downloadBufferRef = useRef<ArrayBuffer[]>([]);
   const bytesReceivedRef = useRef<number>(0);
 
@@ -38,20 +36,28 @@ export const MediaPlayerModal: React.FC<MediaPlayerModalProps> = ({ workerId, fs
     let pc = new RTCPeerConnection(RTC_CONFIG);
     pcRef.current = pc;
 
-    // We create the data channel
     const channel = pc.createDataChannel('mediaStream');
     dcRef.current = channel;
 
-    // --- Media Source Extension (MSE) Setup ---
-    // This allows us to feed chunks directly into the video player without keeping the whole file in RAM
-    const mediaSource = new MediaSource();
-    mediaSourceRef.current = mediaSource;
-    if (videoRef.current) {
-       videoRef.current.src = URL.createObjectURL(mediaSource);
-    }
+    // --- Service Worker Streaming Setup (Bypassing MSE) ---
+    const streamId = Math.random().toString(36).substring(2, 15);
 
-    // We no longer hardcode the codec on sourceopen.
-    // We wait for the STREAM_METADATA message from the backend over the WebRTC Data Channel.
+    if (action === 'PLAY' && 'serviceWorker' in navigator && navigator.serviceWorker.controller) {
+      const messageChannel = new MessageChannel();
+      swPortRef.current = messageChannel.port1;
+
+      // Register the stream with the Service Worker
+      navigator.serviceWorker.controller.postMessage({
+        type: 'REGISTER_STREAM',
+        streamId: streamId,
+        fileType: 'video/mp4' // Will be updated when metadata arrives
+      }, [messageChannel.port2]);
+
+      // Set the video source to the intercepted URL
+      if (videoRef.current) {
+        videoRef.current.src = `/sw-stream/${streamId}`;
+      }
+    }
 
     // --- WebRTC Data Channel Handlers ---
     channel.onopen = () => {
@@ -80,34 +86,18 @@ export const MediaPlayerModal: React.FC<MediaPlayerModalProps> = ({ workerId, fs
 
           if (msg.type === MessageType.STREAM_METADATA) {
              console.log(`[UI] Received Stream Metadata:`, msg);
-             const mimeCodec = msg.mimeType;
 
              if (action === 'PLAY') {
-                 if (mediaSource.readyState === 'open') {
-                    if (MediaSource.isTypeSupported(mimeCodec)) {
-                      sourceBufferRef.current = mediaSource.addSourceBuffer(mimeCodec);
-
-                      sourceBufferRef.current.addEventListener('updateend', () => {
-                        if (queueRef.current.length > 0 && sourceBufferRef.current && !sourceBufferRef.current.updating) {
-                          sourceBufferRef.current.appendBuffer(queueRef.current.shift()!);
-                        }
-                      });
-                      setStatus('Metadata Received. Buffering stream...');
-                    } else {
-                      setStatus(`Unsupported format by browser: ${mimeCodec}`);
-                    }
-                 } else {
-                    console.error("[UI] MediaSource not open when metadata arrived.");
-                 }
+                setStatus('Metadata Received. Buffering stream...');
              } else {
-                 setStatus('Downloading in background...');
+                setStatus('Downloading in background...');
              }
 
           } else if (msg.type === 'STREAM_END') {
             if (action === 'PLAY') {
                 setStatus('Stream Complete');
-                if (mediaSourceRef.current?.readyState === 'open') {
-                   mediaSourceRef.current.endOfStream();
+                if (swPortRef.current) {
+                  swPortRef.current.postMessage('EOF');
                 }
             } else {
                 setStatus('Download Complete. Saving file...');
@@ -126,6 +116,9 @@ export const MediaPlayerModal: React.FC<MediaPlayerModalProps> = ({ workerId, fs
 
           } else if (msg.type === 'STREAM_ERROR') {
             setStatus(`Stream Error: ${msg.error}`);
+            if (swPortRef.current) {
+              swPortRef.current.postMessage('ABORT');
+            }
           }
         } catch (e) {
           // ignore
@@ -136,25 +129,12 @@ export const MediaPlayerModal: React.FC<MediaPlayerModalProps> = ({ workerId, fs
 
         if (action === 'PLAY') {
             setStatus('Streaming from Worker...');
-            try {
-                if (sourceBufferRef.current && !sourceBufferRef.current.updating) {
-                  sourceBufferRef.current.appendBuffer(buffer);
-                } else {
-                  queueRef.current.push(buffer);
-                }
-            } catch (err) {
-                console.warn("[UI] MSE Append Error (File likely not fragmented MP4). Buffering in RAM to play at end.");
-                // If MSE fails (because it's a standard MP4, not fragmented), fallback to buffering it like a download,
-                // and we will attach it to the video player as a Blob when it finishes.
-                downloadBufferRef.current.push(buffer);
+            if (swPortRef.current) {
+               // Push chunk directly to Service Worker stream
+               swPortRef.current.postMessage(buffer, [buffer]); // transfer ownership for performance
             }
         } else {
-            // DOWNLOAD mode: To avoid RAM OOM crashes on massive files (e.g. 50GB),
-            // we use the File System Access API (StreamSaver pattern) to stream directly to disk.
-            // For MVP simplicity and cross-browser support without external libs,
-            // we will buffer chunks into an array and trigger standard Blob download,
-            // BUT we add a warning status if the file gets too large.
-            // Note: In production Phase 8, replace this with a proper ServiceWorker + WritableStream.
+            // DOWNLOAD mode
             downloadBufferRef.current.push(buffer);
             bytesReceivedRef.current += buffer.byteLength;
 
