@@ -24,38 +24,34 @@ export const MediaPlayerModal: React.FC<MediaPlayerModalProps> = ({ workerId, fs
   const pcRef = useRef<RTCPeerConnection | null>(null);
   const dcRef = useRef<RTCDataChannel | null>(null);
 
-  const mediaSourceRef = useRef<MediaSource | null>(null);
-  const sourceBufferRef = useRef<SourceBuffer | null>(null);
-  const queueRef = useRef<ArrayBuffer[]>([]);
   const downloadBufferRef = useRef<ArrayBuffer[]>([]);
   const bytesReceivedRef = useRef<number>(0);
 
-  const [status, setStatus] = useState<string>('Connecting to Swarm Worker...');
+  // Service Worker Bridge Refs
+  const swChannelRef = useRef<MessageChannel | null>(null);
+  const streamIdRef = useRef<string>(`stream_${Date.now()}_${Math.random().toString(36).substr(2, 9)}`);
+
+  const [status, setStatus] = useState<string>('Registering Service Worker Bridge...');
+  const [isVideoSrcSet, setIsVideoSrcSet] = useState(false);
 
   useEffect(() => {
     if (!workerId) return;
 
-    let pc = new RTCPeerConnection(RTC_CONFIG);
-    pcRef.current = pc;
+    let pc: RTCPeerConnection;
+    let channel: RTCDataChannel;
 
-    // We create the data channel
-    const channel = pc.createDataChannel('mediaStream');
-    dcRef.current = channel;
+    const initWebRTC = () => {
+      setStatus('Connecting to Swarm Worker...');
+      pc = new RTCPeerConnection(RTC_CONFIG);
+      pcRef.current = pc;
 
-    // --- Media Source Extension (MSE) Setup ---
-    // This allows us to feed chunks directly into the video player without keeping the whole file in RAM
-    const mediaSource = new MediaSource();
-    mediaSourceRef.current = mediaSource;
-    if (videoRef.current) {
-       videoRef.current.src = URL.createObjectURL(mediaSource);
-    }
+      // We create the data channel
+      channel = pc.createDataChannel('mediaStream');
+      dcRef.current = channel;
 
-    // We no longer hardcode the codec on sourceopen.
-    // We wait for the STREAM_METADATA message from the backend over the WebRTC Data Channel.
-
-    // --- WebRTC Data Channel Handlers ---
-    channel.onopen = () => {
-      setStatus('P2P Pipe Opened. Requesting Stream...');
+      // --- WebRTC Data Channel Handlers ---
+      channel.onopen = () => {
+        setStatus('P2P Pipe Opened. Requesting Stream...');
 
       const streamReq: StreamRequestMessage = {
         type: MessageType.STREAM_REQUEST,
@@ -73,148 +69,204 @@ export const MediaPlayerModal: React.FC<MediaPlayerModalProps> = ({ workerId, fs
     // Explicitly ask for ArrayBuffer, otherwise browsers might default to Blob or String
     channel.binaryType = 'arraybuffer';
 
-    channel.onmessage = (event) => {
-      if (typeof event.data === 'string') {
-        try {
-          const msg = JSON.parse(event.data);
+      channel.onmessage = (event) => {
+        if (typeof event.data === 'string') {
+          try {
+            const msg = JSON.parse(event.data);
 
-          if (msg.type === MessageType.STREAM_METADATA) {
-             console.log(`[UI] Received Stream Metadata:`, msg);
-             const mimeCodec = msg.mimeType;
+            if (msg.type === MessageType.STREAM_METADATA) {
+               console.log(`[UI] Received Stream Metadata:`, msg);
 
-             if (action === 'PLAY') {
-                 if (mediaSource.readyState === 'open') {
-                    if (MediaSource.isTypeSupported(mimeCodec)) {
-                      sourceBufferRef.current = mediaSource.addSourceBuffer(mimeCodec);
+               if (action === 'PLAY' && swChannelRef.current) {
+                   // Initialize the Service Worker stream with the correct MIME type
+                   swChannelRef.current.port1.postMessage({
+                     type: 'INIT_STREAM',
+                     streamId: streamIdRef.current,
+                     mimeType: msg.mimeType
+                   });
+                   setStatus('Metadata Received. Buffering stream...');
+               } else if (action === 'DOWNLOAD') {
+                   setStatus('Downloading in background...');
+               }
 
-                      sourceBufferRef.current.addEventListener('updateend', () => {
-                        if (queueRef.current.length > 0 && sourceBufferRef.current && !sourceBufferRef.current.updating) {
-                          sourceBufferRef.current.appendBuffer(queueRef.current.shift()!);
-                        }
-                      });
-                      setStatus('Metadata Received. Buffering stream...');
-                    } else {
-                      setStatus(`Unsupported format by browser: ${mimeCodec}`);
-                    }
-                 } else {
-                    console.error("[UI] MediaSource not open when metadata arrived.");
-                 }
-             } else {
-                 setStatus('Downloading in background...');
-             }
+            } else if (msg.type === 'STREAM_END') {
+              if (action === 'PLAY' && swChannelRef.current) {
+                  setStatus('Stream Complete');
+                  swChannelRef.current.port1.postMessage({
+                    type: 'END_STREAM',
+                    streamId: streamIdRef.current
+                  });
+              } else if (action === 'DOWNLOAD') {
+                  setStatus('Download Complete. Saving file...');
+                  const blob = new Blob(downloadBufferRef.current);
+                  const url = window.URL.createObjectURL(blob);
+                  const a = document.createElement('a');
+                  a.href = url;
+                  a.download = path.split('/').pop() || 'download';
+                  document.body.appendChild(a);
+                  a.click();
+                  window.URL.revokeObjectURL(url);
+                  a.remove();
+                  setTimeout(() => onClose(), 2000);
+              }
 
-          } else if (msg.type === 'STREAM_END') {
-            if (action === 'PLAY') {
-                setStatus('Stream Complete');
-                if (mediaSourceRef.current?.readyState === 'open') {
-                   mediaSourceRef.current.endOfStream();
-                }
-            } else {
-                setStatus('Download Complete. Saving file...');
-                // Combine chunks and trigger browser download
-                const blob = new Blob(downloadBufferRef.current);
-                const url = window.URL.createObjectURL(blob);
-                const a = document.createElement('a');
-                a.href = url;
-                a.download = path.split('/').pop() || 'download';
-                document.body.appendChild(a);
-                a.click();
-                window.URL.revokeObjectURL(url);
-                a.remove();
-                setTimeout(() => onClose(), 2000); // Auto close after 2 seconds
+            } else if (msg.type === 'STREAM_ERROR') {
+              setStatus(`Stream Error: ${msg.error}`);
+              if (action === 'PLAY' && swChannelRef.current) {
+                 swChannelRef.current.port1.postMessage({
+                    type: 'ERROR_STREAM',
+                    streamId: streamIdRef.current,
+                    error: msg.error
+                 });
+              }
             }
-
-          } else if (msg.type === 'STREAM_ERROR') {
-            setStatus(`Stream Error: ${msg.error}`);
+          } catch (e) {
+            // ignore
           }
-        } catch (e) {
-          // ignore
-        }
-      } else {
-        // Binary Chunk Received!
-        const buffer = event.data as ArrayBuffer;
-
-        if (action === 'PLAY') {
-            setStatus('Streaming from Worker...');
-            try {
-                if (sourceBufferRef.current && !sourceBufferRef.current.updating) {
-                  sourceBufferRef.current.appendBuffer(buffer);
-                } else {
-                  queueRef.current.push(buffer);
-                }
-            } catch (err) {
-                console.warn("[UI] MSE Append Error (File likely not fragmented MP4). Buffering in RAM to play at end.");
-                // If MSE fails (because it's a standard MP4, not fragmented), fallback to buffering it like a download,
-                // and we will attach it to the video player as a Blob when it finishes.
-                downloadBufferRef.current.push(buffer);
-            }
         } else {
-            // DOWNLOAD mode: To avoid RAM OOM crashes on massive files (e.g. 50GB),
-            // we use the File System Access API (StreamSaver pattern) to stream directly to disk.
-            // For MVP simplicity and cross-browser support without external libs,
-            // we will buffer chunks into an array and trigger standard Blob download,
-            // BUT we add a warning status if the file gets too large.
-            // Note: In production Phase 8, replace this with a proper ServiceWorker + WritableStream.
-            downloadBufferRef.current.push(buffer);
-            bytesReceivedRef.current += buffer.byteLength;
+          // Binary Chunk Received!
+          const buffer = event.data as ArrayBuffer;
 
-            const mbDownloaded = bytesReceivedRef.current / (1024 * 1024);
-            if (mbDownloaded > 500) {
-               setStatus(`Downloading... (${mbDownloaded.toFixed(1)} MB) - WARNING: High RAM usage`);
-            } else {
-               setStatus(`Downloading... (${mbDownloaded.toFixed(1)} MB received)`);
-            }
+          if (action === 'PLAY') {
+              if (!isVideoSrcSet) {
+                 setIsVideoSrcSet(true);
+              }
+              setStatus('Streaming from Worker...');
+
+              if (swChannelRef.current) {
+                 // Push the chunk directly to the Service Worker!
+                 swChannelRef.current.port1.postMessage({
+                   type: 'CHUNK',
+                   streamId: streamIdRef.current,
+                   chunk: buffer
+                 }, [buffer]); // Transfer the buffer to avoid memory duplication!
+              }
+          } else {
+              downloadBufferRef.current.push(buffer);
+              bytesReceivedRef.current += buffer.byteLength;
+
+              const mbDownloaded = bytesReceivedRef.current / (1024 * 1024);
+              if (mbDownloaded > 500) {
+                 setStatus(`Downloading... (${mbDownloaded.toFixed(1)} MB) - WARNING: High RAM usage`);
+              } else {
+                 setStatus(`Downloading... (${mbDownloaded.toFixed(1)} MB received)`);
+              }
+          }
         }
-      }
-    };
+      };
 
-    // --- Signaling Handlers ---
-    pc.onicecandidate = (event) => {
-      if (event.candidate) {
-        socketManager.emit(MessageType.ICE_CANDIDATE, {
-          type: MessageType.ICE_CANDIDATE,
+      // --- Signaling Handlers ---
+      pc.onicecandidate = (event) => {
+        if (event.candidate) {
+          socketManager.emit(MessageType.ICE_CANDIDATE, {
+            type: MessageType.ICE_CANDIDATE,
+            timestamp: Date.now(),
+            senderId: userId,
+            targetId: workerId,
+            candidate: event.candidate.toJSON()
+          });
+        }
+      };
+
+      const handleSdpAnswer = async (msg: SdpAnswerMessage) => {
+        if (msg.senderId === workerId && msg.targetId === userId) {
+          await pc.setRemoteDescription(new RTCSessionDescription({ type: 'answer', sdp: msg.sdp }));
+        }
+      };
+
+      const handleIceCandidate = async (msg: IceCandidateMessage) => {
+         if (msg.senderId === workerId && msg.targetId === userId && msg.candidate) {
+            await pc.addIceCandidate(new RTCIceCandidate(msg.candidate));
+         }
+      };
+
+      socketManager.on(MessageType.SDP_ANSWER, handleSdpAnswer);
+      socketManager.on(MessageType.ICE_CANDIDATE, handleIceCandidate);
+
+      // Store these locally so we can remove the event listeners later
+      (pc as any)._sdpAnswerListener = handleSdpAnswer;
+      (pc as any)._iceCandidateListener = handleIceCandidate;
+
+      // Initiate the connection by sending an Offer
+      pc.createOffer().then(offer => {
+        pc.setLocalDescription(offer);
+        socketManager.emit(MessageType.SDP_OFFER, {
+          type: MessageType.SDP_OFFER,
           timestamp: Date.now(),
           senderId: userId,
           targetId: workerId,
-          candidate: event.candidate.toJSON()
+          sdp: offer.sdp
         });
-      }
-    };
-
-    const handleSdpAnswer = async (msg: SdpAnswerMessage) => {
-      if (msg.senderId === workerId && msg.targetId === userId) {
-        await pc.setRemoteDescription(new RTCSessionDescription({ type: 'answer', sdp: msg.sdp }));
-      }
-    };
-
-    const handleIceCandidate = async (msg: IceCandidateMessage) => {
-       if (msg.senderId === workerId && msg.targetId === userId && msg.candidate) {
-          await pc.addIceCandidate(new RTCIceCandidate(msg.candidate));
-       }
-    };
-
-    socketManager.on(MessageType.SDP_ANSWER, handleSdpAnswer);
-    socketManager.on(MessageType.ICE_CANDIDATE, handleIceCandidate);
-
-    // Initiate the connection by sending an Offer
-    pc.createOffer().then(offer => {
-      pc.setLocalDescription(offer);
-      socketManager.emit(MessageType.SDP_OFFER, {
-        type: MessageType.SDP_OFFER,
-        timestamp: Date.now(),
-        senderId: userId,
-        targetId: workerId,
-        sdp: offer.sdp
       });
-    });
+    };
+
+    // Register Service Worker for Video Stream Interception
+    if (action === 'PLAY' && 'serviceWorker' in navigator) {
+      navigator.serviceWorker.register('/sw.js').then((registration) => {
+        console.log('[UI] Service Worker registered for Media Streaming.');
+
+        // Wait for it to be active
+        let sw = registration.active || registration.waiting || registration.installing;
+        if (!sw) return;
+
+        const startStream = () => {
+          swChannelRef.current = new MessageChannel();
+
+          swChannelRef.current.port1.onmessage = (event) => {
+             if (event.data.type === 'STREAM_INITIALIZED') {
+                console.log('[UI] Service Worker ready. Setting video src...');
+                if (videoRef.current) {
+                   videoRef.current.src = `/sw-stream/${streamIdRef.current}`;
+                }
+             }
+          };
+
+          // Give the Service Worker the port so it can talk back
+          sw.postMessage({ type: 'PORT_INITIALIZATION' }, [swChannelRef.current.port2]);
+
+          initWebRTC();
+        };
+
+        if (sw.state === 'activated') {
+           startStream();
+        } else {
+           sw.addEventListener('statechange', () => {
+              if (sw.state === 'activated') {
+                 startStream();
+              }
+           });
+        }
+      }).catch(err => {
+        console.error('[UI] Service Worker registration failed:', err);
+        setStatus('Error: Browser does not support Service Workers needed for streaming.');
+      });
+    } else {
+      // Download mode doesn't need the Service Worker bridge for MVP
+      initWebRTC();
+    }
 
     return () => {
-      socketManager.off(MessageType.SDP_ANSWER, handleSdpAnswer);
-      socketManager.off(MessageType.ICE_CANDIDATE, handleIceCandidate);
-      channel.close();
-      pc.close();
+      if (pcRef.current) {
+         if ((pcRef.current as any)._sdpAnswerListener) {
+            socketManager.off(MessageType.SDP_ANSWER, (pcRef.current as any)._sdpAnswerListener);
+         }
+         if ((pcRef.current as any)._iceCandidateListener) {
+            socketManager.off(MessageType.ICE_CANDIDATE, (pcRef.current as any)._iceCandidateListener);
+         }
+      }
+
+      if (dcRef.current) dcRef.current.close();
+      if (pcRef.current) pcRef.current.close();
+
+      if (swChannelRef.current) {
+         swChannelRef.current.port1.postMessage({
+           type: 'END_STREAM',
+           streamId: streamIdRef.current
+         });
+         swChannelRef.current.port1.close();
+      }
     };
-  }, [workerId, fs, path, userId]);
+  }, [workerId, fs, path, userId, action]);
 
   return (
     <div className="fixed inset-0 bg-background/90 backdrop-blur-sm z-50 flex flex-col items-center justify-center p-4">
