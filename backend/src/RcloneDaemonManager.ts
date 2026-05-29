@@ -230,25 +230,27 @@ export class RcloneDaemonManager {
         args.push('--count', (endByte - startByte + 1).toString());
       }
 
-      // We spawn a child process to stream raw binary data directly, avoiding JSON wrappers
-      // from the rclone rc core/command API.
+      // We spawn a child process to stream raw binary data directly
       const child = spawn('rclone', args);
+      let stderrOutput = '';
 
       child.on('error', (err) => {
         console.error(`[Rclone] streamFile child process error:`, err);
+        child.stdout.emit('error', err);
       });
 
       child.stderr.on('data', (data) => {
-         console.warn(`[Rclone cat stderr]: ${data.toString()}`);
+         const msg = data.toString();
+         stderrOutput += msg;
+         console.warn(`[Rclone cat stderr]: ${msg}`);
       });
 
       // Handle cases where rclone fails immediately (e.g., file not found)
       child.on('exit', (code) => {
          if (code !== 0) {
             console.error(`[Rclone] cat process exited with code ${code} for ${fullPath}`);
-            // If the stream is already returned, we should somehow emit an error.
-            // Since we return child.stdout, we can emit an error on it.
-            child.stdout.emit('error', new Error(`rclone cat exited with code ${code}`));
+            const errMsg = stderrOutput.trim() || `rclone cat exited with code ${code}`;
+            child.stdout.emit('error', new Error(errMsg));
          }
       });
 
