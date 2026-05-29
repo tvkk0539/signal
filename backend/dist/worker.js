@@ -216,6 +216,16 @@ async function bootWorker() {
                             const BUFFER_LIMIT = 8 * 1024 * 1024; // 8MB buffer limit
                             const processStream = async () => {
                                 try {
+                                    // Listen for explicit stream errors (e.g. child process exit != 0)
+                                    stream.on('error', (err) => {
+                                        console.error(`[Worker] Rclone stream emitted error:`, err);
+                                        if (channel.readyState === 'open') {
+                                            try {
+                                                channel.send(JSON.stringify({ type: 'STREAM_ERROR', error: err.message }));
+                                            }
+                                            catch (e) { }
+                                        }
+                                    });
                                     for await (const chunk of stream) {
                                         // Ensure the chunk is treated as a Buffer (rclone spawn stream outputs Buffers, but typing can be broad)
                                         const rawChunk = Buffer.isBuffer(chunk) ? chunk : Buffer.from(chunk);
