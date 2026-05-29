@@ -88,11 +88,12 @@ export const MediaPlayerModal: React.FC<MediaPlayerModalProps> = ({ workerId, fs
                console.log(`[UI] Received Stream Metadata:`, msg);
 
                if (action === 'PLAY' && swChannelRef.current) {
-                   // Initialize the Service Worker stream with the correct MIME type
+                   // Initialize the Service Worker stream with the correct MIME type and file size
                    swChannelRef.current.port1.postMessage({
                      type: 'INIT_STREAM',
                      streamId: streamIdRef.current,
-                     mimeType: msg.mimeType
+                     mimeType: msg.mimeType,
+                     fileSize: msg.fileSize
                    });
                    setStatus('Metadata Received. Buffering stream...');
                } else if (action === 'DOWNLOAD') {
