@@ -24,11 +24,10 @@ export const MediaPlayerModal: React.FC<MediaPlayerModalProps> = ({ workerId, fs
   const pcRef = useRef<RTCPeerConnection | null>(null);
   const dcRef = useRef<RTCDataChannel | null>(null);
 
-  const mediaSourceRef = useRef<MediaSource | null>(null);
-  const sourceBufferRef = useRef<SourceBuffer | null>(null);
-  const queueRef = useRef<ArrayBuffer[]>([]);
   const downloadBufferRef = useRef<ArrayBuffer[]>([]);
   const bytesReceivedRef = useRef<number>(0);
+  const swPortRef = useRef<MessagePort | null>(null);
+  const streamIdRef = useRef<string | null>(null);
 
   const [status, setStatus] = useState<string>('Connecting to Swarm Worker...');
 
@@ -41,17 +40,6 @@ export const MediaPlayerModal: React.FC<MediaPlayerModalProps> = ({ workerId, fs
     // We create the data channel
     const channel = pc.createDataChannel('mediaStream');
     dcRef.current = channel;
-
-    // --- Media Source Extension (MSE) Setup ---
-    // This allows us to feed chunks directly into the video player without keeping the whole file in RAM
-    const mediaSource = new MediaSource();
-    mediaSourceRef.current = mediaSource;
-    if (videoRef.current) {
-       videoRef.current.src = URL.createObjectURL(mediaSource);
-    }
-
-    // We no longer hardcode the codec on sourceopen.
-    // We wait for the STREAM_METADATA message from the backend over the WebRTC Data Channel.
 
     // --- WebRTC Data Channel Handlers ---
     channel.onopen = () => {
@@ -83,21 +71,29 @@ export const MediaPlayerModal: React.FC<MediaPlayerModalProps> = ({ workerId, fs
              const mimeCodec = msg.mimeType;
 
              if (action === 'PLAY') {
-                 if (mediaSource.readyState === 'open') {
-                    if (MediaSource.isTypeSupported(mimeCodec)) {
-                      sourceBufferRef.current = mediaSource.addSourceBuffer(mimeCodec);
+                 setStatus('Metadata Received. Initializing Service Worker bridge...');
 
-                      sourceBufferRef.current.addEventListener('updateend', () => {
-                        if (queueRef.current.length > 0 && sourceBufferRef.current && !sourceBufferRef.current.updating) {
-                          sourceBufferRef.current.appendBuffer(queueRef.current.shift()!);
-                        }
-                      });
-                      setStatus('Metadata Received. Buffering stream...');
-                    } else {
-                      setStatus(`Unsupported format by browser: ${mimeCodec}`);
+                 // --- Service Worker Bridge Setup ---
+                 if (navigator.serviceWorker && navigator.serviceWorker.controller) {
+                    const streamId = `vid_${Date.now()}`;
+                    streamIdRef.current = streamId;
+
+                    const messageChannel = new MessageChannel();
+                    swPortRef.current = messageChannel.port1;
+
+                    navigator.serviceWorker.controller.postMessage({
+                      type: 'REGISTER_STREAM',
+                      streamId: streamId,
+                      mimeType: mimeCodec,
+                      size: msg.fileSize
+                    }, [messageChannel.port2]);
+
+                    // Set the video source to the fake Service Worker URL
+                    if (videoRef.current) {
+                       videoRef.current.src = `/sw-stream/${streamId}`;
                     }
                  } else {
-                    console.error("[UI] MediaSource not open when metadata arrived.");
+                    setStatus('Error: Service Worker not running. Cannot stream standard MP4s. Please refresh.');
                  }
              } else {
                  setStatus('Downloading in background...');
@@ -106,17 +102,8 @@ export const MediaPlayerModal: React.FC<MediaPlayerModalProps> = ({ workerId, fs
           } else if (msg.type === 'STREAM_END') {
             if (action === 'PLAY') {
                 setStatus('Stream Complete');
-                if (mediaSourceRef.current?.readyState === 'open') {
-                   mediaSourceRef.current.endOfStream();
-                }
-
-                // If MSE failed and we buffered the file in RAM instead, play it now.
-                if (downloadBufferRef.current.length > 0 && videoRef.current) {
-                   console.log("[UI] Playing buffered non-fragmented file as Blob.");
-                   const blob = new Blob(downloadBufferRef.current);
-                   const url = window.URL.createObjectURL(blob);
-                   videoRef.current.src = url;
-                   videoRef.current.play().catch(e => console.error("Playback failed", e));
+                if (swPortRef.current) {
+                  swPortRef.current.postMessage({ type: 'END' });
                 }
             } else {
                 setStatus('Download Complete. Saving file...');
@@ -135,6 +122,9 @@ export const MediaPlayerModal: React.FC<MediaPlayerModalProps> = ({ workerId, fs
 
           } else if (msg.type === 'STREAM_ERROR') {
             setStatus(`Stream Error: ${msg.error}`);
+            if (swPortRef.current && action === 'PLAY') {
+               swPortRef.current.postMessage({ type: 'ERROR', error: msg.error });
+            }
           }
         } catch (e) {
           // ignore
@@ -144,30 +134,11 @@ export const MediaPlayerModal: React.FC<MediaPlayerModalProps> = ({ workerId, fs
         const buffer = event.data as ArrayBuffer;
 
         if (action === 'PLAY') {
-            try {
-                // If we've already fallen back to buffering, don't try MSE again
-                if (downloadBufferRef.current.length > 0) {
-                   throw new Error("Already fallen back to RAM buffering");
-                }
-
-                setStatus('Streaming from Worker...');
-                if (sourceBufferRef.current && !sourceBufferRef.current.updating) {
-                  sourceBufferRef.current.appendBuffer(buffer);
-                } else {
-                  queueRef.current.push(buffer);
-                }
-            } catch (err) {
-                if (downloadBufferRef.current.length === 0) {
-                    console.warn("[UI] MSE Append Error (File likely not fragmented MP4). Buffering in RAM to play at end.");
-                }
-                // Calculate progress for the UI
-                bytesReceivedRef.current += buffer.byteLength;
-                const mbBuffered = (bytesReceivedRef.current / (1024 * 1024)).toFixed(1);
-                setStatus(`Buffering unfragmented MP4... (${mbBuffered} MB)`);
-
-                // If MSE fails (because it's a standard MP4, not fragmented), fallback to buffering it like a download,
-                // and we will attach it to the video player as a Blob when it finishes.
-                downloadBufferRef.current.push(buffer);
+            setStatus('Streaming from Worker...');
+            // Pipe directly to the Service Worker! Zero RAM buffering in the UI thread.
+            if (swPortRef.current) {
+               // We transfer the buffer to avoid copying it in memory
+               swPortRef.current.postMessage({ type: 'CHUNK', buffer: buffer }, [buffer]);
             }
         } else {
             // DOWNLOAD mode: To avoid RAM OOM crashes on massive files (e.g. 50GB),
@@ -179,7 +150,7 @@ export const MediaPlayerModal: React.FC<MediaPlayerModalProps> = ({ workerId, fs
             downloadBufferRef.current.push(buffer);
             bytesReceivedRef.current += buffer.byteLength;
 
-            const mbDownloaded = bytesReceivedRef.current / (1024 * 1024);
+            const mbDownloaded = (bytesReceivedRef.current) / (1024 * 1024);
             if (mbDownloaded > 500) {
                setStatus(`Downloading... (${mbDownloaded.toFixed(1)} MB) - WARNING: High RAM usage`);
             } else {
