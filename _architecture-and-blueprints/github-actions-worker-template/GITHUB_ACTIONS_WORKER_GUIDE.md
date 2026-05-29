@@ -25,7 +25,22 @@ The worker needs to know where to connect and how to authenticate.
    *   **Name:** `WORKER_SECRET`
    *   **Secret:** `your_super_secure_swarm_password` (Must match the Relay Server's Gatekeeper password).
 
-### Step 3: Add Cloud Drive Secrets (Optional but Recommended)
+### Step 3: Add Dual-Mode gRPC Routing Secrets (Optional)
+To support blazing fast Worker-to-Worker file transfers, the architecture uses a "Dual-Mode" gRPC Engine. You must configure this depending on *where* you are deploying.
+
+**Scenario A: "Yes" - Deploying to a Public VPS (GCP/AWS/DigitalOcean)**
+If this worker is being deployed on a standard cloud VM, it has a public IP address. Add these secrets so other workers can connect directly to it:
+*   **Name:** `GRPC_PUBLIC_IP`
+*   **Secret:** `192.168.1.100` *(Replace with the server's actual public IP address)*
+*   **Name:** `GRPC_PORT`
+*   **Secret:** `50051` *(Or whichever port you expose. Default is a dynamic random port).*
+
+**Scenario B: "No" - Deploying to GitHub Actions**
+GitHub Actions runners are heavily firewalled and do *not* have a public IP address.
+*   *Action Required:* **Do nothing!** Do not create these secrets.
+*   *How it works:* The worker will auto-detect that it is "Firewalled" (because `GRPC_PUBLIC_IP` is missing). It will automatically fall back to **Reverse-Tunnel Relay Mode**. It will ask the Relay Server to hold the data, and it will "pull" the data through the firewall!
+
+### Step 4: Add Cloud Drive Secrets (Optional but Recommended)
 To allow your worker to browse and stream from cloud drives (Google Drive, OneDrive), you must provide your `rclone.conf` data. You can do this in two ways:
 
 **Method A: Raw Text (Recommended)**
@@ -40,7 +55,7 @@ If you host your config on a secure, raw endpoint (like a private gist with a to
 
 *The `.yml` workflow will automatically detect which method you used and inject the configuration into the Docker container!*
 
-### Step 4: Add the Workflow File
+### Step 5: Add the Workflow File
 1. In the repository, create a new folder path: `.github/workflows/`
 2. Create a new file inside it named `run-worker.yml`.
 3. Copy and paste the entire contents of the `run-worker.yml` file from this template folder into that new file.
@@ -52,7 +67,7 @@ Inside the `.yml` file, you must find and replace `your-username` with the GitHu
 
 Commit the file to the main branch.
 
-### Step 5: Boot the Worker
+### Step 6: Boot the Worker
 1. Click the **Actions** tab in your GitHub repository.
 2. On the left sidebar, click **"Swarm Backend Worker (Docker Runner)"**.
 3. On the right side, click the **"Run workflow"** button.
