@@ -1,9 +1,12 @@
 import React, { useState } from 'react';
 import { useLayoutStore } from '../../store/layoutStore';
-import { Apple, ArrowLeft, Download, Settings2, Terminal, Disc3, PlayCircle } from 'lucide-react';
+import { Apple, ArrowLeft, Download, Settings2, Terminal, Disc3, PlayCircle, Radio, KeyRound } from 'lucide-react';
+import { AppleMusicWrapperUI } from './AppleMusicWrapperUI';
 
 export const AppleMusicApp: React.FC = () => {
   const { setActiveView } = useLayoutStore();
+  const [activeTab, setActiveTab] = useState<'RIPPER' | 'WRAPPER'>('RIPPER');
+
   const [url, setUrl] = useState('');
   const [format, setFormat] = useState<'alac' | 'flac' | 'atmos' | 'aac'>('alac');
   const [quality, setQuality] = useState<'192000' | '96000' | '48000'>('192000');
@@ -49,15 +52,41 @@ export const AppleMusicApp: React.FC = () => {
             </div>
             <div>
               <h2 className="text-lg font-bold text-white leading-tight">Apple Music Engine</h2>
-              <p className="text-[10px] uppercase tracking-wider text-muted-foreground font-semibold">Decryption Proxy Active</p>
+              <p className="text-[10px] uppercase tracking-wider text-muted-foreground font-semibold">
+                {activeTab === 'RIPPER' ? 'Media Acquisition Phase' : 'DRM Negotiation Matrix'}
+              </p>
             </div>
           </div>
         </div>
+
+        {/* Tab Navigation */}
+        <div className="flex items-center bg-black/40 p-1 rounded-xl border border-white/10">
+          <button
+            onClick={() => setActiveTab('RIPPER')}
+            className={`flex items-center gap-2 px-4 py-2 rounded-lg text-sm font-semibold transition-all ${
+              activeTab === 'RIPPER' ? 'bg-white/10 text-white shadow-sm' : 'text-muted-foreground hover:text-white/80'
+            }`}
+          >
+            <Radio size={16} />
+            Ripper Engine
+          </button>
+          <button
+            onClick={() => setActiveTab('WRAPPER')}
+            className={`flex items-center gap-2 px-4 py-2 rounded-lg text-sm font-semibold transition-all ${
+              activeTab === 'WRAPPER' ? 'bg-white/10 text-white shadow-sm' : 'text-muted-foreground hover:text-white/80'
+            }`}
+          >
+            <KeyRound size={16} />
+            Decryption Wrapper
+          </button>
+        </div>
       </div>
 
-      {/* Main Content Split */}
+      {/* Main Content Area */}
       <div className="relative z-10 flex-1 flex overflow-hidden">
 
+        {activeTab === 'RIPPER' ? (
+        <>
         {/* Left Side: Control Deck */}
         <div className="w-1/2 flex flex-col border-r border-white/10 bg-[#0a0a0a]/40 backdrop-blur-sm overflow-y-auto">
 
@@ -197,6 +226,12 @@ export const AppleMusicApp: React.FC = () => {
           {/* Terminal Scanline Overlay */}
           <div className="absolute inset-0 pointer-events-none bg-[linear-gradient(rgba(18,16,16,0)_50%,rgba(0,0,0,0.25)_50%),linear-gradient(90deg,rgba(255,0,0,0.06),rgba(0,255,0,0.02),rgba(0,0,255,0.06))] bg-[length:100%_4px,3px_100%] opacity-20" />
         </div>
+        </>
+        ) : (
+           <div className="w-full h-full overflow-y-auto">
+              <AppleMusicWrapperUI />
+           </div>
+        )}
 
       </div>
     </div>
