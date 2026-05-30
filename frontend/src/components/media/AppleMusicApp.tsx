@@ -6,7 +6,7 @@ import { AppleMusicConfigUI } from './AppleMusicConfigUI';
 import { AppleMusicSettingsUI } from './AppleMusicSettingsUI';
 import { SocketManager } from '../../worker/SocketManager';
 import { MessageType } from '@swarm/shared';
-import type { AppleMusicRipRequestMessage, RipperTelemetryMessage } from '@swarm/shared';
+import type { AppleMusicRipRequestMessage, RipperTelemetryMessage, WrapperStatusUpdateMessage, Wrapper2FAChallengeMessage } from '@swarm/shared';
 import { useAppleMusicStore } from '../../store/appleMusicStore';
 
 export const AppleMusicApp: React.FC = () => {
@@ -27,7 +27,10 @@ export const AppleMusicApp: React.FC = () => {
   ]);
   const [_currentJobId, setCurrentJobId] = useState<string | null>(null);
 
-  const { mediaUserToken, storefront, setMediaUserToken, setStorefront, setAutoUpload, setRcloneRemote } = useAppleMusicStore();
+  const {
+    mediaUserToken, storefront, setMediaUserToken, setStorefront, setAutoUpload, setRcloneRemote,
+    setWrapperStatus, setWrapperNeeds2FA
+  } = useAppleMusicStore();
 
   React.useEffect(() => {
     const socketManager = SocketManager.getInstance();
@@ -56,14 +59,26 @@ export const AppleMusicApp: React.FC = () => {
        }
     };
 
+    const handleWrapperStatusUpdate = (msg: WrapperStatusUpdateMessage) => {
+       setWrapperStatus(msg.installed, msg.running, msg.pid, msg.logs || []);
+    };
+
+    const handleWrapper2FAChallenge = (_msg: Wrapper2FAChallengeMessage) => {
+       setWrapperNeeds2FA(true);
+    };
+
     socketManager.on(MessageType.RIPPER_TELEMETRY, handleTelemetry);
     socketManager.on(MessageType.APPLE_MUSIC_CONFIG_DATA, handleConfigData);
+    socketManager.on(MessageType.WRAPPER_STATUS_UPDATE, handleWrapperStatusUpdate);
+    socketManager.on(MessageType.WRAPPER_2FA_CHALLENGE, handleWrapper2FAChallenge);
 
     return () => {
        socketManager.off(MessageType.RIPPER_TELEMETRY, handleTelemetry);
        socketManager.off(MessageType.APPLE_MUSIC_CONFIG_DATA, handleConfigData);
+        socketManager.off(MessageType.WRAPPER_STATUS_UPDATE, handleWrapperStatusUpdate);
+        socketManager.off(MessageType.WRAPPER_2FA_CHALLENGE, handleWrapper2FAChallenge);
     };
-  }, []);
+  }, [setWrapperStatus, setWrapperNeeds2FA, setMediaUserToken, setStorefront, setAutoUpload, setRcloneRemote]);
 
   const handleRip = (e: React.FormEvent) => {
     e.preventDefault();

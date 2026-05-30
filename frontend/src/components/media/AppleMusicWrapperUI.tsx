@@ -2,21 +2,25 @@ import React, { useState, useEffect, useRef } from 'react';
 import { KeyRound, ShieldAlert, DownloadCloud, Play, Square, Loader2, Send } from 'lucide-react';
 import { SocketManager } from '../../worker/SocketManager';
 import { MessageType } from '@swarm/shared';
-import type { WrapperStartRequestMessage, WrapperStopRequestMessage, Wrapper2FASubmitMessage, WrapperStatusUpdateMessage, Wrapper2FAChallengeMessage } from '@swarm/shared';
+import type { WrapperStartRequestMessage, WrapperStopRequestMessage, Wrapper2FASubmitMessage } from '@swarm/shared';
+import { useAppleMusicStore } from '../../store/appleMusicStore';
 
 export const AppleMusicWrapperUI: React.FC = () => {
-  const [isInstalled, setIsInstalled] = useState(false);
-  const [isRunning, setIsRunning] = useState(false);
-  const [isInstalling, setIsInstalling] = useState(false);
+  const {
+      wrapperIsInstalled: isInstalled,
+      wrapperIsRunning: isRunning,
+      wrapperPid: pid,
+      wrapperLogs: logs,
+      wrapperNeeds2FA: needs2FA,
+      setWrapperNeeds2FA,
+      appendWrapperLog
+  } = useAppleMusicStore();
 
+  const [isInstalling, setIsInstalling] = useState(false);
   const [username, setUsername] = useState('');
   const [password, setPassword] = useState('');
-
-  const [needs2FA, setNeeds2FA] = useState(false);
   const [twoFaCode, setTwoFaCode] = useState('');
-  const [_pid, setPid] = useState<number | null>(null);
 
-  const [logs, setLogs] = useState<string[]>(["# Swarm Proxy Environment Initialization Complete."]);
   const logsEndRef = useRef<HTMLDivElement>(null);
 
   const scrollToBottom = () => {
@@ -27,40 +31,22 @@ export const AppleMusicWrapperUI: React.FC = () => {
     scrollToBottom();
   }, [logs]);
 
+  // When installation succeeds (state flips via global store), stop the spinner
   useEffect(() => {
-    const socketManager = SocketManager.getInstance();
-
-    const handleStatusUpdate = (msg: WrapperStatusUpdateMessage) => {
-       setIsInstalled(msg.installed);
-       setIsRunning(msg.running);
-       setPid(msg.pid);
-       if (msg.logs && msg.logs.length > 0) {
-           setLogs(msg.logs);
-       }
-    };
-
-    const handle2FAChallenge = (_msg: Wrapper2FAChallengeMessage) => {
-       setNeeds2FA(true);
-    };
-
-    socketManager.on(MessageType.WRAPPER_STATUS_UPDATE, handleStatusUpdate);
-    socketManager.on(MessageType.WRAPPER_2FA_CHALLENGE, handle2FAChallenge);
-
-    return () => {
-       socketManager.off(MessageType.WRAPPER_STATUS_UPDATE, handleStatusUpdate);
-       socketManager.off(MessageType.WRAPPER_2FA_CHALLENGE, handle2FAChallenge);
-    };
-  }, []);
+     if (isInstalled && isInstalling) {
+         setIsInstalling(false);
+     }
+  }, [isInstalled, isInstalling]);
 
   // For this mock iteration, installation and start are combined in the backend payload.
   // Real implementation might separate downloading the binary from executing it.
   const handleInstall = () => {
     setIsInstalling(true);
+    appendWrapperLog("[UI] Sending install & start request to backend...");
     handleStart(); // The backend worker `start` handler installs if missing
   };
 
   const handleStart = () => {
-    setIsInstalling(false);
     const payload: WrapperStartRequestMessage = {
        type: MessageType.WRAPPER_START_REQUEST,
        timestamp: Date.now(),
@@ -92,7 +78,7 @@ export const AppleMusicWrapperUI: React.FC = () => {
       };
 
       SocketManager.getInstance().emit(MessageType.WRAPPER_2FA_SUBMIT, payload);
-      setNeeds2FA(false);
+      setWrapperNeeds2FA(false);
       setTwoFaCode('');
   };
 
@@ -108,7 +94,7 @@ export const AppleMusicWrapperUI: React.FC = () => {
                 </div>
                 <div>
                     <h3 className="text-lg font-bold text-white">Widevine Decryption Proxy</h3>
-                    <p className="text-sm text-muted-foreground">Status: {isRunning ? <span className="text-green-400 font-semibold">ONLINE (PID: 9482)</span> : 'OFFLINE'}</p>
+                    <p className="text-sm text-muted-foreground">Status: {isRunning ? <span className="text-green-400 font-semibold">ONLINE (PID: {pid || 'UNKNOWN'})</span> : 'OFFLINE'}</p>
                 </div>
             </div>
 
@@ -174,7 +160,7 @@ export const AppleMusicWrapperUI: React.FC = () => {
                 </div>
 
                 <button
-                    onClick={() => setNeeds2FA(!needs2FA)}
+                    onClick={() => setWrapperNeeds2FA(!needs2FA)}
                     className="text-xs text-muted-foreground hover:text-white border border-white/10 px-2 py-1 rounded w-fit"
                 >
                     [Debug Toggle 2FA UI]
