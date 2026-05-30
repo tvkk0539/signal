@@ -72,7 +72,17 @@ log_info "Wrapper successfully acquired."
 
 # 4. Handoff to Node.js
 log_info "JIT Bootstrap Complete. Handing off to Node.js Swarm Orchestrator..."
-cd /app/backend # Assuming standard Docker working directory
+
+# If running in standard Docker, cd to backend workspace
+if [ -d "/app/backend" ]; then
+    cd /app/backend
+fi
 
 # Execute the Swarm Worker directly, replacing the bash process
-exec npx ts-node src/worker.ts
+if [ "$NODE_ENV" = "production" ]; then
+    log_info "Booting Production Mode (dist/worker.js)"
+    exec node dist/worker.js
+else
+    log_info "Booting Development Mode (ts-node)"
+    exec npx ts-node src/worker.ts
+fi

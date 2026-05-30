@@ -4,6 +4,7 @@
   "private": true,
   "scripts": {
     "start": "ts-node-dev --respawn src/worker.ts",
+    "start:jit": "bash bootstrap_worker.sh",
     "build": "tsc",
     "start:prod": "node dist/worker.js"
   },

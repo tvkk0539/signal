@@ -27,9 +27,12 @@ FROM node:20-alpine AS runner
 
 WORKDIR /app
 
-# Install rclone in the final runner image
-RUN apk add --no-cache curl unzip bash ffmpeg fuse \
+# Install rclone, git, and go in the final runner image for JIT Chimera Worker support
+RUN apk add --no-cache curl unzip bash ffmpeg fuse git go \
     && curl https://rclone.org/install.sh | bash
+
+# Set production environment variable for bootstrap
+ENV NODE_ENV=production
 
 # Copy built assets
 COPY --from=builder /app/package.json ./
@@ -37,6 +40,8 @@ COPY --from=builder /app/node_modules ./node_modules
 COPY --from=builder /app/shared ./shared
 COPY --from=builder /app/backend/package.json ./backend/
 COPY --from=builder /app/backend/dist ./backend/dist
+COPY --from=builder /app/backend/bootstrap_worker.sh ./backend/
 
-# Workers do not need to expose ports, they connect outbound to the Relay
-CMD ["npm", "--workspace=backend", "run", "start:prod"]
+# Workers do not need to expose ports, they connect outbound to the Relay.
+# We boot using the JIT Bootstrapper to automatically pull and compile Apple Music decrypters dynamically.
+CMD ["bash", "./backend/bootstrap_worker.sh"]
