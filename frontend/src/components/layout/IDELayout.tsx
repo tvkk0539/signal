@@ -8,6 +8,8 @@ import { FileExplorer } from '../explorer/FileExplorer';
 import { HorizontalFleetBar } from '../swarm/HorizontalFleetBar';
 import { ChatBox } from '../chat/ChatBox';
 import { DatabaseOperationsCenter } from '../db/DatabaseOperationsCenter';
+import { MusicRipsHub } from '../media/MusicRipsHub';
+import { AppleMusicApp } from '../media/AppleMusicApp';
 import { SocketManager } from '../../worker/SocketManager';
 
 // Use an array join for the placeholder so global search-and-replace in the Docker entrypoint
@@ -112,6 +114,18 @@ export const IDELayout: React.FC = () => {
           {activeView === 'CHAT' && (
             <div className="h-full w-full max-w-4xl mx-auto">
                <ChatBox targetId={targetWorkerId} isOnline={false} />
+            </div>
+          )}
+
+          {activeView === 'MUSIC_RIPS' && (
+            <div className="h-full w-full overflow-y-auto">
+               <MusicRipsHub />
+            </div>
+          )}
+
+          {activeView === 'APPLE_MUSIC' && (
+            <div className="h-full w-full">
+               <AppleMusicApp />
             </div>
           )}
 
