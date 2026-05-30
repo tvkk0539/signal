@@ -311,6 +311,88 @@ export function setupSockets(io: Server) {
       });
     });
 
+    // --- Phase 9: Media Ingestion Routing ---
+    // The UI doesn't know which worker to talk to initially, so it sends the request here.
+    // The Relay load-balances it to an idle worker.
+
+    const routeToIdleWorker = (messageType: string, msg: any) => {
+       const workers = Array.from(connectedWorkers.values());
+       if (workers.length === 0) {
+           console.log(`[Relay] No online workers available to handle ${messageType}.`);
+           return;
+       }
+       // Select first idle worker (or round robin)
+       const targetWorker = workers[0];
+       targetWorker.socket.emit(messageType, { ...msg, workerId: targetWorker.socket.id });
+       console.log(`[Relay] Routed ${messageType} to Worker ${targetWorker.socket.id}`);
+    };
+
+    socket.on(MessageType.WRAPPER_START_REQUEST, (msg: any) => routeToIdleWorker(MessageType.WRAPPER_START_REQUEST, msg));
+    socket.on(MessageType.WRAPPER_STOP_REQUEST, (msg: any) => routeToIdleWorker(MessageType.WRAPPER_STOP_REQUEST, msg));
+    socket.on(MessageType.WRAPPER_2FA_SUBMIT, (msg: any) => routeToIdleWorker(MessageType.WRAPPER_2FA_SUBMIT, msg));
+    socket.on(MessageType.APPLE_MUSIC_RIP_REQUEST, (msg: any) => routeToIdleWorker(MessageType.APPLE_MUSIC_RIP_REQUEST, msg));
+
+    // --- Phase 9 & 10: Media Config Database Routing ---
+    socket.on(MessageType.APPLE_MUSIC_CONFIG_SAVE, async (msg: any) => {
+        try {
+            const db = dbManager.getAppleMusic();
+            await db.saveConfig({
+                mediaUserToken: msg.mediaUserToken,
+                storefront: msg.storefront,
+                autoUpload: msg.autoUpload,
+                rcloneRemote: msg.rcloneRemote
+            });
+            console.log(`[Relay] Saved Apple Music Config for Swarm.`);
+            // Broadcast config to all other UI clients to keep them in sync
+            socket.broadcast.emit(MessageType.APPLE_MUSIC_CONFIG_DATA, {
+               type: MessageType.APPLE_MUSIC_CONFIG_DATA,
+               ...msg
+            });
+        } catch (e: any) {
+            console.error(`[Relay] Failed to save Apple Music Config:`, e.message);
+        }
+    });
+
+    socket.on(MessageType.APPLE_MUSIC_CONFIG_LOAD, async () => {
+        try {
+            const db = dbManager.getAppleMusic();
+            const config = await db.getConfig();
+            if (config) {
+                socket.emit(MessageType.APPLE_MUSIC_CONFIG_DATA, {
+                    type: MessageType.APPLE_MUSIC_CONFIG_DATA,
+                    timestamp: Date.now(),
+                    mediaUserToken: config.mediaUserToken,
+                    storefront: config.storefront,
+                    autoUpload: config.autoUpload,
+                    rcloneRemote: config.rcloneRemote,
+                    alacFix: false // Mock for now
+                });
+            }
+        } catch (e: any) {
+             console.error(`[Relay] Failed to load Apple Music Config:`, e.message);
+        }
+    });
+
+
+    // Reverse Routing: From Worker back to UI clients
+    socket.on(MessageType.WRAPPER_STATUS_UPDATE, (msg: any) => {
+        connectedUIClients.forEach((clientSocket) => {
+            clientSocket.emit(MessageType.WRAPPER_STATUS_UPDATE, msg);
+        });
+    });
+
+    socket.on(MessageType.WRAPPER_2FA_CHALLENGE, (msg: any) => {
+        connectedUIClients.forEach((clientSocket) => {
+            clientSocket.emit(MessageType.WRAPPER_2FA_CHALLENGE, msg);
+        });
+    });
+
+    socket.on(MessageType.RIPPER_TELEMETRY, (msg: any) => {
+        connectedUIClients.forEach((clientSocket) => {
+            clientSocket.emit(MessageType.RIPPER_TELEMETRY, msg);
+        });
+    });
+
     socket.on(MessageType.TASK_PROGRESS, (msg: any) => {
       // Broadcast to UI
       connectedUIClients.forEach((clientSocket) => {

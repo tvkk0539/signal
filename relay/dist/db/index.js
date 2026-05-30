@@ -5,19 +5,23 @@ const MongoUserRepository_1 = require("./providers/mongo/MongoUserRepository");
 const MongoAuditLogRepository_1 = require("./providers/mongo/MongoAuditLogRepository");
 const InMemoryUserRepository_1 = require("./providers/mock/InMemoryUserRepository");
 const InMemoryAuditLogRepository_1 = require("./providers/mock/InMemoryAuditLogRepository");
+const InMemoryAppleMusicRepository_1 = require("./providers/mock/InMemoryAppleMusicRepository");
 const connection_1 = require("./providers/mongo/connection");
 const ReplicatedUserRepository_1 = require("./core/ReplicatedUserRepository");
 const ReplicatedAuditLogRepository_1 = require("./core/ReplicatedAuditLogRepository");
 const ReplicatedChatRepository_1 = require("./core/ReplicatedChatRepository");
+const ReplicatedAppleMusicRepository_1 = require("./core/ReplicatedAppleMusicRepository");
 class DatabaseManager {
     userRepository;
     auditLogRepository;
     chatRepository;
+    appleMusicRepository;
     // The state map to track which engines are running which domain (Primary + Mirrors)
     currentRouting = {
         AUTH: { primary: { engine: 'MOCK' }, mirrors: [] },
         AUDIT: { primary: { engine: 'MOCK' }, mirrors: [] },
-        CHAT: { primary: { engine: 'MOCK' }, mirrors: [] }
+        CHAT: { primary: { engine: 'MOCK' }, mirrors: [] },
+        APPLE_MUSIC: { primary: { engine: 'MOCK' }, mirrors: [] }
     };
     async initialize() {
         console.log(`[DB Manager] Initializing Polyglot Switchboard...`);
@@ -27,6 +31,7 @@ class DatabaseManager {
             await this.hotSwapDomain('AUTH', { primary: { engine: defaultEngine }, mirrors: [] });
             await this.hotSwapDomain('AUDIT', { primary: { engine: defaultEngine }, mirrors: [] });
             await this.hotSwapDomain('CHAT', { primary: { engine: defaultEngine }, mirrors: [] });
+            await this.hotSwapDomain('APPLE_MUSIC', { primary: { engine: 'MOCK' }, mirrors: [] }); // Mock default until Mongo schema is written
         }
         catch (e) {
             console.warn(`[DB Manager] Primary initialize failed, falling back to MOCK universally.`);
@@ -38,6 +43,13 @@ class DatabaseManager {
     // The Magic Function: Hot-Swaps a specific domain's database engine (and its mirrors) at runtime
     async hotSwapDomain(domain, config) {
         console.log(`[DB Manager] Hot-swapping ${domain} domain to Primary: ${config.primary.engine} with ${config.mirrors.length} mirrors...`);
+        if (domain === 'APPLE_MUSIC') {
+            const primaryAdapter = new InMemoryAppleMusicRepository_1.InMemoryAppleMusicRepository();
+            const mirrorAdapters = config.mirrors.map(() => new InMemoryAppleMusicRepository_1.InMemoryAppleMusicRepository());
+            this.appleMusicRepository = new ReplicatedAppleMusicRepository_1.ReplicatedAppleMusicRepository(primaryAdapter, mirrorAdapters);
+            this.currentRouting.APPLE_MUSIC = config;
+            return;
+        }
         try {
             // 1. Instantiate the Primary
             const primaryRepo = await this.instantiateDomainRepository(domain, config.primary);
@@ -152,6 +164,11 @@ class DatabaseManager {
         if (!this.chatRepository)
             throw new Error("DatabaseManager Chat not initialized.");
         return this.chatRepository;
+    }
+    getAppleMusic() {
+        if (!this.appleMusicRepository)
+            throw new Error("DatabaseManager Apple Music not initialized.");
+        return this.appleMusicRepository;
     }
 }
 // Temporary Mock Chat Repository until MongoChatRepository is built

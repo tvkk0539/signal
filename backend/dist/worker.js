@@ -6,6 +6,8 @@ const shared_1 = require("@swarm/shared");
 const RcloneDaemonManager_1 = require("./RcloneDaemonManager");
 const server_1 = require("./grpc/server");
 const client_1 = require("./grpc/client");
+const AppleMusicWrapperManager_1 = require("./services/AppleMusicWrapperManager");
+const AppleMusicRipperService_1 = require("./services/AppleMusicRipperService");
 const RELAY_SERVER_URL = process.env.RELAY_URL || 'http://localhost:3001';
 const WORKER_SECRET = process.env.WORKER_SECRET || 'fallback_for_dev_only';
 const GRPC_MODE = process.env.GRPC_MODE || 'DIRECT';
@@ -28,6 +30,86 @@ async function bootWorker() {
     console.log(`[Worker] Attempting to connect to Relay Server at ${RELAY_SERVER_URL}`);
     // Outbound connection to bypass firewalls
     const socket = (0, socket_io_client_1.io)(RELAY_SERVER_URL);
+    // --- Phase 9: Media Ingestion Managers ---
+    const wrapperManager = AppleMusicWrapperManager_1.AppleMusicWrapperManager.getInstance();
+    const ripperService = new AppleMusicRipperService_1.AppleMusicRipperService();
+    wrapperManager.on('requires_2fa', () => {
+        socket.emit(shared_1.MessageType.WRAPPER_2FA_CHALLENGE, {
+            type: shared_1.MessageType.WRAPPER_2FA_CHALLENGE,
+            timestamp: Date.now(),
+            workerId: socket.id
+        });
+    });
+    wrapperManager.on('log', (log) => {
+        socket.emit(shared_1.MessageType.WRAPPER_STATUS_UPDATE, {
+            type: shared_1.MessageType.WRAPPER_STATUS_UPDATE,
+            timestamp: Date.now(),
+            workerId: socket.id,
+            ...wrapperManager.getStatus()
+        });
+    });
+    ripperService.on('telemetry', (data) => {
+        socket.emit(shared_1.MessageType.RIPPER_TELEMETRY, {
+            type: shared_1.MessageType.RIPPER_TELEMETRY,
+            timestamp: Date.now(),
+            workerId: socket.id,
+            jobId: data.jobId,
+            log: data.log
+        });
+    });
+    ripperService.on('job_complete', async (data) => {
+        socket.emit(shared_1.MessageType.RIPPER_TELEMETRY, {
+            type: shared_1.MessageType.RIPPER_TELEMETRY,
+            timestamp: Date.now(),
+            workerId: socket.id,
+            jobId: data.jobId,
+            log: `[SYSTEM] Job finished with status: ${data.status}`
+        });
+        if (data.status === 'SUCCESS' && data.downloadDir) {
+            if (!data.autoUpload) {
+                socket.emit(shared_1.MessageType.RIPPER_TELEMETRY, {
+                    type: shared_1.MessageType.RIPPER_TELEMETRY,
+                    timestamp: Date.now(),
+                    workerId: socket.id,
+                    jobId: data.jobId,
+                    log: `[SYSTEM] Cloud Handoff Disabled by User. Keeping files in ephemeral storage.`
+                });
+                return;
+            }
+            try {
+                socket.emit(shared_1.MessageType.RIPPER_TELEMETRY, {
+                    type: shared_1.MessageType.RIPPER_TELEMETRY,
+                    timestamp: Date.now(),
+                    workerId: socket.id,
+                    jobId: data.jobId,
+                    log: `[SYSTEM] Initiating Rclone Cloud Handoff to ${data.rcloneRemote}...`
+                });
+                // Using the UI-provided rcloneRemote path (e.g., 'remote:/Media/AppleMusic_Rips')
+                // Split it if it contains a path, otherwise use root.
+                const remoteParts = data.rcloneRemote.split(':');
+                const fsStr = remoteParts[0] + ':';
+                const pathStr = remoteParts.length > 1 ? remoteParts[1] : '/';
+                await rcloneManager.uploadDirectory(data.downloadDir, fsStr, pathStr);
+                socket.emit(shared_1.MessageType.RIPPER_TELEMETRY, {
+                    type: shared_1.MessageType.RIPPER_TELEMETRY,
+                    timestamp: Date.now(),
+                    workerId: socket.id,
+                    jobId: data.jobId,
+                    log: `[SUCCESS] Cloud Handoff Complete. Files preserved securely.`
+                });
+            }
+            catch (e) {
+                console.error(`[Worker] Rclone Handoff Error:`, e);
+                socket.emit(shared_1.MessageType.RIPPER_TELEMETRY, {
+                    type: shared_1.MessageType.RIPPER_TELEMETRY,
+                    timestamp: Date.now(),
+                    workerId: socket.id,
+                    jobId: data.jobId,
+                    log: `[ERROR] Cloud Handoff Failed: ${e.message}`
+                });
+            }
+        }
+    });
     socket.on('connect', () => {
         console.log(`[Worker] Connected to Relay Server. Authenticating...`);
         const authMessage = {
@@ -346,6 +428,52 @@ async function bootWorker() {
         }
         catch (e) {
             console.error(`[Worker] Failed to establish Reverse-Tunnel to Relay:`, e);
+        }
+    });
+    // --- Phase 9: WebSocket Ingestion Handlers ---
+    socket.on(shared_1.MessageType.WRAPPER_START_REQUEST, async (msg) => {
+        console.log(`[Worker] Received WRAPPER_START_REQUEST`);
+        try {
+            if (!wrapperManager.isInstalled()) {
+                await wrapperManager.install();
+            }
+            await wrapperManager.start(msg.username, msg.password);
+        }
+        catch (e) {
+            console.error(`[Worker] Wrapper Start Error:`, e);
+        }
+    });
+    socket.on(shared_1.MessageType.WRAPPER_STOP_REQUEST, (msg) => {
+        console.log(`[Worker] Received WRAPPER_STOP_REQUEST`);
+        wrapperManager.stop();
+    });
+    socket.on(shared_1.MessageType.WRAPPER_2FA_SUBMIT, (msg) => {
+        console.log(`[Worker] Received WRAPPER_2FA_SUBMIT`);
+        try {
+            wrapperManager.sendInput(msg.code);
+        }
+        catch (e) {
+            console.error(`[Worker] Wrapper 2FA Input Error:`, e);
+        }
+    });
+    socket.on(shared_1.MessageType.APPLE_MUSIC_RIP_REQUEST, async (msg) => {
+        console.log(`[Worker] Received APPLE_MUSIC_RIP_REQUEST for URL: ${msg.url}`);
+        try {
+            await ripperService.executeRipJob({
+                url: msg.url,
+                mediaUserToken: msg.mediaUserToken || '',
+                storefront: msg.storefront || 'us',
+                format: msg.format,
+                qualityLimit: msg.qualityLimit,
+                embedLrc: msg.embedLrc,
+                animatedArt: msg.animatedArt,
+                // Pass through routing preferences to the 'job_complete' handler
+                autoUpload: msg.autoUpload ?? true,
+                rcloneRemote: msg.rcloneRemote || 'remote:/Media/AppleMusic_Rips'
+            });
+        }
+        catch (e) {
+            console.error(`[Worker] Ripper Execution Error:`, e);
         }
     });
     socket.on(shared_1.MessageType.TASK_ASSIGNMENT, async (msg) => {

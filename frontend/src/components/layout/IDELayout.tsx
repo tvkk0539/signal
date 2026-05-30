@@ -3,11 +3,13 @@ import { useAuthStore } from '../../store/authStore';
 import { useLayoutStore } from '../../store/layoutStore';
 import { AuthScreen } from '../auth/AuthScreen';
 import { GlobalSidebar } from './GlobalSidebar';
-import { ContextPanel } from './ContextPanel';
 import { TelemetryDrawer } from './TelemetryDrawer';
 import { FileExplorer } from '../explorer/FileExplorer';
+import { HorizontalFleetBar } from '../swarm/HorizontalFleetBar';
 import { ChatBox } from '../chat/ChatBox';
 import { DatabaseOperationsCenter } from '../db/DatabaseOperationsCenter';
+import { MusicRipsHub } from '../media/MusicRipsHub';
+import { AppleMusicApp } from '../media/AppleMusicApp';
 import { SocketManager } from '../../worker/SocketManager';
 
 // Use an array join for the placeholder so global search-and-replace in the Docker entrypoint
@@ -66,13 +68,7 @@ export const IDELayout: React.FC = () => {
       {/* 1. Global Navigation Sidebar (Far Left) */}
       <GlobalSidebar />
 
-      {/* 2. Context Panel (Inner Left) */}
-      <ContextPanel
-        targetWorkerId={targetWorkerId}
-        setTargetWorkerId={setTargetWorkerId}
-      />
-
-      {/* 3. Main Stage (Center Workspace) */}
+      {/* 2. Main Stage (Center Workspace) */}
       <div className="flex-1 relative flex flex-col min-w-0 bg-[#0f1218]">
 
         {/* Top Status Bar */}
@@ -90,25 +86,46 @@ export const IDELayout: React.FC = () => {
         </div>
 
         {/* Dynamic App View */}
-        <div className="flex-1 overflow-hidden relative p-6 pb-16"> {/* pb-16 to leave room for TelemetryDrawer handle */}
+        <div className="flex-1 overflow-hidden relative flex flex-col pb-16"> {/* pb-16 for TelemetryDrawer handle */}
 
           {activeView === 'EXPLORER' && (
-            targetWorkerId ? (
-              <FileExplorer isConnected={isConnected} workerId={targetWorkerId} />
-            ) : (
-              <div className="h-full w-full flex items-center justify-center border-2 border-dashed border-border/50 rounded-2xl bg-card/20">
-                <div className="text-center text-muted-foreground">
-                  <div className="text-4xl mb-4">🗄️</div>
-                  <h2 className="text-lg font-medium text-foreground">No Target Selected</h2>
-                  <p className="text-sm mt-2">Select a worker from the Swarm Fleet sidebar to browse files.</p>
-                </div>
+            <div className="flex-1 flex flex-col h-full">
+              <HorizontalFleetBar
+                targetWorkerId={targetWorkerId}
+                setTargetWorkerId={setTargetWorkerId}
+                isConnected={isConnected}
+              />
+              <div className="flex-1 overflow-hidden p-6 pt-0">
+                {targetWorkerId ? (
+                  <FileExplorer isConnected={isConnected} workerId={targetWorkerId} />
+                ) : (
+                  <div className="h-full w-full flex items-center justify-center border-2 border-dashed border-border/50 rounded-2xl bg-card/20">
+                    <div className="text-center text-muted-foreground">
+                      <div className="text-4xl mb-4">🗄️</div>
+                      <h2 className="text-lg font-medium text-foreground">No Target Selected</h2>
+                      <p className="text-sm mt-2">Select an active node from the top fleet bar to browse files.</p>
+                    </div>
+                  </div>
+                )}
               </div>
-            )
+            </div>
           )}
 
           {activeView === 'CHAT' && (
             <div className="h-full w-full max-w-4xl mx-auto">
                <ChatBox targetId={targetWorkerId} isOnline={false} />
+            </div>
+          )}
+
+          {activeView === 'MUSIC_RIPS' && (
+            <div className="h-full w-full overflow-y-auto">
+               <MusicRipsHub />
+            </div>
+          )}
+
+          {activeView === 'APPLE_MUSIC' && (
+            <div className="h-full w-full">
+               <AppleMusicApp />
             </div>
           )}
 

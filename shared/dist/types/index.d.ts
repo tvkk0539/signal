@@ -212,3 +212,63 @@ export interface PublicKeyResponseMessage extends BaseMessage {
     targetId: string;
     publicKeyBase64: string | null;
 }
+export interface WrapperStartRequestMessage extends BaseMessage {
+    type: MessageType.WRAPPER_START_REQUEST;
+    workerId: string;
+    username?: string;
+    password?: string;
+}
+export interface WrapperStopRequestMessage extends BaseMessage {
+    type: MessageType.WRAPPER_STOP_REQUEST;
+    workerId: string;
+}
+export interface Wrapper2FAChallengeMessage extends BaseMessage {
+    type: MessageType.WRAPPER_2FA_CHALLENGE;
+    workerId: string;
+}
+export interface Wrapper2FASubmitMessage extends BaseMessage {
+    type: MessageType.WRAPPER_2FA_SUBMIT;
+    workerId: string;
+    code: string;
+}
+export interface WrapperStatusUpdateMessage extends BaseMessage {
+    type: MessageType.WRAPPER_STATUS_UPDATE;
+    workerId: string;
+    installed: boolean;
+    running: boolean;
+    pid: number | null;
+    logs: string[];
+}
+export interface AppleMusicRipRequestMessage extends BaseMessage {
+    type: MessageType.APPLE_MUSIC_RIP_REQUEST;
+    workerId: string;
+    url: string;
+    format: 'alac' | 'flac' | 'atmos' | 'aac';
+    qualityLimit: '192000' | '96000' | '48000';
+    embedLrc: boolean;
+    animatedArt: boolean;
+    mediaUserToken: string;
+    storefront: string;
+}
+export interface RipperTelemetryMessage extends BaseMessage {
+    type: MessageType.RIPPER_TELEMETRY;
+    workerId: string;
+    jobId: string;
+    log: string;
+}
+export interface AppleMusicConfigSaveMessage extends BaseMessage {
+    type: MessageType.APPLE_MUSIC_CONFIG_SAVE;
+    mediaUserToken: string;
+    storefront: string;
+    alacFix: boolean;
+    autoUpload: boolean;
+    rcloneRemote: string;
+}
+export interface AppleMusicConfigDataMessage extends BaseMessage {
+    type: MessageType.APPLE_MUSIC_CONFIG_DATA;
+    mediaUserToken: string;
+    storefront: string;
+    alacFix: boolean;
+    autoUpload: boolean;
+    rcloneRemote: string;
+}

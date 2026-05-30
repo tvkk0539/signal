@@ -1,7 +1,7 @@
 import React from 'react';
 import { useLayoutStore } from '../../store/layoutStore';
 import { useAuthStore } from '../../store/authStore';
-import { Folder, MessageSquare, Database, Settings, LogOut } from 'lucide-react';
+import { Folder, MessageSquare, Database, Settings, LogOut, Music } from 'lucide-react';
 
 export const GlobalSidebar: React.FC = () => {
   const { activeView, setActiveView } = useLayoutStore();
@@ -9,6 +9,7 @@ export const GlobalSidebar: React.FC = () => {
 
   const navItems = [
     { id: 'EXPLORER', icon: Folder, label: 'File Explorer' },
+    { id: 'MUSIC_RIPS', icon: Music, label: 'Media Ingestion Hub' },
     { id: 'CHAT', icon: MessageSquare, label: 'Encrypted Chat' },
     { id: 'DB_OPS', icon: Database, label: 'Database Ops' },
     { id: 'SETTINGS', icon: Settings, label: 'Settings' }
@@ -19,7 +20,8 @@ export const GlobalSidebar: React.FC = () => {
       <div className="flex-1 w-full flex flex-col items-center gap-6">
         {navItems.map((item) => {
           const Icon = item.icon;
-          const isActive = activeView === item.id;
+          // Highlight the Music icon if we are in the hub or one of the dedicated apps
+          const isActive = activeView === item.id || (item.id === 'MUSIC_RIPS' && activeView === 'APPLE_MUSIC');
           return (
             <button
               key={item.id}
