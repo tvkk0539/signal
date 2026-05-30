@@ -97,8 +97,8 @@ export const AppleMusicWrapperUI: React.FC = () => {
   };
 
   return (
-    <div className="w-full h-full flex flex-col items-center py-10 overflow-y-auto">
-      <div className="w-full max-w-4xl px-6 space-y-6">
+    <div className="w-full h-full flex flex-col items-center py-6 overflow-y-auto">
+      <div className="w-full max-w-4xl px-6 space-y-6 pb-20">
 
         {/* Status Header */}
         <div className="flex items-center justify-between p-6 bg-black/40 border border-white/10 rounded-2xl backdrop-blur-sm">
@@ -173,11 +173,18 @@ export const AppleMusicWrapperUI: React.FC = () => {
                     </div>
                 </div>
 
+                <button
+                    onClick={() => setNeeds2FA(!needs2FA)}
+                    className="text-xs text-muted-foreground hover:text-white border border-white/10 px-2 py-1 rounded w-fit"
+                >
+                    [Debug Toggle 2FA UI]
+                </button>
+
                 {/* 2FA Slide-In Prompt */}
-                <div className={`p-6 border rounded-2xl backdrop-blur-sm transition-all duration-500 overflow-hidden ${
+                <div className={`border rounded-2xl backdrop-blur-sm transition-all duration-500 overflow-hidden ${
                     needs2FA
-                        ? 'bg-orange-500/10 border-orange-500/30 shadow-[0_0_20px_rgba(249,115,22,0.15)] opacity-100 h-auto'
-                        : 'bg-black/40 border-transparent opacity-50 h-0 p-0 m-0 pointer-events-none'
+                        ? 'bg-orange-500/10 border-orange-500/30 shadow-[0_0_20px_rgba(249,115,22,0.15)] opacity-100 p-6 h-auto pointer-events-auto'
+                        : 'bg-black/40 border-transparent opacity-0 p-0 h-0 m-0 pointer-events-none'
                 }`}>
                     <div className="flex items-center gap-2 text-orange-400 mb-3">
                         <ShieldAlert size={18} />
