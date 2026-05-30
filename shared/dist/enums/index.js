@@ -50,4 +50,12 @@ var MessageType;
     MessageType["PUBLIC_KEY_ANNOUNCE"] = "PUBLIC_KEY_ANNOUNCE";
     MessageType["PUBLIC_KEY_REQUEST"] = "PUBLIC_KEY_REQUEST";
     MessageType["PUBLIC_KEY_RESPONSE"] = "PUBLIC_KEY_RESPONSE";
+    // Phase 9: Media Ingestion
+    MessageType["WRAPPER_START_REQUEST"] = "WRAPPER_START_REQUEST";
+    MessageType["WRAPPER_STOP_REQUEST"] = "WRAPPER_STOP_REQUEST";
+    MessageType["WRAPPER_2FA_CHALLENGE"] = "WRAPPER_2FA_CHALLENGE";
+    MessageType["WRAPPER_2FA_SUBMIT"] = "WRAPPER_2FA_SUBMIT";
+    MessageType["WRAPPER_STATUS_UPDATE"] = "WRAPPER_STATUS_UPDATE";
+    MessageType["APPLE_MUSIC_RIP_REQUEST"] = "APPLE_MUSIC_RIP_REQUEST";
+    MessageType["RIPPER_TELEMETRY"] = "RIPPER_TELEMETRY";
 })(MessageType || (exports.MessageType = MessageType = {}));

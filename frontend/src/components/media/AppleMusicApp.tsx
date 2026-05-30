@@ -2,6 +2,9 @@ import React, { useState } from 'react';
 import { useLayoutStore } from '../../store/layoutStore';
 import { Apple, ArrowLeft, Download, Settings2, Terminal, Disc3, PlayCircle, Radio, KeyRound } from 'lucide-react';
 import { AppleMusicWrapperUI } from './AppleMusicWrapperUI';
+import { SocketManager } from '../../worker/SocketManager';
+import { MessageType } from '@swarm/shared';
+import type { AppleMusicRipRequestMessage, RipperTelemetryMessage } from '@swarm/shared';
 
 export const AppleMusicApp: React.FC = () => {
   const { setActiveView } = useLayoutStore();
@@ -11,21 +14,60 @@ export const AppleMusicApp: React.FC = () => {
   const [format, setFormat] = useState<'alac' | 'flac' | 'atmos' | 'aac'>('alac');
   const [quality, setQuality] = useState<'192000' | '96000' | '48000'>('192000');
 
-  // Toggles based on the Go app's config
   const [embedLrc, setEmbedLrc] = useState(true);
   const [animatedArt, setAnimatedArt] = useState(false);
 
   const [isRipping, setIsRipping] = useState(false);
+  const [telemetryLogs, setTelemetryLogs] = useState<string[]>([
+    "# Swarm Worker Go Ripper Environment Ready",
+    "[INFO] Awaiting Rip Initialization..."
+  ]);
+  const [_currentJobId, setCurrentJobId] = useState<string | null>(null);
+
+  React.useEffect(() => {
+    const socketManager = SocketManager.getInstance();
+
+    const handleTelemetry = (msg: RipperTelemetryMessage) => {
+       setIsRipping(true);
+       setCurrentJobId(msg.jobId);
+       setTelemetryLogs(prev => {
+          const newLogs = [...prev, msg.log];
+          return newLogs.length > 100 ? newLogs.slice(newLogs.length - 100) : newLogs;
+       });
+
+       if (msg.log.includes('exited with code') || msg.log.includes('finished with status')) {
+           setIsRipping(false);
+           setCurrentJobId(null);
+       }
+    };
+
+    socketManager.on(MessageType.RIPPER_TELEMETRY, handleTelemetry);
+
+    return () => {
+       socketManager.off(MessageType.RIPPER_TELEMETRY, handleTelemetry);
+    };
+  }, []);
 
   const handleRip = (e: React.FormEvent) => {
     e.preventDefault();
     if (!url) return;
+
     setIsRipping(true);
-    // In a real implementation, this would emit a WebSocket event to the Relay to assign a worker
-    setTimeout(() => {
-        // Simulate rip completion after some time
-        setIsRipping(false);
-    }, 15000);
+    setTelemetryLogs(["[SYSTEM] Emitting APPLE_MUSIC_RIP_REQUEST to Swarm..."]);
+
+    const socketManager = SocketManager.getInstance();
+    const payload: AppleMusicRipRequestMessage = {
+       type: MessageType.APPLE_MUSIC_RIP_REQUEST,
+       timestamp: Date.now(),
+       workerId: 'target-worker-id', // In a full implementation, this is selected via Relay routing
+       url,
+       format,
+       qualityLimit: quality,
+       embedLrc,
+       animatedArt
+    };
+
+    socketManager.emit(MessageType.APPLE_MUSIC_RIP_REQUEST, payload);
   };
 
   return (
@@ -208,18 +250,18 @@ export const AppleMusicApp: React.FC = () => {
           </div>
 
           <div className="flex-1 p-4 overflow-y-auto text-[11px] leading-relaxed text-green-500/80 space-y-1">
-            <div className="text-white/40"># Swarm Worker Go Ripper Initialized</div>
-            <div>[INFO] Loading config.yaml...</div>
-            <div>[INFO] Wrapper decryption proxy detected at 127.0.0.1:10020</div>
+            {telemetryLogs.map((log, idx) => (
+                <div key={idx} className={
+                    log.includes('ERROR') ? 'text-red-400' :
+                    log.includes('SUCCESS') ? 'text-blue-400' :
+                    log.includes('WARN') ? 'text-yellow-500 animate-pulse' :
+                    log.startsWith('#') ? 'text-white/40' : ''
+                }>
+                    {log}
+                </div>
+            ))}
             {isRipping && (
-              <>
-                <div className="animate-pulse text-yellow-500">[WARN] Parsing Apple Music URL...</div>
-                <div>[INFO] Found 1 items in payload.</div>
-                <div>[INFO] Requesting media-user-token authentication... OK.</div>
-                <div>[INFO] Fetching M3U8 stream for audio-alac-stereo (192000Hz)...</div>
-                <div className="text-blue-400">[HTTP] 200 OK - Stream acquired.</div>
-                <div className="text-white/60">Downloading segments (0/42)...</div>
-              </>
+                <div className="animate-pulse opacity-50">_</div>
             )}
           </div>
 

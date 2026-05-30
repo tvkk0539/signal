@@ -1,8 +1,10 @@
 import React, { useState, useEffect, useRef } from 'react';
 import { KeyRound, ShieldAlert, DownloadCloud, Play, Square, Loader2, Send } from 'lucide-react';
+import { SocketManager } from '../../worker/SocketManager';
+import { MessageType } from '@swarm/shared';
+import type { WrapperStartRequestMessage, WrapperStopRequestMessage, Wrapper2FASubmitMessage, WrapperStatusUpdateMessage, Wrapper2FAChallengeMessage } from '@swarm/shared';
 
 export const AppleMusicWrapperUI: React.FC = () => {
-  // Simulated State for the UI Blueprint
   const [isInstalled, setIsInstalled] = useState(false);
   const [isRunning, setIsRunning] = useState(false);
   const [isInstalling, setIsInstalling] = useState(false);
@@ -12,8 +14,9 @@ export const AppleMusicWrapperUI: React.FC = () => {
 
   const [needs2FA, setNeeds2FA] = useState(false);
   const [twoFaCode, setTwoFaCode] = useState('');
+  const [_pid, setPid] = useState<number | null>(null);
 
-  const [logs, setLogs] = useState<string[]>([]);
+  const [logs, setLogs] = useState<string[]>(["# Swarm Proxy Environment Initialization Complete."]);
   const logsEndRef = useRef<HTMLDivElement>(null);
 
   const scrollToBottom = () => {
@@ -24,49 +27,73 @@ export const AppleMusicWrapperUI: React.FC = () => {
     scrollToBottom();
   }, [logs]);
 
+  useEffect(() => {
+    const socketManager = SocketManager.getInstance();
+
+    const handleStatusUpdate = (msg: WrapperStatusUpdateMessage) => {
+       setIsInstalled(msg.installed);
+       setIsRunning(msg.running);
+       setPid(msg.pid);
+       if (msg.logs && msg.logs.length > 0) {
+           setLogs(msg.logs);
+       }
+    };
+
+    const handle2FAChallenge = (_msg: Wrapper2FAChallengeMessage) => {
+       setNeeds2FA(true);
+    };
+
+    socketManager.on(MessageType.WRAPPER_STATUS_UPDATE, handleStatusUpdate);
+    socketManager.on(MessageType.WRAPPER_2FA_CHALLENGE, handle2FAChallenge);
+
+    return () => {
+       socketManager.off(MessageType.WRAPPER_STATUS_UPDATE, handleStatusUpdate);
+       socketManager.off(MessageType.WRAPPER_2FA_CHALLENGE, handle2FAChallenge);
+    };
+  }, []);
+
+  // For this mock iteration, installation and start are combined in the backend payload.
+  // Real implementation might separate downloading the binary from executing it.
   const handleInstall = () => {
     setIsInstalling(true);
-    setLogs(prev => [...prev, "[SYSTEM] Downloading Widevine Wrapper Proxy...", "[SYSTEM] Extracting to /tmp/apple_music/wrapper..."]);
-    setTimeout(() => {
-      setIsInstalled(true);
-      setIsInstalling(false);
-      setLogs(prev => [...prev, "[SYSTEM] Installation complete. Ready to boot."]);
-    }, 2000);
+    handleStart(); // The backend worker `start` handler installs if missing
   };
 
   const handleStart = () => {
-    setIsRunning(true);
-    setLogs(prev => [
-        ...prev,
-        "[WRAPPER] Binding to 0.0.0.0:10020",
-        "[WRAPPER] Authenticating with Apple DRM servers...",
-        "[WRAPPER] Sending credentials..."
-    ]);
-
-    // Simulate hitting a 2FA block
-    setTimeout(() => {
-        setLogs(prev => [...prev, "[WRAPPER] Challenge received: Enter 2FA Code:"]);
-        setNeeds2FA(true);
-    }, 2000);
+    setIsInstalling(false);
+    const payload: WrapperStartRequestMessage = {
+       type: MessageType.WRAPPER_START_REQUEST,
+       timestamp: Date.now(),
+       workerId: 'target-worker-id',
+       username,
+       password
+    };
+    SocketManager.getInstance().emit(MessageType.WRAPPER_START_REQUEST, payload);
   };
 
   const handleStop = () => {
-    setIsRunning(false);
-    setNeeds2FA(false);
-    setLogs(prev => [...prev, "[SYSTEM] Terminated Wrapper Process (SIGKILL)."]);
+    const payload: WrapperStopRequestMessage = {
+       type: MessageType.WRAPPER_STOP_REQUEST,
+       timestamp: Date.now(),
+       workerId: 'target-worker-id'
+    };
+    SocketManager.getInstance().emit(MessageType.WRAPPER_STOP_REQUEST, payload);
   };
 
   const handle2FASubmit = (e: React.FormEvent) => {
       e.preventDefault();
       if (!twoFaCode) return;
 
-      setLogs(prev => [...prev, `[USER] Sending 2FA input: ******`, "[WRAPPER] Verifying token..."]);
-      setNeeds2FA(false);
+      const payload: Wrapper2FASubmitMessage = {
+         type: MessageType.WRAPPER_2FA_SUBMIT,
+         timestamp: Date.now(),
+         workerId: 'target-worker-id',
+         code: twoFaCode
+      };
 
-      setTimeout(() => {
-          setLogs(prev => [...prev, "[WRAPPER] Auth Success.", "[WRAPPER] Listening for M3U8 decryption requests."]);
-          setTwoFaCode('');
-      }, 1500);
+      SocketManager.getInstance().emit(MessageType.WRAPPER_2FA_SUBMIT, payload);
+      setNeeds2FA(false);
+      setTwoFaCode('');
   };
 
   return (

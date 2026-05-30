@@ -67,6 +67,7 @@ The Monorepo is being developed in strict, highly-engineered phases. The current
     *   **Apple Music Engine:** A highly-engineered, dedicated UI for ALAC/Atmos ripping, featuring live telemetry logs and interactive 2FA prompt support.
     *   **Chimera Worker Architecture:** Ephemeral Node.js backend workers dynamically orchestrate external Go binaries, Widevine Decryption Proxies (`wrapper`), and FFmpeg using sub-process spawning, routing the live stdout back to the UI, and automatically pushing massive ALAC files to cloud storage (`rclone move`) for a zero-disk footprint.
     *   **Just-In-Time (JIT) Cloning Engine:** Ephemeral workers pull and compile the absolute latest third-party ripper repositories exactly at boot time, preventing breakage from upstream API changes without needing to rebuild Swarm Docker images.
+    *   **WebSocket Nervous System:** Complete end-to-end integration mapping UI interactions (like 2FA submission and configuration payloads) through the Relay Server directly into the ephemeral backend worker's sub-processes.
 
 ---
 
