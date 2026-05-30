@@ -29,7 +29,8 @@ export const AppleMusicApp: React.FC = () => {
 
   const {
     mediaUserToken, storefront, setMediaUserToken, setStorefront, setAutoUpload, setRcloneRemote,
-    setWrapperStatus, setWrapperNeeds2FA
+    alacFix, autoUpload, rcloneRemote, lrcFormat, lrcType, language, tagSortOrder, saveLrcFile, saveArtistCover, useSongInfoForPlaylist,
+    setWrapperStatus, setWrapperNeeds2FA, setLrcFormat, setLrcType, setLanguage, setTagSortOrder, setSaveLrcFile, setSaveArtistCover, setUseSongInfoForPlaylist, setAlacFix
   } = useAppleMusicStore();
 
   React.useEffect(() => {
@@ -43,6 +44,14 @@ export const AppleMusicApp: React.FC = () => {
        if (msg.storefront) setStorefront(msg.storefront);
        if (msg.autoUpload !== undefined) setAutoUpload(msg.autoUpload);
        if (msg.rcloneRemote) setRcloneRemote(msg.rcloneRemote);
+         if (msg.alacFix !== undefined) setAlacFix(msg.alacFix);
+         if (msg.lrcFormat) setLrcFormat(msg.lrcFormat as any);
+         if (msg.lrcType) setLrcType(msg.lrcType as any);
+         if (msg.language !== undefined) setLanguage(msg.language);
+         if (msg.tagSortOrder !== undefined) setTagSortOrder(msg.tagSortOrder);
+         if (msg.saveLrcFile !== undefined) setSaveLrcFile(msg.saveLrcFile);
+         if (msg.saveArtistCover !== undefined) setSaveArtistCover(msg.saveArtistCover);
+         if (msg.useSongInfoForPlaylist !== undefined) setUseSongInfoForPlaylist(msg.useSongInfoForPlaylist);
     };
 
     const handleTelemetry = (msg: RipperTelemetryMessage) => {
@@ -98,7 +107,17 @@ export const AppleMusicApp: React.FC = () => {
        embedLrc,
        animatedArt,
        mediaUserToken,
-       storefront
+       storefront,
+       alacFix,
+       autoUpload,
+       rcloneRemote,
+       lrcFormat,
+       lrcType,
+       language,
+       tagSortOrder,
+       saveLrcFile,
+       saveArtistCover,
+       useSongInfoForPlaylist
     };
 
     socketManager.emit(MessageType.APPLE_MUSIC_RIP_REQUEST, payload);

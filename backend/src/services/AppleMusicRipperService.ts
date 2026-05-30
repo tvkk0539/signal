@@ -16,6 +16,14 @@ export interface RipperConfig {
     storefront?: string;
     autoUpload?: boolean;
     rcloneRemote?: string;
+    lrcFormat?: 'lrc' | 'ttml';
+    lrcType?: 'lyrics' | 'syllable-lyrics';
+    language?: string;
+    tagSortOrder?: boolean;
+    saveLrcFile?: boolean;
+    saveArtistCover?: boolean;
+    useSongInfoForPlaylist?: boolean;
+    alacFix?: boolean;
 }
 
 export class AppleMusicRipperService extends EventEmitter {
@@ -52,18 +60,18 @@ export class AppleMusicRipperService extends EventEmitter {
         const yamlData = {
             'media-user-token': config.mediaUserToken,
             'authorization-token': config.authorizationToken || "",
-            'language': "",
-            'lrc-type': "lyrics",
-            'lrc-format': "lrc",
+            'language': config.language || "",
+            'lrc-type': config.lrcType || "lyrics",
+            'lrc-format': config.lrcFormat || "lrc",
             'embed-lrc': config.embedLrc,
-            'save-lrc-file': false,
-            'save-artist-cover': false,
+            'save-lrc-file': config.saveLrcFile ?? false,
+            'save-artist-cover': config.saveArtistCover ?? false,
             'save-animated-artwork': config.animatedArt,
             'emby-animated-artwork': false,
             'embed-cover': true,
             'cover-size': "5000x5000",
             'cover-format': "jpg",
-            'tag-sort-order': true,
+            'tag-sort-order': config.tagSortOrder ?? true,
             'tag-itunes-id': true,
 
             // Route all formats to the same isolated download folder for this job
@@ -93,13 +101,13 @@ export class AppleMusicRipperService extends EventEmitter {
             'clean-choice': "[C]",
             'apple-master-choice': "[M]",
 
-            'use-songinfo-for-playlist': false,
+            'use-songinfo-for-playlist': config.useSongInfoForPlaylist ?? false,
             'dl-albumcover-for-playlist': false,
             'mv-audio-type': "atmos",
             'mv-max': 2160,
 
             'storefront': config.storefront || "us",
-            'alac-fix': false,
+            'alac-fix': config.alacFix ?? false,
 
             'convert-after-download': config.format === 'flac',
             'convert-format': "flac",

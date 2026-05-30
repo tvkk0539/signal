@@ -273,6 +273,16 @@ export interface AppleMusicRipRequestMessage extends BaseMessage {
   animatedArt: boolean;
   mediaUserToken: string;
   storefront: string;
+  autoUpload?: boolean;
+  rcloneRemote?: string;
+  lrcFormat?: 'lrc' | 'ttml';
+  lrcType?: 'lyrics' | 'syllable-lyrics';
+  language?: string;
+  tagSortOrder?: boolean;
+  saveLrcFile?: boolean;
+  saveArtistCover?: boolean;
+  useSongInfoForPlaylist?: boolean;
+  alacFix?: boolean;
 }
 
 export interface RipperTelemetryMessage extends BaseMessage {
@@ -289,6 +299,13 @@ export interface AppleMusicConfigSaveMessage extends BaseMessage {
   alacFix: boolean;
   autoUpload: boolean;
   rcloneRemote: string;
+  lrcFormat: 'lrc' | 'ttml';
+  lrcType: 'lyrics' | 'syllable-lyrics';
+  language: string;
+  tagSortOrder: boolean;
+  saveLrcFile: boolean;
+  saveArtistCover: boolean;
+  useSongInfoForPlaylist: boolean;
 }
 
 export interface AppleMusicConfigDataMessage extends BaseMessage {
@@ -298,4 +315,11 @@ export interface AppleMusicConfigDataMessage extends BaseMessage {
   alacFix: boolean;
   autoUpload: boolean;
   rcloneRemote: string;
+  lrcFormat: 'lrc' | 'ttml';
+  lrcType: 'lyrics' | 'syllable-lyrics';
+  language: string;
+  tagSortOrder: boolean;
+  saveLrcFile: boolean;
+  saveArtistCover: boolean;
+  useSongInfoForPlaylist: boolean;
 }

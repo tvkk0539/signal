@@ -10,6 +10,14 @@ export interface RipperConfig {
     storefront?: string;
     autoUpload?: boolean;
     rcloneRemote?: string;
+    lrcFormat?: 'lrc' | 'ttml';
+    lrcType?: 'lyrics' | 'syllable-lyrics';
+    language?: string;
+    tagSortOrder?: boolean;
+    saveLrcFile?: boolean;
+    saveArtistCover?: boolean;
+    useSongInfoForPlaylist?: boolean;
+    alacFix?: boolean;
 }
 export declare class AppleMusicRipperService extends EventEmitter {
     private readonly BASE_DIR;
