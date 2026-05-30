@@ -68,6 +68,10 @@ The Monorepo is being developed in strict, highly-engineered phases. The current
     *   **Chimera Worker Architecture:** Ephemeral Node.js backend workers dynamically orchestrate external Go binaries, Widevine Decryption Proxies (`wrapper`), and FFmpeg using sub-process spawning, routing the live stdout back to the UI, and automatically pushing massive ALAC files to cloud storage (`rclone move`) for a zero-disk footprint.
     *   **Just-In-Time (JIT) Cloning Engine:** Ephemeral workers pull and compile the absolute latest third-party ripper repositories exactly at boot time, preventing breakage from upstream API changes without needing to rebuild Swarm Docker images.
     *   **WebSocket Nervous System:** Complete end-to-end integration mapping UI interactions (like 2FA submission and configuration payloads) through the Relay Server directly into the ephemeral backend worker's sub-processes.
+*   **Phase 10: The Immortal Swarm & Apple Music Database (✅ Active):**
+    *   **JIT Bootstrapper (`bootstrap_worker.sh`):** A pre-flight bash script that dynamically `git clones` third-party repositories, runs `go build`, and fetches decryption binaries specifically for the host architecture (`x86_64` vs `aarch64`) before handing off to the Node.js orchestrator.
+    *   **Dedicated Apple Music DB Domain:** The Relay Database Switchboard formally supports an `APPLE_MUSIC` schema to persist highly-sensitive `media-user-token`s and configuration states across ephemeral Swarm deployments.
+    *   **Dynamic Cloud Handoff Routing:** Backend workers autonomously parse UI routing preferences to conditionally trigger `RcloneDaemonManager.uploadDirectory()`, beaming multi-gigabyte ALAC rips to specific Cloud storage paths.
 
 ---
 
