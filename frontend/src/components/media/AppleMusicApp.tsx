@@ -115,14 +115,21 @@ export const AppleMusicApp: React.FC = () => {
               <div className="w-8 h-8 rounded-lg bg-gradient-to-tr from-[#FA243C] to-[#fa5e6e] flex items-center justify-center shadow-lg shadow-[#FA243C]/20">
                 <Apple size={18} className="text-white mb-0.5" />
               </div>
-              <h2 className="text-lg font-bold text-white leading-tight">Apple Music Engine</h2>
+              <div>
+                  <h2 className="text-lg font-bold text-white leading-tight">Apple Music Engine</h2>
+                  <p className="text-[10px] uppercase tracking-wider text-muted-foreground font-semibold mt-0.5">
+                    {activeTab === 'RIPPER' ? 'Media Acquisition Phase' :
+                     activeTab === 'WRAPPER' ? 'DRM Negotiation Matrix' :
+                     activeTab === 'CONFIG' ? 'Engine Configuration' : 'Swarm Settings'}
+                  </p>
+              </div>
             </div>
           </div>
         </div>
 
         {/* Bottom Row: Tab Navigation */}
         <div className="px-6 pb-4">
-          <div className="flex items-center bg-black/40 p-1 rounded-xl border border-white/10 overflow-x-auto w-fit">
+          <div className="flex items-center bg-black/40 p-1 rounded-xl border border-white/10 overflow-x-auto w-fit shadow-md">
           <button
             onClick={() => setActiveTab('RIPPER')}
             className={`flex items-center gap-2 px-4 py-2 rounded-lg text-sm font-semibold transition-all whitespace-nowrap ${
