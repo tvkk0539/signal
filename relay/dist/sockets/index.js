@@ -304,8 +304,16 @@ function setupSockets(io) {
                 await db.saveConfig({
                     mediaUserToken: msg.mediaUserToken,
                     storefront: msg.storefront,
+                    alacFix: msg.alacFix,
                     autoUpload: msg.autoUpload,
-                    rcloneRemote: msg.rcloneRemote
+                    rcloneRemote: msg.rcloneRemote,
+                    lrcFormat: msg.lrcFormat,
+                    lrcType: msg.lrcType,
+                    language: msg.language,
+                    tagSortOrder: msg.tagSortOrder,
+                    saveLrcFile: msg.saveLrcFile,
+                    saveArtistCover: msg.saveArtistCover,
+                    useSongInfoForPlaylist: msg.useSongInfoForPlaylist
                 });
                 console.log(`[Relay] Saved Apple Music Config for Swarm.`);
                 // Broadcast config to all other UI clients to keep them in sync
@@ -328,9 +336,16 @@ function setupSockets(io) {
                         timestamp: Date.now(),
                         mediaUserToken: config.mediaUserToken,
                         storefront: config.storefront,
+                        alacFix: config.alacFix,
                         autoUpload: config.autoUpload,
                         rcloneRemote: config.rcloneRemote,
-                        alacFix: false // Mock for now
+                        lrcFormat: config.lrcFormat,
+                        lrcType: config.lrcType,
+                        language: config.language,
+                        tagSortOrder: config.tagSortOrder,
+                        saveLrcFile: config.saveLrcFile,
+                        saveArtistCover: config.saveArtistCover,
+                        useSongInfoForPlaylist: config.useSongInfoForPlaylist
                     });
                 }
             }

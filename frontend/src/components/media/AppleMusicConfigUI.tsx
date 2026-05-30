@@ -6,7 +6,19 @@ import { MessageType } from '@swarm/shared';
 import type { AppleMusicConfigSaveMessage } from '@swarm/shared';
 
 export const AppleMusicConfigUI: React.FC = () => {
-  const { mediaUserToken, setMediaUserToken, storefront, setStorefront, alacFix, setAlacFix, autoUpload, rcloneRemote } = useAppleMusicStore();
+  const {
+    mediaUserToken, setMediaUserToken,
+    storefront, setStorefront,
+    alacFix, setAlacFix,
+    autoUpload, rcloneRemote,
+    lrcFormat, setLrcFormat,
+    lrcType, setLrcType,
+    language, setLanguage,
+    tagSortOrder, setTagSortOrder,
+    saveLrcFile, setSaveLrcFile,
+    saveArtistCover, setSaveArtistCover,
+    useSongInfoForPlaylist, setUseSongInfoForPlaylist
+  } = useAppleMusicStore();
 
   const handleSave = () => {
     const payload: AppleMusicConfigSaveMessage = {
@@ -16,7 +28,14 @@ export const AppleMusicConfigUI: React.FC = () => {
       storefront,
       alacFix,
       autoUpload,
-      rcloneRemote
+      rcloneRemote,
+      lrcFormat,
+      lrcType,
+      language,
+      tagSortOrder,
+      saveLrcFile,
+      saveArtistCover,
+      useSongInfoForPlaylist
     };
     SocketManager.getInstance().emit(MessageType.APPLE_MUSIC_CONFIG_SAVE, payload);
     // Could add a toast notification here
@@ -77,12 +96,70 @@ export const AppleMusicConfigUI: React.FC = () => {
                     />
                 </div>
                 <div className="space-y-1">
+                    <label className="text-xs text-muted-foreground ml-1">Translation Language Code</label>
+                    <input
+                      type="text"
+                      value={language}
+                      onChange={(e) => setLanguage(e.target.value)}
+                      placeholder="e.g. ko-KR"
+                      className="w-full bg-black/50 border border-white/10 rounded-lg px-3 py-2 text-sm text-white focus:ring-1 focus:ring-primary outline-none font-mono"
+                    />
+                    <p className="text-[10px] text-muted-foreground ml-1">Used for TTML translation lyrics.</p>
+                </div>
+
+                <div className="space-y-1">
                     <label className="text-xs text-muted-foreground ml-1">LRC Format</label>
-                    <select className="w-full bg-black/50 border border-white/10 rounded-lg px-3 py-2 text-sm text-white focus:ring-1 focus:ring-primary outline-none">
+                    <select
+                        value={lrcFormat}
+                        onChange={(e) => setLrcFormat(e.target.value as 'lrc' | 'ttml')}
+                        className="w-full bg-black/50 border border-white/10 rounded-lg px-3 py-2 text-sm text-white focus:ring-1 focus:ring-primary outline-none"
+                    >
                         <option value="lrc">Standard LRC</option>
                         <option value="ttml">TTML (Word-by-word)</option>
                     </select>
                 </div>
+                <div className="space-y-1">
+                    <label className="text-xs text-muted-foreground ml-1">LRC Type</label>
+                    <select
+                        value={lrcType}
+                        onChange={(e) => setLrcType(e.target.value as 'lyrics' | 'syllable-lyrics')}
+                        className="w-full bg-black/50 border border-white/10 rounded-lg px-3 py-2 text-sm text-white focus:ring-1 focus:ring-primary outline-none"
+                    >
+                        <option value="lyrics">Standard (lyrics)</option>
+                        <option value="syllable-lyrics">Syllable (syllable-lyrics)</option>
+                    </select>
+                </div>
+
+                <div className="space-y-1 flex items-center justify-between bg-white/5 p-3 rounded-lg border border-white/5">
+                    <span className="text-sm text-white/90">Save LRC File</span>
+                    <input
+                      type="checkbox"
+                      checked={saveLrcFile}
+                      onChange={(e) => setSaveLrcFile(e.target.checked)}
+                      className="accent-primary w-4 h-4"
+                    />
+                </div>
+
+                <div className="space-y-1 flex items-center justify-between bg-white/5 p-3 rounded-lg border border-white/5">
+                    <span className="text-sm text-white/90">Save Artist Cover</span>
+                    <input
+                      type="checkbox"
+                      checked={saveArtistCover}
+                      onChange={(e) => setSaveArtistCover(e.target.checked)}
+                      className="accent-primary w-4 h-4"
+                    />
+                </div>
+
+                <div className="space-y-1 flex items-center justify-between bg-white/5 p-3 rounded-lg border border-white/5">
+                    <span className="text-sm text-white/90">Use SongInfo For Playlist</span>
+                    <input
+                      type="checkbox"
+                      checked={useSongInfoForPlaylist}
+                      onChange={(e) => setUseSongInfoForPlaylist(e.target.checked)}
+                      className="accent-primary w-4 h-4"
+                    />
+                </div>
+
                 <div className="space-y-1 flex items-center justify-between bg-white/5 p-3 rounded-lg border border-white/5">
                     <span className="text-sm text-white/90">Apply ALAC Fix Patch</span>
                     <input
@@ -94,7 +171,12 @@ export const AppleMusicConfigUI: React.FC = () => {
                 </div>
                 <div className="space-y-1 flex items-center justify-between bg-white/5 p-3 rounded-lg border border-white/5">
                     <span className="text-sm text-white/90">Force Tag Sort Order</span>
-                    <input type="checkbox" defaultChecked className="accent-primary w-4 h-4" />
+                    <input
+                      type="checkbox"
+                      checked={tagSortOrder}
+                      onChange={(e) => setTagSortOrder(e.target.checked)}
+                      className="accent-primary w-4 h-4"
+                    />
                 </div>
             </div>
         </div>

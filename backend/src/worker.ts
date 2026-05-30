@@ -508,7 +508,15 @@ async function bootWorker() {
         animatedArt: msg.animatedArt,
         // Pass through routing preferences to the 'job_complete' handler
         autoUpload: msg.autoUpload ?? true,
-        rcloneRemote: msg.rcloneRemote || 'remote:/Media/AppleMusic_Rips'
+        rcloneRemote: msg.rcloneRemote || 'remote:/Media/AppleMusic_Rips',
+        lrcFormat: msg.lrcFormat,
+        lrcType: msg.lrcType,
+        language: msg.language,
+        tagSortOrder: msg.tagSortOrder,
+        saveLrcFile: msg.saveLrcFile,
+        saveArtistCover: msg.saveArtistCover,
+        useSongInfoForPlaylist: msg.useSongInfoForPlaylist,
+        alacFix: msg.alacFix
       });
     } catch (e: any) {
       console.error(`[Worker] Ripper Execution Error:`, e);

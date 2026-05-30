@@ -6,7 +6,10 @@ import { MessageType } from '@swarm/shared';
 import type { AppleMusicConfigSaveMessage } from '@swarm/shared';
 
 export const AppleMusicSettingsUI: React.FC = () => {
-  const { mediaUserToken, storefront, alacFix, autoUpload, setAutoUpload, rcloneRemote, setRcloneRemote } = useAppleMusicStore();
+  const {
+    mediaUserToken, storefront, alacFix, autoUpload, setAutoUpload, rcloneRemote, setRcloneRemote,
+    lrcFormat, lrcType, language, tagSortOrder, saveLrcFile, saveArtistCover, useSongInfoForPlaylist
+  } = useAppleMusicStore();
 
   const handleSync = () => {
     const payload: AppleMusicConfigSaveMessage = {
@@ -16,7 +19,14 @@ export const AppleMusicSettingsUI: React.FC = () => {
       storefront,
       alacFix,
       autoUpload,
-      rcloneRemote
+      rcloneRemote,
+      lrcFormat,
+      lrcType,
+      language,
+      tagSortOrder,
+      saveLrcFile,
+      saveArtistCover,
+      useSongInfoForPlaylist
     };
     SocketManager.getInstance().emit(MessageType.APPLE_MUSIC_CONFIG_SAVE, payload);
   };
