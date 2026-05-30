@@ -99,31 +99,30 @@ export const AppleMusicApp: React.FC = () => {
       </div>
 
       {/* Header Bar */}
-      <div className="relative z-10 flex items-center justify-between px-6 py-4 border-b border-white/10 bg-[#0a0a0a]/60 backdrop-blur-xl">
-        <div className="flex items-center gap-4">
-          <button
-            onClick={() => setActiveView('MUSIC_RIPS')}
-            className="p-2 rounded-full hover:bg-white/10 transition-colors text-muted-foreground hover:text-white"
-          >
-            <ArrowLeft size={20} />
-          </button>
-          <div className="flex items-center gap-3">
-            <div className="w-8 h-8 rounded-lg bg-gradient-to-tr from-[#FA243C] to-[#fa5e6e] flex items-center justify-center shadow-lg shadow-[#FA243C]/20">
-              <Apple size={18} className="text-white mb-0.5" />
-            </div>
-            <div>
+      <div className="relative z-10 flex flex-col border-b border-white/10 bg-[#0a0a0a]/60 backdrop-blur-xl">
+
+        {/* Top Row: Title & Back Button */}
+        <div className="flex items-center justify-between px-6 py-4">
+          <div className="flex items-center gap-4">
+            <button
+              onClick={() => setActiveView('MUSIC_RIPS')}
+              className="p-2 rounded-full hover:bg-white/10 transition-colors text-muted-foreground hover:text-white"
+              title="Back to Hub"
+            >
+              <ArrowLeft size={20} />
+            </button>
+            <div className="flex items-center gap-3">
+              <div className="w-8 h-8 rounded-lg bg-gradient-to-tr from-[#FA243C] to-[#fa5e6e] flex items-center justify-center shadow-lg shadow-[#FA243C]/20">
+                <Apple size={18} className="text-white mb-0.5" />
+              </div>
               <h2 className="text-lg font-bold text-white leading-tight">Apple Music Engine</h2>
-              <p className="text-[10px] uppercase tracking-wider text-muted-foreground font-semibold">
-                {activeTab === 'RIPPER' ? 'Media Acquisition Phase' :
-                 activeTab === 'WRAPPER' ? 'DRM Negotiation Matrix' :
-                 activeTab === 'CONFIG' ? 'Engine Configuration' : 'Swarm Settings'}
-              </p>
             </div>
           </div>
         </div>
 
-        {/* Tab Navigation */}
-        <div className="flex items-center bg-black/40 p-1 rounded-xl border border-white/10 overflow-x-auto">
+        {/* Bottom Row: Tab Navigation */}
+        <div className="px-6 pb-4">
+          <div className="flex items-center bg-black/40 p-1 rounded-xl border border-white/10 overflow-x-auto w-fit">
           <button
             onClick={() => setActiveTab('RIPPER')}
             className={`flex items-center gap-2 px-4 py-2 rounded-lg text-sm font-semibold transition-all whitespace-nowrap ${
@@ -160,6 +159,7 @@ export const AppleMusicApp: React.FC = () => {
             <Database size={16} />
             Storage & Settings
           </button>
+          </div>
         </div>
       </div>
 
