@@ -58,4 +58,7 @@ var MessageType;
     MessageType["WRAPPER_STATUS_UPDATE"] = "WRAPPER_STATUS_UPDATE";
     MessageType["APPLE_MUSIC_RIP_REQUEST"] = "APPLE_MUSIC_RIP_REQUEST";
     MessageType["RIPPER_TELEMETRY"] = "RIPPER_TELEMETRY";
+    MessageType["APPLE_MUSIC_CONFIG_SAVE"] = "APPLE_MUSIC_CONFIG_SAVE";
+    MessageType["APPLE_MUSIC_CONFIG_LOAD"] = "APPLE_MUSIC_CONFIG_LOAD";
+    MessageType["APPLE_MUSIC_CONFIG_DATA"] = "APPLE_MUSIC_CONFIG_DATA";
 })(MessageType || (exports.MessageType = MessageType = {}));

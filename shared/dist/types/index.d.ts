@@ -247,10 +247,28 @@ export interface AppleMusicRipRequestMessage extends BaseMessage {
     qualityLimit: '192000' | '96000' | '48000';
     embedLrc: boolean;
     animatedArt: boolean;
+    mediaUserToken: string;
+    storefront: string;
 }
 export interface RipperTelemetryMessage extends BaseMessage {
     type: MessageType.RIPPER_TELEMETRY;
     workerId: string;
     jobId: string;
     log: string;
+}
+export interface AppleMusicConfigSaveMessage extends BaseMessage {
+    type: MessageType.APPLE_MUSIC_CONFIG_SAVE;
+    mediaUserToken: string;
+    storefront: string;
+    alacFix: boolean;
+    autoUpload: boolean;
+    rcloneRemote: string;
+}
+export interface AppleMusicConfigDataMessage extends BaseMessage {
+    type: MessageType.APPLE_MUSIC_CONFIG_DATA;
+    mediaUserToken: string;
+    storefront: string;
+    alacFix: boolean;
+    autoUpload: boolean;
+    rcloneRemote: string;
 }

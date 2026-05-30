@@ -67,7 +67,7 @@ async function bootWorker() {
     });
   });
 
-  ripperService.on('job_complete', (data) => {
+  ripperService.on('job_complete', async (data) => {
     socket.emit(MessageType.RIPPER_TELEMETRY, {
       type: MessageType.RIPPER_TELEMETRY,
       timestamp: Date.now(),
@@ -75,7 +75,54 @@ async function bootWorker() {
       jobId: data.jobId,
       log: `[SYSTEM] Job finished with status: ${data.status}`
     });
-    // Here we would orchestrate RcloneDaemonManager to upload data.downloadDir
+
+    if (data.status === 'SUCCESS' && data.downloadDir) {
+        if (!data.autoUpload) {
+             socket.emit(MessageType.RIPPER_TELEMETRY, {
+                type: MessageType.RIPPER_TELEMETRY,
+                timestamp: Date.now(),
+                workerId: socket.id,
+                jobId: data.jobId,
+                log: `[SYSTEM] Cloud Handoff Disabled by User. Keeping files in ephemeral storage.`
+            });
+            return;
+        }
+
+        try {
+            socket.emit(MessageType.RIPPER_TELEMETRY, {
+                type: MessageType.RIPPER_TELEMETRY,
+                timestamp: Date.now(),
+                workerId: socket.id,
+                jobId: data.jobId,
+                log: `[SYSTEM] Initiating Rclone Cloud Handoff to ${data.rcloneRemote}...`
+            });
+
+            // Using the UI-provided rcloneRemote path (e.g., 'remote:/Media/AppleMusic_Rips')
+            // Split it if it contains a path, otherwise use root.
+            const remoteParts = data.rcloneRemote.split(':');
+            const fsStr = remoteParts[0] + ':';
+            const pathStr = remoteParts.length > 1 ? remoteParts[1] : '/';
+
+            await rcloneManager.uploadDirectory(data.downloadDir, fsStr, pathStr);
+
+            socket.emit(MessageType.RIPPER_TELEMETRY, {
+                type: MessageType.RIPPER_TELEMETRY,
+                timestamp: Date.now(),
+                workerId: socket.id,
+                jobId: data.jobId,
+                log: `[SUCCESS] Cloud Handoff Complete. Files preserved securely.`
+            });
+        } catch (e: any) {
+            console.error(`[Worker] Rclone Handoff Error:`, e);
+            socket.emit(MessageType.RIPPER_TELEMETRY, {
+                type: MessageType.RIPPER_TELEMETRY,
+                timestamp: Date.now(),
+                workerId: socket.id,
+                jobId: data.jobId,
+                log: `[ERROR] Cloud Handoff Failed: ${e.message}`
+            });
+        }
+    }
   });
 
   socket.on('connect', () => {
@@ -453,11 +500,15 @@ async function bootWorker() {
     try {
       await ripperService.executeRipJob({
         url: msg.url,
-        mediaUserToken: 'dummy-token', // Securely fetch this in prod
+        mediaUserToken: msg.mediaUserToken || '',
+        storefront: msg.storefront || 'us',
         format: msg.format,
         qualityLimit: msg.qualityLimit,
         embedLrc: msg.embedLrc,
-        animatedArt: msg.animatedArt
+        animatedArt: msg.animatedArt,
+        // Pass through routing preferences to the 'job_complete' handler
+        autoUpload: msg.autoUpload ?? true,
+        rcloneRemote: msg.rcloneRemote || 'remote:/Media/AppleMusic_Rips'
       });
     } catch (e: any) {
       console.error(`[Worker] Ripper Execution Error:`, e);

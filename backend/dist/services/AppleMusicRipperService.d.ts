@@ -8,6 +8,8 @@ export interface RipperConfig {
     embedLrc: boolean;
     animatedArt: boolean;
     storefront?: string;
+    autoUpload?: boolean;
+    rcloneRemote?: string;
 }
 export declare class AppleMusicRipperService extends EventEmitter {
     private readonly BASE_DIR;

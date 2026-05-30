@@ -14,6 +14,8 @@ export interface RipperConfig {
     embedLrc: boolean;
     animatedArt: boolean;
     storefront?: string;
+    autoUpload?: boolean;
+    rcloneRemote?: string;
 }
 
 export class AppleMusicRipperService extends EventEmitter {
@@ -148,9 +150,9 @@ export class AppleMusicRipperService extends EventEmitter {
         this.log(jobId, `Spawning Go Ripper Core: ${cmd} ${args.join(' ')}`);
 
         const childProc = spawn(isRipperInstalled ? cmd : 'bash', isRipperInstalled ? args : ['-c', `
-            echo "[INFO] Loading ${configPath}..."
+            echo "[INFO] Loading $CONFIG_PATH..."
             sleep 1
-            echo "[INFO] Resolving URL: ${config.url}"
+            echo "[INFO] Resolving URL: $TARGET_URL"
             sleep 2
             echo "[INFO] Requesting Wrapper Decryption via 127.0.0.1:10020"
             sleep 2
@@ -160,10 +162,15 @@ export class AppleMusicRipperService extends EventEmitter {
             echo "Downloading segments (42/42)..."
             echo "[INFO] Muxing audio tracks with MP4Box..."
             sleep 2
-            echo "[SUCCESS] Saved to ${path.join(workspaceDir, 'downloads', 'track.m4a')}"
+            echo "[SUCCESS] Saved to $DOWNLOAD_PATH"
         `], {
             cwd: workspaceDir,
-            env: { ...process.env }
+            env: {
+                ...process.env,
+                TARGET_URL: config.url,
+                CONFIG_PATH: configPath,
+                DOWNLOAD_PATH: path.join(workspaceDir, 'downloads', 'track.m4a')
+            }
         });
 
         this.activeJobs.set(jobId, childProc);
@@ -195,7 +202,9 @@ export class AppleMusicRipperService extends EventEmitter {
                 this.emit('job_complete', {
                     jobId,
                     status: 'SUCCESS',
-                    downloadDir: path.join(workspaceDir, 'downloads')
+                    downloadDir: path.join(workspaceDir, 'downloads'),
+                    autoUpload: config.autoUpload,
+                    rcloneRemote: config.rcloneRemote
                 });
             } else {
                 this.emit('job_complete', {

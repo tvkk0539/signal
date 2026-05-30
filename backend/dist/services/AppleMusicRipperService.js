@@ -151,9 +151,9 @@ class AppleMusicRipperService extends events_1.EventEmitter {
         // 3. Sub-Process Execution
         this.log(jobId, `Spawning Go Ripper Core: ${cmd} ${args.join(' ')}`);
         const childProc = (0, child_process_1.spawn)(isRipperInstalled ? cmd : 'bash', isRipperInstalled ? args : ['-c', `
-            echo "[INFO] Loading ${configPath}..."
+            echo "[INFO] Loading $CONFIG_PATH..."
             sleep 1
-            echo "[INFO] Resolving URL: ${config.url}"
+            echo "[INFO] Resolving URL: $TARGET_URL"
             sleep 2
             echo "[INFO] Requesting Wrapper Decryption via 127.0.0.1:10020"
             sleep 2
@@ -163,10 +163,15 @@ class AppleMusicRipperService extends events_1.EventEmitter {
             echo "Downloading segments (42/42)..."
             echo "[INFO] Muxing audio tracks with MP4Box..."
             sleep 2
-            echo "[SUCCESS] Saved to ${path.join(workspaceDir, 'downloads', 'track.m4a')}"
+            echo "[SUCCESS] Saved to $DOWNLOAD_PATH"
         `], {
             cwd: workspaceDir,
-            env: { ...process.env }
+            env: {
+                ...process.env,
+                TARGET_URL: config.url,
+                CONFIG_PATH: configPath,
+                DOWNLOAD_PATH: path.join(workspaceDir, 'downloads', 'track.m4a')
+            }
         });
         this.activeJobs.set(jobId, childProc);
         // 4. The Telemetry Pipe (Routing stdout to Relay)
@@ -193,7 +198,9 @@ class AppleMusicRipperService extends events_1.EventEmitter {
                 this.emit('job_complete', {
                     jobId,
                     status: 'SUCCESS',
-                    downloadDir: path.join(workspaceDir, 'downloads')
+                    downloadDir: path.join(workspaceDir, 'downloads'),
+                    autoUpload: config.autoUpload,
+                    rcloneRemote: config.rcloneRemote
                 });
             }
             else {

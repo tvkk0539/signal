@@ -1,14 +1,17 @@
 import React, { useState } from 'react';
 import { useLayoutStore } from '../../store/layoutStore';
-import { Apple, ArrowLeft, Download, Settings2, Terminal, Disc3, PlayCircle, Radio, KeyRound } from 'lucide-react';
+import { Apple, ArrowLeft, Download, Settings2, Terminal, Disc3, PlayCircle, Radio, KeyRound, Cog, Database } from 'lucide-react';
 import { AppleMusicWrapperUI } from './AppleMusicWrapperUI';
+import { AppleMusicConfigUI } from './AppleMusicConfigUI';
+import { AppleMusicSettingsUI } from './AppleMusicSettingsUI';
 import { SocketManager } from '../../worker/SocketManager';
 import { MessageType } from '@swarm/shared';
 import type { AppleMusicRipRequestMessage, RipperTelemetryMessage } from '@swarm/shared';
+import { useAppleMusicStore } from '../../store/appleMusicStore';
 
 export const AppleMusicApp: React.FC = () => {
   const { setActiveView } = useLayoutStore();
-  const [activeTab, setActiveTab] = useState<'RIPPER' | 'WRAPPER'>('RIPPER');
+  const [activeTab, setActiveTab] = useState<'RIPPER' | 'WRAPPER' | 'CONFIG' | 'SETTINGS'>('RIPPER');
 
   const [url, setUrl] = useState('');
   const [format, setFormat] = useState<'alac' | 'flac' | 'atmos' | 'aac'>('alac');
@@ -24,8 +27,20 @@ export const AppleMusicApp: React.FC = () => {
   ]);
   const [_currentJobId, setCurrentJobId] = useState<string | null>(null);
 
+  const { mediaUserToken, storefront, setMediaUserToken, setStorefront, setAutoUpload, setRcloneRemote } = useAppleMusicStore();
+
   React.useEffect(() => {
     const socketManager = SocketManager.getInstance();
+
+    // Load config on mount
+    socketManager.emit(MessageType.APPLE_MUSIC_CONFIG_LOAD, { type: MessageType.APPLE_MUSIC_CONFIG_LOAD, timestamp: Date.now() });
+
+    const handleConfigData = (msg: any) => {
+       if (msg.mediaUserToken) setMediaUserToken(msg.mediaUserToken);
+       if (msg.storefront) setStorefront(msg.storefront);
+       if (msg.autoUpload !== undefined) setAutoUpload(msg.autoUpload);
+       if (msg.rcloneRemote) setRcloneRemote(msg.rcloneRemote);
+    };
 
     const handleTelemetry = (msg: RipperTelemetryMessage) => {
        setIsRipping(true);
@@ -42,9 +57,11 @@ export const AppleMusicApp: React.FC = () => {
     };
 
     socketManager.on(MessageType.RIPPER_TELEMETRY, handleTelemetry);
+    socketManager.on(MessageType.APPLE_MUSIC_CONFIG_DATA, handleConfigData);
 
     return () => {
        socketManager.off(MessageType.RIPPER_TELEMETRY, handleTelemetry);
+       socketManager.off(MessageType.APPLE_MUSIC_CONFIG_DATA, handleConfigData);
     };
   }, []);
 
@@ -64,7 +81,9 @@ export const AppleMusicApp: React.FC = () => {
        format,
        qualityLimit: quality,
        embedLrc,
-       animatedArt
+       animatedArt,
+       mediaUserToken,
+       storefront
     };
 
     socketManager.emit(MessageType.APPLE_MUSIC_RIP_REQUEST, payload);
@@ -95,17 +114,19 @@ export const AppleMusicApp: React.FC = () => {
             <div>
               <h2 className="text-lg font-bold text-white leading-tight">Apple Music Engine</h2>
               <p className="text-[10px] uppercase tracking-wider text-muted-foreground font-semibold">
-                {activeTab === 'RIPPER' ? 'Media Acquisition Phase' : 'DRM Negotiation Matrix'}
+                {activeTab === 'RIPPER' ? 'Media Acquisition Phase' :
+                 activeTab === 'WRAPPER' ? 'DRM Negotiation Matrix' :
+                 activeTab === 'CONFIG' ? 'Engine Configuration' : 'Swarm Settings'}
               </p>
             </div>
           </div>
         </div>
 
         {/* Tab Navigation */}
-        <div className="flex items-center bg-black/40 p-1 rounded-xl border border-white/10">
+        <div className="flex items-center bg-black/40 p-1 rounded-xl border border-white/10 overflow-x-auto">
           <button
             onClick={() => setActiveTab('RIPPER')}
-            className={`flex items-center gap-2 px-4 py-2 rounded-lg text-sm font-semibold transition-all ${
+            className={`flex items-center gap-2 px-4 py-2 rounded-lg text-sm font-semibold transition-all whitespace-nowrap ${
               activeTab === 'RIPPER' ? 'bg-white/10 text-white shadow-sm' : 'text-muted-foreground hover:text-white/80'
             }`}
           >
@@ -114,12 +135,30 @@ export const AppleMusicApp: React.FC = () => {
           </button>
           <button
             onClick={() => setActiveTab('WRAPPER')}
-            className={`flex items-center gap-2 px-4 py-2 rounded-lg text-sm font-semibold transition-all ${
+            className={`flex items-center gap-2 px-4 py-2 rounded-lg text-sm font-semibold transition-all whitespace-nowrap ${
               activeTab === 'WRAPPER' ? 'bg-white/10 text-white shadow-sm' : 'text-muted-foreground hover:text-white/80'
             }`}
           >
             <KeyRound size={16} />
             Decryption Wrapper
+          </button>
+          <button
+            onClick={() => setActiveTab('CONFIG')}
+            className={`flex items-center gap-2 px-4 py-2 rounded-lg text-sm font-semibold transition-all whitespace-nowrap ${
+              activeTab === 'CONFIG' ? 'bg-white/10 text-white shadow-sm' : 'text-muted-foreground hover:text-white/80'
+            }`}
+          >
+            <Cog size={16} />
+            Configuration
+          </button>
+          <button
+            onClick={() => setActiveTab('SETTINGS')}
+            className={`flex items-center gap-2 px-4 py-2 rounded-lg text-sm font-semibold transition-all whitespace-nowrap ${
+              activeTab === 'SETTINGS' ? 'bg-white/10 text-white shadow-sm' : 'text-muted-foreground hover:text-white/80'
+            }`}
+          >
+            <Database size={16} />
+            Storage & Settings
           </button>
         </div>
       </div>
@@ -269,9 +308,17 @@ export const AppleMusicApp: React.FC = () => {
           <div className="absolute inset-0 pointer-events-none bg-[linear-gradient(rgba(18,16,16,0)_50%,rgba(0,0,0,0.25)_50%),linear-gradient(90deg,rgba(255,0,0,0.06),rgba(0,255,0,0.02),rgba(0,0,255,0.06))] bg-[length:100%_4px,3px_100%] opacity-20" />
         </div>
         </>
-        ) : (
+        ) : activeTab === 'WRAPPER' ? (
            <div className="w-full h-full overflow-y-auto">
               <AppleMusicWrapperUI />
+           </div>
+        ) : activeTab === 'CONFIG' ? (
+           <div className="w-full h-full overflow-y-auto">
+              <AppleMusicConfigUI />
+           </div>
+        ) : (
+           <div className="w-full h-full overflow-y-auto">
+              <AppleMusicSettingsUI />
            </div>
         )}
 

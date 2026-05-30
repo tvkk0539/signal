@@ -197,6 +197,32 @@ export class RcloneDaemonManager {
 
   // Phase 4: On-The-Fly Memory Streaming
   // Streams a file from rclone VFS as a buffer stream, allowing us to pipe it into WebRTC
+  public async uploadDirectory(localPath: string, remoteFs: string, remotePath: string): Promise<void> {
+    console.log(`[Rclone] Uploading directory ${localPath} to ${remoteFs}${remotePath}`);
+    return new Promise((resolve, reject) => {
+        // Use standard rclone copy command instead of RC API for large directory syncing
+        const child = spawn('rclone', [
+            'copy',
+            localPath,
+            `${remoteFs}${remotePath}`,
+            '--stats', '1s',
+            '-v'
+        ]);
+
+        child.stdout.on('data', (data) => console.log(`[Rclone Upload] ${data.toString().trim()}`));
+        child.stderr.on('data', (data) => console.log(`[Rclone Upload] ${data.toString().trim()}`));
+
+        child.on('close', (code) => {
+            if (code === 0) {
+                console.log(`[Rclone] Upload complete for ${localPath}`);
+                resolve();
+            } else {
+                reject(new Error(`Rclone copy exited with code ${code}`));
+            }
+        });
+    });
+  }
+
   public async streamFile(fs: string, path: string, startByte: number = 0, endByte?: number): Promise<NodeJS.ReadableStream> {
     if (!this.isRunning) {
       throw new Error('Rclone daemon is not running');

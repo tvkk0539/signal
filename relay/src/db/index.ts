@@ -6,14 +6,17 @@ import { MongoUserRepository } from './providers/mongo/MongoUserRepository';
 import { MongoAuditLogRepository } from './providers/mongo/MongoAuditLogRepository';
 import { InMemoryUserRepository } from './providers/mock/InMemoryUserRepository';
 import { InMemoryAuditLogRepository } from './providers/mock/InMemoryAuditLogRepository';
+import { InMemoryAppleMusicRepository } from './providers/mock/InMemoryAppleMusicRepository';
 import { createMongoConnection } from './providers/mongo/connection';
 
 import { ReplicatedUserRepository } from './core/ReplicatedUserRepository';
 import { ReplicatedAuditLogRepository } from './core/ReplicatedAuditLogRepository';
 import { ReplicatedChatRepository } from './core/ReplicatedChatRepository';
+import { ReplicatedAppleMusicRepository } from './core/ReplicatedAppleMusicRepository';
+import { IAppleMusicRepository } from './interfaces/IAppleMusicRepository';
 
 export type DatabaseEngine = 'MONGODB' | 'POSTGRES' | 'SUPABASE' | 'FIREBASE' | 'SQLITE' | 'MOCK';
-export type DomainService = 'AUTH' | 'AUDIT' | 'CHAT';
+export type DomainService = 'AUTH' | 'AUDIT' | 'CHAT' | 'APPLE_MUSIC';
 
 export interface DatabaseConfig {
   engine: DatabaseEngine;
@@ -31,12 +34,14 @@ class DatabaseManager {
   private userRepository!: IUserRepository;
   private auditLogRepository!: IAuditLogRepository;
   private chatRepository!: IChatRepository;
+  private appleMusicRepository!: IAppleMusicRepository;
 
   // The state map to track which engines are running which domain (Primary + Mirrors)
   private currentRouting: Record<DomainService, DomainRoutingConfig> = {
     AUTH: { primary: { engine: 'MOCK' }, mirrors: [] },
     AUDIT: { primary: { engine: 'MOCK' }, mirrors: [] },
-    CHAT: { primary: { engine: 'MOCK' }, mirrors: [] }
+    CHAT: { primary: { engine: 'MOCK' }, mirrors: [] },
+    APPLE_MUSIC: { primary: { engine: 'MOCK' }, mirrors: [] }
   };
 
   async initialize() {
@@ -48,6 +53,7 @@ class DatabaseManager {
        await this.hotSwapDomain('AUTH', { primary: { engine: defaultEngine }, mirrors: [] });
        await this.hotSwapDomain('AUDIT', { primary: { engine: defaultEngine }, mirrors: [] });
        await this.hotSwapDomain('CHAT', { primary: { engine: defaultEngine }, mirrors: [] });
+       await this.hotSwapDomain('APPLE_MUSIC', { primary: { engine: 'MOCK' }, mirrors: [] }); // Mock default until Mongo schema is written
     } catch (e) {
        console.warn(`[DB Manager] Primary initialize failed, falling back to MOCK universally.`);
        await this.hotSwapDomain('AUTH', { primary: { engine: 'MOCK' }, mirrors: [] });
@@ -59,6 +65,14 @@ class DatabaseManager {
   // The Magic Function: Hot-Swaps a specific domain's database engine (and its mirrors) at runtime
   async hotSwapDomain(domain: DomainService, config: DomainRoutingConfig) {
     console.log(`[DB Manager] Hot-swapping ${domain} domain to Primary: ${config.primary.engine} with ${config.mirrors.length} mirrors...`);
+
+    if (domain === 'APPLE_MUSIC') {
+       const primaryAdapter = new InMemoryAppleMusicRepository();
+       const mirrorAdapters = config.mirrors.map(() => new InMemoryAppleMusicRepository());
+       this.appleMusicRepository = new ReplicatedAppleMusicRepository(primaryAdapter, mirrorAdapters);
+       this.currentRouting.APPLE_MUSIC = config;
+       return;
+    }
 
     try {
       // 1. Instantiate the Primary
@@ -183,6 +197,11 @@ class DatabaseManager {
   getChat(): IChatRepository {
     if (!this.chatRepository) throw new Error("DatabaseManager Chat not initialized.");
     return this.chatRepository;
+  }
+
+  public getAppleMusic() {
+    if (!this.appleMusicRepository) throw new Error("DatabaseManager Apple Music not initialized.");
+    return this.appleMusicRepository;
   }
 }
 

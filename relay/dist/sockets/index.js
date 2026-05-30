@@ -279,6 +279,81 @@ function setupSockets(io) {
                 roundRobinIndex++;
             });
         });
+        // --- Phase 9: Media Ingestion Routing ---
+        // The UI doesn't know which worker to talk to initially, so it sends the request here.
+        // The Relay load-balances it to an idle worker.
+        const routeToIdleWorker = (messageType, msg) => {
+            const workers = Array.from(exports.connectedWorkers.values());
+            if (workers.length === 0) {
+                console.log(`[Relay] No online workers available to handle ${messageType}.`);
+                return;
+            }
+            // Select first idle worker (or round robin)
+            const targetWorker = workers[0];
+            targetWorker.socket.emit(messageType, { ...msg, workerId: targetWorker.socket.id });
+            console.log(`[Relay] Routed ${messageType} to Worker ${targetWorker.socket.id}`);
+        };
+        socket.on(shared_1.MessageType.WRAPPER_START_REQUEST, (msg) => routeToIdleWorker(shared_1.MessageType.WRAPPER_START_REQUEST, msg));
+        socket.on(shared_1.MessageType.WRAPPER_STOP_REQUEST, (msg) => routeToIdleWorker(shared_1.MessageType.WRAPPER_STOP_REQUEST, msg));
+        socket.on(shared_1.MessageType.WRAPPER_2FA_SUBMIT, (msg) => routeToIdleWorker(shared_1.MessageType.WRAPPER_2FA_SUBMIT, msg));
+        socket.on(shared_1.MessageType.APPLE_MUSIC_RIP_REQUEST, (msg) => routeToIdleWorker(shared_1.MessageType.APPLE_MUSIC_RIP_REQUEST, msg));
+        // --- Phase 9 & 10: Media Config Database Routing ---
+        socket.on(shared_1.MessageType.APPLE_MUSIC_CONFIG_SAVE, async (msg) => {
+            try {
+                const db = db_1.dbManager.getAppleMusic();
+                await db.saveConfig({
+                    mediaUserToken: msg.mediaUserToken,
+                    storefront: msg.storefront,
+                    autoUpload: msg.autoUpload,
+                    rcloneRemote: msg.rcloneRemote
+                });
+                console.log(`[Relay] Saved Apple Music Config for Swarm.`);
+                // Broadcast config to all other UI clients to keep them in sync
+                socket.broadcast.emit(shared_1.MessageType.APPLE_MUSIC_CONFIG_DATA, {
+                    type: shared_1.MessageType.APPLE_MUSIC_CONFIG_DATA,
+                    ...msg
+                });
+            }
+            catch (e) {
+                console.error(`[Relay] Failed to save Apple Music Config:`, e.message);
+            }
+        });
+        socket.on(shared_1.MessageType.APPLE_MUSIC_CONFIG_LOAD, async () => {
+            try {
+                const db = db_1.dbManager.getAppleMusic();
+                const config = await db.getConfig();
+                if (config) {
+                    socket.emit(shared_1.MessageType.APPLE_MUSIC_CONFIG_DATA, {
+                        type: shared_1.MessageType.APPLE_MUSIC_CONFIG_DATA,
+                        timestamp: Date.now(),
+                        mediaUserToken: config.mediaUserToken,
+                        storefront: config.storefront,
+                        autoUpload: config.autoUpload,
+                        rcloneRemote: config.rcloneRemote,
+                        alacFix: false // Mock for now
+                    });
+                }
+            }
+            catch (e) {
+                console.error(`[Relay] Failed to load Apple Music Config:`, e.message);
+            }
+        });
+        // Reverse Routing: From Worker back to UI clients
+        socket.on(shared_1.MessageType.WRAPPER_STATUS_UPDATE, (msg) => {
+            exports.connectedUIClients.forEach((clientSocket) => {
+                clientSocket.emit(shared_1.MessageType.WRAPPER_STATUS_UPDATE, msg);
+            });
+        });
+        socket.on(shared_1.MessageType.WRAPPER_2FA_CHALLENGE, (msg) => {
+            exports.connectedUIClients.forEach((clientSocket) => {
+                clientSocket.emit(shared_1.MessageType.WRAPPER_2FA_CHALLENGE, msg);
+            });
+        });
+        socket.on(shared_1.MessageType.RIPPER_TELEMETRY, (msg) => {
+            exports.connectedUIClients.forEach((clientSocket) => {
+                clientSocket.emit(shared_1.MessageType.RIPPER_TELEMETRY, msg);
+            });
+        });
         socket.on(shared_1.MessageType.TASK_PROGRESS, (msg) => {
             // Broadcast to UI
             exports.connectedUIClients.forEach((clientSocket) => {
