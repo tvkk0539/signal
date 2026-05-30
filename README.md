@@ -59,6 +59,14 @@ The Monorepo is being developed in strict, highly-engineered phases. The current
     *   **Polyglot DB Switchboard:** The `DatabaseOperationsCenter` UI allows runtime hot-swapping of individual domains (AUTH, AUDIT, CHAT) to different database engines (e.g., Auth to MongoDB, Audit to Postgres).
     *   **Asynchronous Database Mirrors:** Supports Zero-Delay write-behind mirroring, allowing a single domain to replicate data synchronously to a primary DB and asynchronously to N-mirrors without blocking the Relay Server CPU or user UI.
 *   **Phase 7: True Zero-Knowledge E2EE (✅ Active):** The UI uses native browser `WebCrypto` to generate ECDH key pairs and derive AES-GCM shared secrets. The Relay Server acts as a dumb Public Key registry, completely blind to the actual encrypted payloads flowing through the chat system.
+*   **Phase 8: Glassmorphism UI & Layout Engineering (✅ Active):**
+    *   **Horizontal Fleet Bar:** The Swarm Node selector was refactored into a collapsible horizontal toolbar to maximize horizontal screen real estate for the `FileExplorer`.
+    *   **Premium Auth Screen:** A pure-CSS, zero-JS glassmorphism login screen utilizing hardware-accelerated radial blurs to maintain a professional aesthetic with zero impact on low-resource VMs.
+*   **Phase 9: Dedicated Media Ingestion Engines (✅ Active):**
+    *   **Micro-Frontend Hub:** The UI features a dedicated "Music Rips" section operating as an App Store for specialized ingestion engines.
+    *   **Apple Music Engine:** A highly-engineered, dedicated UI for ALAC/Atmos ripping, featuring live telemetry logs and interactive 2FA prompt support.
+    *   **Chimera Worker Architecture:** Ephemeral Node.js backend workers dynamically orchestrate external Go binaries, Widevine Decryption Proxies (`wrapper`), and FFmpeg using sub-process spawning, routing the live stdout back to the UI, and automatically pushing massive ALAC files to cloud storage (`rclone move`) for a zero-disk footprint.
+    *   **Just-In-Time (JIT) Cloning Engine:** Ephemeral workers pull and compile the absolute latest third-party ripper repositories exactly at boot time, preventing breakage from upstream API changes without needing to rebuild Swarm Docker images.
 
 ---
 

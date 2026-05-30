@@ -12,10 +12,12 @@
     "@grpc/proto-loader": "^0.8.1",
     "@swarm/shared": "*",
     "axios": "^1.16.1",
+    "js-yaml": "^4.1.1",
     "socket.io-client": "^4.7.5",
     "werift": "^0.23.0"
   },
   "devDependencies": {
+    "@types/js-yaml": "^4.0.9",
     "@types/node": "^20.0.0",
     "ts-node-dev": "^2.0.0",
     "typescript": "^5.0.0"
