@@ -259,6 +259,24 @@ export interface AppleMusicRipRequestMessage extends BaseMessage {
     saveArtistCover?: boolean;
     useSongInfoForPlaylist?: boolean;
     alacFix?: boolean;
+    coverSize?: string;
+    coverFormat?: 'jpg' | 'png' | 'original';
+    explicitChoice?: string;
+    cleanChoice?: string;
+    appleMasterChoice?: string;
+    albumFolderFormat?: string;
+    playlistFolderFormat?: string;
+    songFileFormat?: string;
+    artistFolderFormat?: string;
+    maxMemoryLimit?: number;
+    exitOnError?: boolean;
+    getM3u8Mode?: 'all' | 'hires';
+    aacType?: 'aac-lc' | 'aac' | 'aac-binaural' | 'aac-downmix';
+    mvAudioType?: 'atmos' | 'ac3' | 'aac';
+    mvMax?: number;
+    limitMax?: number;
+    dlAlbumcoverForPlaylist?: boolean;
+    embyAnimatedArtwork?: boolean;
 }
 export interface RipperTelemetryMessage extends BaseMessage {
     type: MessageType.RIPPER_TELEMETRY;
@@ -280,6 +298,24 @@ export interface AppleMusicConfigSaveMessage extends BaseMessage {
     saveLrcFile: boolean;
     saveArtistCover: boolean;
     useSongInfoForPlaylist: boolean;
+    coverSize?: string;
+    coverFormat?: 'jpg' | 'png' | 'original';
+    explicitChoice?: string;
+    cleanChoice?: string;
+    appleMasterChoice?: string;
+    albumFolderFormat?: string;
+    playlistFolderFormat?: string;
+    songFileFormat?: string;
+    artistFolderFormat?: string;
+    maxMemoryLimit?: number;
+    exitOnError?: boolean;
+    getM3u8Mode?: 'all' | 'hires';
+    aacType?: 'aac-lc' | 'aac' | 'aac-binaural' | 'aac-downmix';
+    mvAudioType?: 'atmos' | 'ac3' | 'aac';
+    mvMax?: number;
+    limitMax?: number;
+    dlAlbumcoverForPlaylist?: boolean;
+    embyAnimatedArtwork?: boolean;
 }
 export interface AppleMusicConfigDataMessage extends BaseMessage {
     type: MessageType.APPLE_MUSIC_CONFIG_DATA;
@@ -295,4 +331,22 @@ export interface AppleMusicConfigDataMessage extends BaseMessage {
     saveLrcFile: boolean;
     saveArtistCover: boolean;
     useSongInfoForPlaylist: boolean;
+    coverSize?: string;
+    coverFormat?: 'jpg' | 'png' | 'original';
+    explicitChoice?: string;
+    cleanChoice?: string;
+    appleMasterChoice?: string;
+    albumFolderFormat?: string;
+    playlistFolderFormat?: string;
+    songFileFormat?: string;
+    artistFolderFormat?: string;
+    maxMemoryLimit?: number;
+    exitOnError?: boolean;
+    getM3u8Mode?: 'all' | 'hires';
+    aacType?: 'aac-lc' | 'aac' | 'aac-binaural' | 'aac-downmix';
+    mvAudioType?: 'atmos' | 'ac3' | 'aac';
+    mvMax?: number;
+    limitMax?: number;
+    dlAlbumcoverForPlaylist?: boolean;
+    embyAnimatedArtwork?: boolean;
 }

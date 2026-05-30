@@ -17,7 +17,25 @@ export const AppleMusicConfigUI: React.FC = () => {
     tagSortOrder, setTagSortOrder,
     saveLrcFile, setSaveLrcFile,
     saveArtistCover, setSaveArtistCover,
-    useSongInfoForPlaylist, setUseSongInfoForPlaylist
+    useSongInfoForPlaylist, setUseSongInfoForPlaylist,
+    coverSize, setCoverSize,
+    coverFormat, setCoverFormat,
+    explicitChoice, setExplicitChoice,
+    cleanChoice, setCleanChoice,
+    appleMasterChoice, setAppleMasterChoice,
+    albumFolderFormat, setAlbumFolderFormat,
+    playlistFolderFormat, setPlaylistFolderFormat,
+    songFileFormat, setSongFileFormat,
+    artistFolderFormat, setArtistFolderFormat,
+    maxMemoryLimit, setMaxMemoryLimit,
+    exitOnError, setExitOnError,
+    getM3u8Mode, setGetM3u8Mode,
+    aacType, setAacType,
+    mvAudioType, setMvAudioType,
+    mvMax, setMvMax,
+    limitMax, setLimitMax,
+    dlAlbumcoverForPlaylist, setDlAlbumcoverForPlaylist,
+    embyAnimatedArtwork, setEmbyAnimatedArtwork
   } = useAppleMusicStore();
 
   const handleSave = () => {
@@ -35,7 +53,25 @@ export const AppleMusicConfigUI: React.FC = () => {
       tagSortOrder,
       saveLrcFile,
       saveArtistCover,
-      useSongInfoForPlaylist
+      useSongInfoForPlaylist,
+      coverSize,
+      coverFormat,
+      explicitChoice,
+      cleanChoice,
+      appleMasterChoice,
+      albumFolderFormat,
+      playlistFolderFormat,
+      songFileFormat,
+      artistFolderFormat,
+      maxMemoryLimit,
+      exitOnError,
+      getM3u8Mode,
+      aacType,
+      mvAudioType,
+      mvMax,
+      limitMax,
+      dlAlbumcoverForPlaylist,
+      embyAnimatedArtwork
     };
     SocketManager.getInstance().emit(MessageType.APPLE_MUSIC_CONFIG_SAVE, payload);
     // Could add a toast notification here
@@ -85,7 +121,11 @@ export const AppleMusicConfigUI: React.FC = () => {
             </div>
 
             <h4 className="text-sm uppercase tracking-wider text-muted-foreground font-bold border-b border-white/10 pb-2 mt-8">Advanced Parameters</h4>
-            <div className="grid grid-cols-2 gap-6">
+
+            {/* Split Advanced Parameters into Sections */}
+            <div className="space-y-8 mt-4">
+
+              <div className="grid grid-cols-2 gap-6">
                  <div className="space-y-1">
                     <label className="text-xs text-muted-foreground ml-1">Storefront ID</label>
                     <input
@@ -104,7 +144,6 @@ export const AppleMusicConfigUI: React.FC = () => {
                       placeholder="e.g. ko-KR"
                       className="w-full bg-black/50 border border-white/10 rounded-lg px-3 py-2 text-sm text-white focus:ring-1 focus:ring-primary outline-none font-mono"
                     />
-                    <p className="text-[10px] text-muted-foreground ml-1">Used for TTML translation lyrics.</p>
                 </div>
 
                 <div className="space-y-1">
@@ -129,55 +168,255 @@ export const AppleMusicConfigUI: React.FC = () => {
                         <option value="syllable-lyrics">Syllable (syllable-lyrics)</option>
                     </select>
                 </div>
+                <div className="space-y-1">
+                    <label className="text-xs text-muted-foreground ml-1">AAC Type</label>
+                    <select
+                        value={aacType}
+                        onChange={(e) => setAacType(e.target.value as any)}
+                        className="w-full bg-black/50 border border-white/10 rounded-lg px-3 py-2 text-sm text-white focus:ring-1 focus:ring-primary outline-none"
+                    >
+                        <option value="aac-lc">AAC-LC</option>
+                        <option value="aac">AAC</option>
+                        <option value="aac-binaural">AAC Binaural</option>
+                        <option value="aac-downmix">AAC Downmix</option>
+                    </select>
+                </div>
+                <div className="space-y-1">
+                    <label className="text-xs text-muted-foreground ml-1">M3U8 Mode</label>
+                    <select
+                        value={getM3u8Mode}
+                        onChange={(e) => setGetM3u8Mode(e.target.value as any)}
+                        className="w-full bg-black/50 border border-white/10 rounded-lg px-3 py-2 text-sm text-white focus:ring-1 focus:ring-primary outline-none"
+                    >
+                        <option value="hires">Hi-Res Only</option>
+                        <option value="all">All</option>
+                    </select>
+                </div>
+                <div className="space-y-1">
+                    <label className="text-xs text-muted-foreground ml-1">Music Video Audio Type</label>
+                    <select
+                        value={mvAudioType}
+                        onChange={(e) => setMvAudioType(e.target.value as any)}
+                        className="w-full bg-black/50 border border-white/10 rounded-lg px-3 py-2 text-sm text-white focus:ring-1 focus:ring-primary outline-none"
+                    >
+                        <option value="atmos">Atmos</option>
+                        <option value="ac3">AC3</option>
+                        <option value="aac">AAC</option>
+                    </select>
+                </div>
+                <div className="space-y-1">
+                    <label className="text-xs text-muted-foreground ml-1">Music Video Max Height (px)</label>
+                    <input
+                      type="number"
+                      value={mvMax}
+                      onChange={(e) => setMvMax(parseInt(e.target.value) || 2160)}
+                      className="w-full bg-black/50 border border-white/10 rounded-lg px-3 py-2 text-sm text-white focus:ring-1 focus:ring-primary outline-none font-mono"
+                    />
+                </div>
+              </div>
 
-                <div className="space-y-1 flex items-center justify-between bg-white/5 p-3 rounded-lg border border-white/5">
-                    <span className="text-sm text-white/90">Save LRC File</span>
-                    <input
-                      type="checkbox"
-                      checked={saveLrcFile}
-                      onChange={(e) => setSaveLrcFile(e.target.checked)}
-                      className="accent-primary w-4 h-4"
-                    />
-                </div>
+              {/* Tagging and Content Matching */}
+              <h5 className="text-xs uppercase tracking-wider text-muted-foreground font-bold border-b border-white/10 pb-2 mt-4">Tagging & Content Matching</h5>
+              <div className="grid grid-cols-3 gap-4">
+                  <div className="space-y-1">
+                      <label className="text-[10px] text-muted-foreground ml-1">Explicit Tag</label>
+                      <input
+                        type="text"
+                        value={explicitChoice}
+                        onChange={(e) => setExplicitChoice(e.target.value)}
+                        className="w-full bg-black/50 border border-white/10 rounded-lg px-3 py-2 text-sm text-white focus:ring-1 focus:ring-primary outline-none font-mono"
+                      />
+                  </div>
+                  <div className="space-y-1">
+                      <label className="text-[10px] text-muted-foreground ml-1">Clean Tag</label>
+                      <input
+                        type="text"
+                        value={cleanChoice}
+                        onChange={(e) => setCleanChoice(e.target.value)}
+                        className="w-full bg-black/50 border border-white/10 rounded-lg px-3 py-2 text-sm text-white focus:ring-1 focus:ring-primary outline-none font-mono"
+                      />
+                  </div>
+                  <div className="space-y-1">
+                      <label className="text-[10px] text-muted-foreground ml-1">Apple Master Tag</label>
+                      <input
+                        type="text"
+                        value={appleMasterChoice}
+                        onChange={(e) => setAppleMasterChoice(e.target.value)}
+                        className="w-full bg-black/50 border border-white/10 rounded-lg px-3 py-2 text-sm text-white focus:ring-1 focus:ring-primary outline-none font-mono"
+                      />
+                  </div>
+              </div>
 
-                <div className="space-y-1 flex items-center justify-between bg-white/5 p-3 rounded-lg border border-white/5">
-                    <span className="text-sm text-white/90">Save Artist Cover</span>
-                    <input
-                      type="checkbox"
-                      checked={saveArtistCover}
-                      onChange={(e) => setSaveArtistCover(e.target.checked)}
-                      className="accent-primary w-4 h-4"
-                    />
-                </div>
+              {/* Artwork Settings */}
+              <h5 className="text-xs uppercase tracking-wider text-muted-foreground font-bold border-b border-white/10 pb-2 mt-4">Artwork Settings</h5>
+              <div className="grid grid-cols-2 gap-4">
+                  <div className="space-y-1">
+                      <label className="text-xs text-muted-foreground ml-1">Cover Size</label>
+                      <input
+                        type="text"
+                        value={coverSize}
+                        onChange={(e) => setCoverSize(e.target.value)}
+                        className="w-full bg-black/50 border border-white/10 rounded-lg px-3 py-2 text-sm text-white focus:ring-1 focus:ring-primary outline-none font-mono"
+                      />
+                  </div>
+                  <div className="space-y-1">
+                      <label className="text-xs text-muted-foreground ml-1">Cover Format</label>
+                      <select
+                          value={coverFormat}
+                          onChange={(e) => setCoverFormat(e.target.value as any)}
+                          className="w-full bg-black/50 border border-white/10 rounded-lg px-3 py-2 text-sm text-white focus:ring-1 focus:ring-primary outline-none"
+                      >
+                          <option value="jpg">JPG</option>
+                          <option value="png">PNG</option>
+                          <option value="original">Original</option>
+                      </select>
+                  </div>
+              </div>
 
-                <div className="space-y-1 flex items-center justify-between bg-white/5 p-3 rounded-lg border border-white/5">
-                    <span className="text-sm text-white/90">Use SongInfo For Playlist</span>
-                    <input
-                      type="checkbox"
-                      checked={useSongInfoForPlaylist}
-                      onChange={(e) => setUseSongInfoForPlaylist(e.target.checked)}
-                      className="accent-primary w-4 h-4"
-                    />
-                </div>
+              {/* Naming Templates */}
+              <h5 className="text-xs uppercase tracking-wider text-muted-foreground font-bold border-b border-white/10 pb-2 mt-4">File & Folder Templates</h5>
+              <div className="grid grid-cols-1 gap-4">
+                  <div className="space-y-1">
+                      <label className="text-[10px] text-muted-foreground ml-1">Album Folder Format</label>
+                      <input
+                        type="text"
+                        value={albumFolderFormat}
+                        onChange={(e) => setAlbumFolderFormat(e.target.value)}
+                        className="w-full bg-black/50 border border-white/10 rounded-lg px-3 py-2 text-sm text-white focus:ring-1 focus:ring-primary outline-none font-mono"
+                      />
+                  </div>
+                  <div className="space-y-1">
+                      <label className="text-[10px] text-muted-foreground ml-1">Playlist Folder Format</label>
+                      <input
+                        type="text"
+                        value={playlistFolderFormat}
+                        onChange={(e) => setPlaylistFolderFormat(e.target.value)}
+                        className="w-full bg-black/50 border border-white/10 rounded-lg px-3 py-2 text-sm text-white focus:ring-1 focus:ring-primary outline-none font-mono"
+                      />
+                  </div>
+                  <div className="space-y-1">
+                      <label className="text-[10px] text-muted-foreground ml-1">Artist Folder Format</label>
+                      <input
+                        type="text"
+                        value={artistFolderFormat}
+                        onChange={(e) => setArtistFolderFormat(e.target.value)}
+                        className="w-full bg-black/50 border border-white/10 rounded-lg px-3 py-2 text-sm text-white focus:ring-1 focus:ring-primary outline-none font-mono"
+                      />
+                  </div>
+                  <div className="space-y-1">
+                      <label className="text-[10px] text-muted-foreground ml-1">Song File Format</label>
+                      <input
+                        type="text"
+                        value={songFileFormat}
+                        onChange={(e) => setSongFileFormat(e.target.value)}
+                        className="w-full bg-black/50 border border-white/10 rounded-lg px-3 py-2 text-sm text-white focus:ring-1 focus:ring-primary outline-none font-mono"
+                      />
+                  </div>
+              </div>
 
-                <div className="space-y-1 flex items-center justify-between bg-white/5 p-3 rounded-lg border border-white/5">
-                    <span className="text-sm text-white/90">Apply ALAC Fix Patch</span>
-                    <input
-                      type="checkbox"
-                      checked={alacFix}
-                      onChange={(e) => setAlacFix(e.target.checked)}
-                      className="accent-primary w-4 h-4"
-                    />
-                </div>
-                <div className="space-y-1 flex items-center justify-between bg-white/5 p-3 rounded-lg border border-white/5">
-                    <span className="text-sm text-white/90">Force Tag Sort Order</span>
-                    <input
-                      type="checkbox"
-                      checked={tagSortOrder}
-                      onChange={(e) => setTagSortOrder(e.target.checked)}
-                      className="accent-primary w-4 h-4"
-                    />
-                </div>
+              {/* Toggles Matrix */}
+              <h5 className="text-xs uppercase tracking-wider text-muted-foreground font-bold border-b border-white/10 pb-2 mt-4">Behavioral Toggles</h5>
+              <div className="grid grid-cols-2 gap-4">
+                  <div className="space-y-1 flex items-center justify-between bg-white/5 p-3 rounded-lg border border-white/5">
+                      <span className="text-sm text-white/90">Save LRC File</span>
+                      <input
+                        type="checkbox"
+                        checked={saveLrcFile}
+                        onChange={(e) => setSaveLrcFile(e.target.checked)}
+                        className="accent-primary w-4 h-4"
+                      />
+                  </div>
+
+                  <div className="space-y-1 flex items-center justify-between bg-white/5 p-3 rounded-lg border border-white/5">
+                      <span className="text-sm text-white/90">Save Artist Cover</span>
+                      <input
+                        type="checkbox"
+                        checked={saveArtistCover}
+                        onChange={(e) => setSaveArtistCover(e.target.checked)}
+                        className="accent-primary w-4 h-4"
+                      />
+                  </div>
+
+                  <div className="space-y-1 flex items-center justify-between bg-white/5 p-3 rounded-lg border border-white/5">
+                      <span className="text-sm text-white/90">Use SongInfo For Playlist</span>
+                      <input
+                        type="checkbox"
+                        checked={useSongInfoForPlaylist}
+                        onChange={(e) => setUseSongInfoForPlaylist(e.target.checked)}
+                        className="accent-primary w-4 h-4"
+                      />
+                  </div>
+
+                  <div className="space-y-1 flex items-center justify-between bg-white/5 p-3 rounded-lg border border-white/5">
+                      <span className="text-sm text-white/90">Download Album Cover for Playlist</span>
+                      <input
+                        type="checkbox"
+                        checked={dlAlbumcoverForPlaylist}
+                        onChange={(e) => setDlAlbumcoverForPlaylist(e.target.checked)}
+                        className="accent-primary w-4 h-4"
+                      />
+                  </div>
+
+                  <div className="space-y-1 flex items-center justify-between bg-white/5 p-3 rounded-lg border border-white/5">
+                      <span className="text-sm text-white/90">Emby Animated Artwork</span>
+                      <input
+                        type="checkbox"
+                        checked={embyAnimatedArtwork}
+                        onChange={(e) => setEmbyAnimatedArtwork(e.target.checked)}
+                        className="accent-primary w-4 h-4"
+                      />
+                  </div>
+
+                  <div className="space-y-1 flex items-center justify-between bg-white/5 p-3 rounded-lg border border-white/5">
+                      <span className="text-sm text-white/90">Apply ALAC Fix Patch</span>
+                      <input
+                        type="checkbox"
+                        checked={alacFix}
+                        onChange={(e) => setAlacFix(e.target.checked)}
+                        className="accent-primary w-4 h-4"
+                      />
+                  </div>
+                  <div className="space-y-1 flex items-center justify-between bg-white/5 p-3 rounded-lg border border-white/5">
+                      <span className="text-sm text-white/90">Force Tag Sort Order</span>
+                      <input
+                        type="checkbox"
+                        checked={tagSortOrder}
+                        onChange={(e) => setTagSortOrder(e.target.checked)}
+                        className="accent-primary w-4 h-4"
+                      />
+                  </div>
+                  <div className="space-y-1 flex items-center justify-between bg-white/5 p-3 rounded-lg border border-white/5">
+                      <span className="text-sm text-white/90">Exit On Error</span>
+                      <input
+                        type="checkbox"
+                        checked={exitOnError}
+                        onChange={(e) => setExitOnError(e.target.checked)}
+                        className="accent-primary w-4 h-4"
+                      />
+                  </div>
+              </div>
+
+              <div className="grid grid-cols-2 gap-4">
+                  <div className="space-y-1">
+                      <label className="text-[10px] text-muted-foreground ml-1">Max Memory Limit (MB)</label>
+                      <input
+                        type="number"
+                        value={maxMemoryLimit}
+                        onChange={(e) => setMaxMemoryLimit(parseInt(e.target.value) || 256)}
+                        className="w-full bg-black/50 border border-white/10 rounded-lg px-3 py-2 text-sm text-white focus:ring-1 focus:ring-primary outline-none font-mono"
+                      />
+                  </div>
+                  <div className="space-y-1">
+                      <label className="text-[10px] text-muted-foreground ml-1">Limit Max (String length)</label>
+                      <input
+                        type="number"
+                        value={limitMax}
+                        onChange={(e) => setLimitMax(parseInt(e.target.value) || 200)}
+                        className="w-full bg-black/50 border border-white/10 rounded-lg px-3 py-2 text-sm text-white focus:ring-1 focus:ring-primary outline-none font-mono"
+                      />
+                  </div>
+              </div>
+
             </div>
         </div>
 

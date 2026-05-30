@@ -18,6 +18,24 @@ export interface RipperConfig {
     saveArtistCover?: boolean;
     useSongInfoForPlaylist?: boolean;
     alacFix?: boolean;
+    coverSize?: string;
+    coverFormat?: 'jpg' | 'png' | 'original';
+    explicitChoice?: string;
+    cleanChoice?: string;
+    appleMasterChoice?: string;
+    albumFolderFormat?: string;
+    playlistFolderFormat?: string;
+    songFileFormat?: string;
+    artistFolderFormat?: string;
+    maxMemoryLimit?: number;
+    exitOnError?: boolean;
+    getM3u8Mode?: 'all' | 'hires';
+    aacType?: 'aac-lc' | 'aac' | 'aac-binaural' | 'aac-downmix';
+    mvAudioType?: 'atmos' | 'ac3' | 'aac';
+    mvMax?: number;
+    limitMax?: number;
+    dlAlbumcoverForPlaylist?: boolean;
+    embyAnimatedArtwork?: boolean;
 }
 export declare class AppleMusicRipperService extends EventEmitter {
     private readonly BASE_DIR;
