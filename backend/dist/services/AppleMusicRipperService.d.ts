@@ -46,6 +46,8 @@ export declare class AppleMusicRipperService extends EventEmitter {
     private log;
     /**
      * Dynamically generates the config.yaml required by the Go Ripper.
+     * Engineered as a Zero-Dependency Configuration Template Engine to guarantee 1:1 parity
+     * with the original Go binary's expected structure, preserving comments and exact quoting.
      */
     private generateConfigYaml;
     /**
