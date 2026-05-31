@@ -3,9 +3,33 @@ FROM node:20-bookworm-slim AS builder
 
 WORKDIR /app
 
-# Install OS dependencies required for rclone and potential ffmpeg encoding
+# Install robust build dependencies (including ffmpeg and networking tools)
 RUN apt-get update && apt-get install -y --no-install-recommends \
-    curl unzip bash ffmpeg ca-certificates \
+    ffmpeg \
+    gcc \
+    libffi-dev \
+    fuse3 \
+    build-essential \
+    zlib1g-dev \
+    wget \
+    cmake \
+    pkg-config \
+    libssl-dev \
+    unzip \
+    zip \
+    libxml2 \
+    libxslt1.1 \
+    curl \
+    sudo \
+    git \
+    net-tools \
+    iputils-ping \
+    tar \
+    make \
+    automake \
+    autoconf \
+    libtool \
+    ca-certificates \
     && rm -rf /var/lib/apt/lists/*
 
 # Copy root configurations
@@ -24,19 +48,55 @@ RUN npm run build --workspace=shared
 # Build backend worker
 RUN npm run build --workspace=backend
 
+# Install modern Go directly (to satisfy 1.23.1+ module requirements)
+ENV GO_VERSION=1.24.0 \
+    PATH="/usr/local/go/bin:$PATH"
+
+RUN ARCH=$(uname -m) && \
+    case "$ARCH" in \
+        x86_64) GO_ARCH="amd64" ;; \
+        aarch64) GO_ARCH="arm64" ;; \
+        armv7l) GO_ARCH="armv6l" ;; \
+        i686) GO_ARCH="386" ;; \
+        *) echo "Unsupported architecture: $ARCH"; exit 1 ;; \
+    esac && \
+    wget -q "https://go.dev/dl/go${GO_VERSION}.linux-${GO_ARCH}.tar.gz" -O /tmp/go.tar.gz && \
+    tar -C /usr/local -xzf /tmp/go.tar.gz && \
+    rm /tmp/go.tar.gz
+
 # Stage 2: Production Run
 FROM node:20-bookworm-slim AS runner
 
 WORKDIR /app
 
-# Install rclone, git, and go in the final runner image for JIT Chimera Worker support
+# Install robust runtime dependencies
 RUN apt-get update && apt-get install -y --no-install-recommends \
-    curl unzip bash ffmpeg fuse git golang-go ca-certificates \
+    ffmpeg \
+    libxml2 \
+    libxslt1.1 \
+    gcc \
+    file \
+    unzip \
+    curl \
+    wget \
+    fuse3 \
+    git \
+    tar \
+    net-tools \
+    iputils-ping \
+    zip \
+    nano \
+    ca-certificates \
+    sudo \
     && rm -rf /var/lib/apt/lists/* \
     && curl https://rclone.org/install.sh | bash
 
-# Set production environment variable for bootstrap
-ENV NODE_ENV=production
+# Copy modern Go from builder
+COPY --from=builder /usr/local/go /usr/local/go
+
+# Set production environment variables
+ENV NODE_ENV=production \
+    PATH="/usr/local/go/bin:$PATH"
 
 # Copy built assets
 COPY --from=builder /app/package.json ./
