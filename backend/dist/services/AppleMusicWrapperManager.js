@@ -86,38 +86,18 @@ class AppleMusicWrapperManager extends events_1.EventEmitter {
         };
     }
     async install() {
-        this.log("Starting installation process...");
-        const arch = process.arch;
-        const url = arch === 'arm64' ? this.DOWNLOAD_URL_ARM : this.DOWNLOAD_URL_X86;
-        this.log(`Detected architecture: ${arch}. Using URL: ${url}`);
+        this.log("Verifying wrapper installation...");
         return new Promise((resolve, reject) => {
-            if (!fs.existsSync(this.WRAPPER_DIR)) {
-                fs.mkdirSync(this.WRAPPER_DIR, { recursive: true });
+            const exePath = path.join(this.WRAPPER_DIR, this.BINARY_NAME);
+            if (fs.existsSync(exePath)) {
+                this.log("Wrapper proxy is already installed by Docker orchestrator.");
+                resolve();
             }
-            const rootFs = path.join(this.APP_DIR, 'rootfs', 'data');
-            if (!fs.existsSync(rootFs)) {
-                fs.mkdirSync(rootFs, { recursive: true });
+            else {
+                this.log("[ERROR] Wrapper binary not found at " + exePath);
+                this.log("Please ensure the Swarm Worker Docker image is built properly or manually run setup_wrapper.sh if deployed on bare-metal.");
+                reject(new Error("Wrapper binary missing."));
             }
-            this.log("Downloading wrapper tarball...");
-            const tarPath = path.join(this.WRAPPER_DIR, 'wrapper.tar.gz');
-            const child = (0, child_process_1.spawn)('bash', ['-c', `
-                wget -q "${url}" -O wrapper.tar.gz && \
-                tar -xzf wrapper.tar.gz && \
-                rm wrapper.tar.gz && \
-                chmod +x ${this.BINARY_NAME} && \
-                chmod -R 777 ${rootFs}
-            `], { cwd: this.WRAPPER_DIR });
-            child.stdout.on('data', (d) => this.log(d.toString().trim()));
-            child.stderr.on('data', (d) => this.log(`[ERROR] ${d.toString().trim()}`));
-            child.on('close', (code) => {
-                if (code === 0) {
-                    this.log("Installation successful.");
-                    resolve();
-                }
-                else {
-                    reject(new Error(`Installation failed with code ${code}`));
-                }
-            });
         });
     }
     async start(username, password) {
