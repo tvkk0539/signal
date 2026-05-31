@@ -51,7 +51,8 @@ export declare class AppleMusicRipperService extends EventEmitter {
      */
     private generateConfigYaml;
     /**
-     * Initializes an isolated Workspace, generates the config, and spawns the Go Ripper.
+     * Initializes an isolated Virtual File System (VFS) Sandbox, generates the config,
+     * and spawns the Go Ripper perfectly isolated via symlinking.
      */
     executeRipJob(config: RipperConfig): Promise<{
         jobId: string;

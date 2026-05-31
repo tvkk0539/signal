@@ -178,34 +178,54 @@ convert-delete-bad-alac: false # If true, delete if ALAC is damaged
     }
 
     /**
-     * Initializes an isolated Workspace, generates the config, and spawns the Go Ripper.
+     * Initializes an isolated Virtual File System (VFS) Sandbox, generates the config,
+     * and spawns the Go Ripper perfectly isolated via symlinking.
      */
     public async executeRipJob(config: RipperConfig): Promise<{ jobId: string }> {
-        // 1. Isolation: Create a highly specific workspace for this job to prevent cross-contamination
+        // 1. Isolation (VFS Vault Creation): Create a highly specific workspace to prevent cross-contamination
         const jobId = crypto.randomUUID();
         const workspaceDir = path.join(this.APP_DIR, `job_${jobId}`);
         fs.mkdirSync(workspaceDir, { recursive: true });
 
-        this.log(jobId, `Initializing new isolated rip environment at ${workspaceDir}`);
+        this.log(jobId, `Initializing new isolated VFS Sandbox at ${workspaceDir}`);
 
-        // 2. Dynamic Provisioning
+        // 2. Dynamic Provisioning (Config Injection)
         const configPath = this.generateConfigYaml(workspaceDir, config);
-        this.log(jobId, `Dynamically generated config.yaml`);
+        this.log(jobId, `Dynamically generated config.yaml inside VFS`);
 
-        // Check if JIT binary exists (For development mocking, we'll bypass if missing)
+        // Check if JIT binary exists
         const isRipperInstalled = fs.existsSync(this.BINARY_PATH);
 
-        let cmd = this.BINARY_PATH;
-        let args = ['--config', configPath];
+        let cmd = 'bash';
+        let args: string[] = [];
 
-        // Map UI format selection to command line arguments
-        if (config.format === 'atmos') args.push('--atmos');
-        if (config.format === 'aac') args.push('--aac');
+        if (isRipperInstalled) {
+            // 3. The Symlink Bridge: Abstracting the execution environment completely.
+            // We symlink the permanent binary into the ephemeral VFS workspace so the binary
+            // naturally thinks it's located inside this exact folder alongside the config.yaml.
+            const symlinkPath = path.join(workspaceDir, 'am-ripper');
 
-        args.push(config.url);
+            try {
+                fs.linkSync(this.BINARY_PATH, symlinkPath);
+                this.log(jobId, `Created hardlink bridge for binary into VFS`);
+            } catch (err: any) {
+                this.log(jobId, `[WARN] Hardlink failed, attempting symlink fallback: ${err.message}`);
+                fs.symlinkSync(this.BINARY_PATH, symlinkPath);
+            }
 
-        // 3. Sub-Process Execution
-        this.log(jobId, `Spawning Go Ripper Core: ${cmd} ${args.join(' ')}`);
+            cmd = './am-ripper';
+
+            // Map UI format selection to command line arguments
+            // NOTE: We do NOT pass --config because the Go program crashes on unknown pflags.
+            // By executing from the VFS root, the Go binary natively reads ./config.yaml
+            if (config.format === 'atmos') args.push('--atmos');
+            if (config.format === 'aac') args.push('--aac');
+
+            args.push(config.url);
+        }
+
+        // 4. Sub-Process Execution
+        this.log(jobId, `Executing sandboxed Go Ripper Core: ${cmd} ${args.join(' ')}`);
 
         const childProc = spawn(isRipperInstalled ? cmd : 'bash', isRipperInstalled ? args : ['-c', `
             echo "[INFO] Loading $CONFIG_PATH..."
