@@ -11,6 +11,7 @@ export interface AppleMusicConfig {
     saveLrcFile: boolean;
     saveArtistCover: boolean;
     useSongInfoForPlaylist: boolean;
+    wrapperStatePayload?: string;
     updatedAt: Date;
 }
 export interface IAppleMusicRepository {

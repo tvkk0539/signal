@@ -90,7 +90,11 @@ self.onmessage = (event: MessageEvent) => {
         MessageType.SDP_ANSWER,
         MessageType.ICE_CANDIDATE,
         MessageType.DB_STATE_UPDATE,
-        MessageType.PUBLIC_KEY_RESPONSE
+        MessageType.PUBLIC_KEY_RESPONSE,
+        MessageType.WRAPPER_STATUS_UPDATE,
+        MessageType.WRAPPER_2FA_CHALLENGE,
+        MessageType.RIPPER_TELEMETRY,
+        MessageType.APPLE_MUSIC_CONFIG_DATA
       ];
 
       passThroughEvents.forEach(eventType => {

@@ -256,5 +256,69 @@ class AppleMusicWrapperManager extends events_1.EventEmitter {
         const payload = text.endsWith('\n') ? text : `${text}\n`;
         this.process.stdin.write(payload);
     }
+    async exportState() {
+        this.log("Exporting Wrapper Ephemeral State...");
+        const targetDir = path.join(this.APP_DIR, 'rootfs', 'data');
+        if (!fs.existsSync(targetDir)) {
+            this.log("No state directory found to export.");
+            return null;
+        }
+        return new Promise((resolve, reject) => {
+            const child = (0, child_process_1.spawn)('tar', ['-czf', '-', '-C', targetDir, '.']);
+            const chunks = [];
+            child.stdout.on('data', (chunk) => chunks.push(chunk));
+            child.on('close', (code) => {
+                if (code === 0) {
+                    const buffer = Buffer.concat(chunks);
+                    this.log(`State exported successfully. (Size: ${buffer.length} bytes)`);
+                    resolve(buffer.toString('base64'));
+                }
+                else {
+                    this.log(`[ERROR] Failed to export state. Tar exited with code ${code}`);
+                    resolve(null);
+                }
+            });
+            child.on('error', (err) => {
+                this.log(`[ERROR] Tar process failed: ${err.message}`);
+                resolve(null);
+            });
+        });
+    }
+    async importState(base64Payload) {
+        this.log("Hydrating Wrapper Ephemeral State...");
+        const targetDir = path.join(this.APP_DIR, 'rootfs', 'data');
+        if (!fs.existsSync(targetDir)) {
+            fs.mkdirSync(targetDir, { recursive: true });
+        }
+        return new Promise((resolve, reject) => {
+            const buffer = Buffer.from(base64Payload, 'base64');
+            const child = (0, child_process_1.spawn)('tar', ['-xzf', '-', '-C', targetDir]);
+            child.stdin.write(buffer);
+            child.stdin.end();
+            child.on('close', (code) => {
+                if (code === 0) {
+                    this.log("State hydrated successfully.");
+                    try {
+                        // Re-apply required Android emulation permissions after extraction
+                        fs.chmodSync(targetDir, 0o777);
+                        // Recursively try to apply 777 to contents if possible natively
+                        (0, child_process_1.spawn)('bash', ['-c', `chmod -R 777 "${targetDir}"`]);
+                    }
+                    catch (e) {
+                        this.log(`[WARN] Failed to re-apply 777 permissions after hydration.`);
+                    }
+                    resolve();
+                }
+                else {
+                    this.log(`[ERROR] Failed to hydrate state. Tar exited with code ${code}`);
+                    resolve();
+                }
+            });
+            child.on('error', (err) => {
+                this.log(`[ERROR] Tar hydration failed: ${err.message}`);
+                resolve();
+            });
+        });
+    }
 }
 exports.AppleMusicWrapperManager = AppleMusicWrapperManager;

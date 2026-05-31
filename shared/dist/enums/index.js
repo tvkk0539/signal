@@ -61,4 +61,7 @@ var MessageType;
     MessageType["APPLE_MUSIC_CONFIG_SAVE"] = "APPLE_MUSIC_CONFIG_SAVE";
     MessageType["APPLE_MUSIC_CONFIG_LOAD"] = "APPLE_MUSIC_CONFIG_LOAD";
     MessageType["APPLE_MUSIC_CONFIG_DATA"] = "APPLE_MUSIC_CONFIG_DATA";
+    MessageType["WRAPPER_STATE_SAVE"] = "WRAPPER_STATE_SAVE";
+    MessageType["WRAPPER_STATE_LOAD"] = "WRAPPER_STATE_LOAD";
+    MessageType["WRAPPER_STATE_DATA"] = "WRAPPER_STATE_DATA";
 })(MessageType || (exports.MessageType = MessageType = {}));

@@ -24,7 +24,8 @@ const io = new socket_io_1.Server(server, {
     cors: {
         origin: '*',
         methods: ['GET', 'POST']
-    }
+    },
+    maxHttpBufferSize: 1e8 // 100MB for Ephemeral State Hydration payloads
 });
 (0, sockets_1.setupSockets)(io);
 // Health check endpoint

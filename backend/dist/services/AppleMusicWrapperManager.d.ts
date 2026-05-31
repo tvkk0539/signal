@@ -23,4 +23,6 @@ export declare class AppleMusicWrapperManager extends EventEmitter {
     start(username?: string, password?: string): Promise<void>;
     stop(): void;
     sendInput(text: string): void;
+    exportState(): Promise<string | null>;
+    importState(base64Payload: string): Promise<void>;
 }
