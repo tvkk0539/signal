@@ -154,11 +154,53 @@ export const AppleMusicApp: React.FC = () => {
 
     const newJobId = uuidv4();
 
+    // Create the immutable "Frozen Snapshot" of every single setting
+    const frozenConfigSnapshot = {
+       url,
+       ripMode,
+       format,
+       qualityLimit: quality,
+       embedLrc,
+       animatedArt,
+       saveM3u8Playlist,
+       printJson,
+       debugMode,
+       storefront,
+       alacFix,
+       autoUpload,
+       rcloneRemote,
+       lrcFormat,
+       lrcType,
+       language,
+       tagSortOrder,
+       saveLrcFile,
+       saveArtistCover,
+       useSongInfoForPlaylist,
+       coverSize,
+       coverFormat,
+       explicitChoice,
+       cleanChoice,
+       appleMasterChoice,
+       albumFolderFormat,
+       playlistFolderFormat,
+       songFileFormat,
+       artistFolderFormat,
+       maxMemoryLimit,
+       exitOnError,
+       getM3u8Mode,
+       aacType,
+       mvAudioType,
+       mvMax,
+       limitMax,
+       dlAlbumcoverForPlaylist,
+       embyAnimatedArtwork
+    };
+
     addJob({
       jobId: newJobId,
       url,
       status: 'QUEUED',
-      configSnapshot: { mode: ripMode, format },
+      configSnapshot: frozenConfigSnapshot,
       logs: ["[SYSTEM] Job created and dispatched to Swarm Ledger..."]
     });
 

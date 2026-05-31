@@ -42,9 +42,9 @@ Before the Node.js Swarm Worker (`worker.ts`) connects to the Relay, a pre-fligh
 When a user pastes an Apple Music URL and clicks "Initialize" in the UI, the following highly engineered sequence occurs within the assigned ephemeral worker:
 
 ### Phase A: Dynamic Provisioning & VFS Sandbox (The Brain)
-1.  **Task Receipt:** The Node.js worker receives a `TASK_ASSIGNMENT` via WebSocket containing the URL, target format (e.g., ALAC 192kHz), and metadata toggles.
-2.  **Isolation (VFS Vault):** Node.js creates a unique, isolated workspace for this specific job (e.g., `/tmp/rip_job_123`).
-3.  **Config Injection:** Node.js dynamically generates a `config.yaml` file on the fly inside the workspace, injecting the user's UI choices and retrieving the secure `media-user-token` from the database.
+1.  **Task Receipt & Immutable Snapshots:** The frontend React UI captures a frozen snapshot of over 30+ configuration settings the exact millisecond the user clicks "Dispatch". This guarantees Configuration State Concurrency; users can immediately change UI settings for the next track without affecting the currently flying payload. The Node.js worker receives this `APPLE_MUSIC_RIP_REQUEST` payload via WebSocket.
+2.  **Isolation (VFS Vault):** Node.js creates a unique, isolated workspace for this specific job (e.g., `/tmp/job_uuid_123`).
+3.  **Config Injection:** Node.js dynamically translates the immutable snapshot payload into a physical `config.yaml` file on the fly inside the workspace, securely retrieving the `media-user-token` from the database.
 
 ### Phase B: Sub-Process Spawning & The Symlink Bridge (The Muscle)
 4.  **Proxy Initialization:** Node.js spawns the decryption `wrapper` as a background child process (`spawn('./wrapper')`). It polls `127.0.0.1:10020` until it verifies the proxy is actively listening.

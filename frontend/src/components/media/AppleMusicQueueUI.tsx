@@ -9,6 +9,7 @@ export const AppleMusicQueueUI: React.FC = () => {
   const { jobs, removeJobs } = useAppleMusicQueueStore();
   const [selectedJobIds, setSelectedJobIds] = useState<Set<string>>(new Set());
   const [viewedJobId, setViewedJobId] = useState<string | null>(null);
+  const [inspectorTab, setInspectorTab] = useState<'TELEMETRY' | 'CONFIG'>('TELEMETRY');
 
   const toggleSelect = (jobId: string) => {
     const newSet = new Set(selectedJobIds);
@@ -126,17 +127,36 @@ export const AppleMusicQueueUI: React.FC = () => {
         </div>
       </div>
 
-      {/* Right: Telemetry Ledger */}
+      {/* Right: Telemetry & Config Ledger */}
       <div className="w-1/2 bg-[#050505] flex flex-col font-mono relative">
-        <div className="px-4 py-2 bg-white/5 border-b border-white/5 flex items-center gap-2 text-xs text-muted-foreground">
-            <Terminal size={14} />
-            <span>Worker Node [tty0] - stdout {viewedJobId ? `(Job: ${viewedJobId.split('-')[0]})` : ''}</span>
+        <div className="px-4 py-2 bg-white/5 border-b border-white/5 flex items-center justify-between text-xs text-muted-foreground">
+            <div className="flex items-center gap-2">
+                <Terminal size={14} />
+                <span>Worker Node [tty0] {viewedJobId ? `(Job: ${viewedJobId.split('-')[0]})` : ''}</span>
+            </div>
+
+            {viewedJobId && (
+                <div className="flex gap-2">
+                    <button
+                        onClick={() => setInspectorTab('TELEMETRY')}
+                        className={`px-3 py-1 rounded transition-colors ${inspectorTab === 'TELEMETRY' ? 'bg-[#FA243C] text-white' : 'hover:text-white'}`}
+                    >
+                        stdout
+                    </button>
+                    <button
+                        onClick={() => setInspectorTab('CONFIG')}
+                        className={`px-3 py-1 rounded transition-colors ${inspectorTab === 'CONFIG' ? 'bg-[#FA243C] text-white' : 'hover:text-white'}`}
+                    >
+                        frozen config
+                    </button>
+                </div>
+            )}
         </div>
 
         <div className="flex-1 p-4 overflow-y-auto text-[11px] leading-relaxed text-green-500/80 space-y-1">
             {!viewedJob ? (
-                <div className="text-white/30 italic">Select a job from the ledger to view historical telemetry...</div>
-            ) : (
+                <div className="text-white/30 italic">Select a job from the ledger to view historical telemetry and configuration...</div>
+            ) : inspectorTab === 'TELEMETRY' ? (
                 <>
                     {viewedJob.logs.map((log, idx) => (
                         <div key={idx} className={
@@ -150,6 +170,23 @@ export const AppleMusicQueueUI: React.FC = () => {
                     ))}
                     {viewedJob.status === 'RUNNING' && <div className="animate-pulse opacity-50">_</div>}
                 </>
+            ) : (
+                <div className="text-white/80 space-y-2">
+                    <div className="text-yellow-500/80 italic mb-4">
+                        // IMMUTABLE DISPATCH SNAPSHOT
+                        <br/>
+                        // These arguments were securely injected into the VFS Vault at dispatch.
+                    </div>
+                    {Object.entries(viewedJob.configSnapshot).map(([key, value]) => (
+                        <div key={key} className="flex">
+                            <span className="w-48 text-blue-400">"{key}"</span>
+                            <span className="text-muted-foreground">: </span>
+                            <span className={typeof value === 'boolean' ? 'text-purple-400' : typeof value === 'number' ? 'text-orange-400' : 'text-green-400'}>
+                                {typeof value === 'string' ? `"${value}"` : String(value)}
+                            </span>
+                        </div>
+                    ))}
+                </div>
             )}
         </div>
         <div className="absolute inset-0 pointer-events-none bg-[linear-gradient(rgba(18,16,16,0)_50%,rgba(0,0,0,0.25)_50%),linear-gradient(90deg,rgba(255,0,0,0.06),rgba(0,255,0,0.02),rgba(0,0,255,0.06))] bg-[length:100%_4px,3px_100%] opacity-20" />
