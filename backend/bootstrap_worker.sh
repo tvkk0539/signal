@@ -51,26 +51,7 @@ else
     # In a pure Docker environment, Go would be installed in the base image.
 fi
 
-# 3. Download Decryption Proxy Wrapper
-log_info "Detecting system architecture for Decryption Proxy..."
-ARCH=$(uname -m)
-if [ "$ARCH" = "x86_64" ]; then
-    WRAPPER_URL="https://github.com/zhaarey/wrapper/releases/download/linux.V2/wrapper.x86_64.tar.gz"
-elif [ "$ARCH" = "aarch64" ]; then
-    WRAPPER_URL="https://github.com/zhaarey/wrapper/releases/download/arm64/wrapper.arm64.tar.gz"
-else
-    log_error "Unsupported architecture for decryption wrapper: $ARCH"
-fi
-
-log_info "Fetching Wrapper from $WRAPPER_URL"
-cd "$WRAPPER_DIR"
-curl -sL "$WRAPPER_URL" -o wrapper.tar.gz || log_error "Failed to download wrapper."
-tar -xzf wrapper.tar.gz || log_error "Failed to extract wrapper."
-rm wrapper.tar.gz
-chmod +x wrapper
-log_info "Wrapper successfully acquired."
-
-# 4. Handoff to Node.js
+# 3. Handoff to Node.js
 log_info "JIT Bootstrap Complete. Handing off to Node.js Swarm Orchestrator..."
 
 # If running in standard Docker, cd to backend workspace

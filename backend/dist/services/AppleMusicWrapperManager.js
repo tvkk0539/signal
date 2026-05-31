@@ -84,32 +84,39 @@ class AppleMusicWrapperManager extends events_1.EventEmitter {
             logs: [...this.logHistory]
         };
     }
-    // Note: In a real environment, we'd use 'tar' via child_process to extract, similar to the bash script.
-    // This is a structural blueprint for the TypeScript side.
     async install() {
         this.log("Starting installation process...");
         const arch = process.arch;
         const url = arch === 'arm64' ? this.DOWNLOAD_URL_ARM : this.DOWNLOAD_URL_X86;
         this.log(`Detected architecture: ${arch}. Using URL: ${url}`);
         return new Promise((resolve, reject) => {
-            // Simulated install delay for blueprint purposes
-            setTimeout(() => {
-                this.log("Simulating tar extraction and chmod +x...");
-                if (!fs.existsSync(this.WRAPPER_DIR)) {
-                    fs.mkdirSync(this.WRAPPER_DIR, { recursive: true });
+            if (!fs.existsSync(this.WRAPPER_DIR)) {
+                fs.mkdirSync(this.WRAPPER_DIR, { recursive: true });
+            }
+            const rootFs = path.join(this.APP_DIR, 'rootfs', 'data');
+            if (!fs.existsSync(rootFs)) {
+                fs.mkdirSync(rootFs, { recursive: true });
+            }
+            this.log("Downloading wrapper tarball...");
+            const tarPath = path.join(this.WRAPPER_DIR, 'wrapper.tar.gz');
+            const child = (0, child_process_1.spawn)('bash', ['-c', `
+                wget -q "${url}" -O wrapper.tar.gz && \
+                tar -xzf wrapper.tar.gz && \
+                rm wrapper.tar.gz && \
+                chmod +x ${this.BINARY_NAME} && \
+                chmod -R 777 ${rootFs}
+            `], { cwd: this.WRAPPER_DIR });
+            child.stdout.on('data', (d) => this.log(d.toString().trim()));
+            child.stderr.on('data', (d) => this.log(`[ERROR] ${d.toString().trim()}`));
+            child.on('close', (code) => {
+                if (code === 0) {
+                    this.log("Installation successful.");
+                    resolve();
                 }
-                // Create dummy executable to satisfy isInstalled()
-                const exePath = path.join(this.WRAPPER_DIR, this.BINARY_NAME);
-                fs.writeFileSync(exePath, '#!/bin/bash\necho "Wrapper Proxy Active"');
-                fs.chmodSync(exePath, '755');
-                // Simulate rootfs creation
-                const rootFs = path.join(this.APP_DIR, 'rootfs', 'data');
-                if (!fs.existsSync(rootFs)) {
-                    fs.mkdirSync(rootFs, { recursive: true });
+                else {
+                    reject(new Error(`Installation failed with code ${code}`));
                 }
-                this.log("Installation successful.");
-                resolve();
-            }, 2000);
+            });
         });
     }
     async start(username, password) {
@@ -124,25 +131,9 @@ class AppleMusicWrapperManager extends events_1.EventEmitter {
         if (username && password) {
             args.push('-L', `${username}:${password}`);
         }
-        this.log(`Starting wrapper proxy with args: ${args.join(' ')}`);
-        // We use a mock process spawn for this iteration to test the UI flow securely
-        this.process = (0, child_process_1.spawn)('bash', ['-c', `
-            echo "Starting Wrapper Decryption Proxy v2.0..."
-            sleep 1
-            echo "Binding to 0.0.0.0:10020..."
-            sleep 1
-            echo "Authenticating with Apple Servers..."
-            sleep 2
-            echo "Enter 2FA Code:"
-            # Wait for input
-            read -r code
-            echo "Verifying code $code..."
-            sleep 2
-            echo "Authentication Successful."
-            echo "Proxy is now listening for requests."
-            # Keep process alive
-            tail -f /dev/null
-        `], {
+        this.log(`Starting wrapper proxy: ./wrapper ${args.join(' ')}`);
+        // Spawn actual wrapper process
+        this.process = (0, child_process_1.spawn)('./' + this.BINARY_NAME, args, {
             cwd: this.WRAPPER_DIR,
             stdio: ['pipe', 'pipe', 'pipe']
         });
@@ -151,15 +142,19 @@ class AppleMusicWrapperManager extends events_1.EventEmitter {
             if (output) {
                 this.log(output);
                 // The crucial 2FA detection logic!
-                if (output.includes('Enter 2FA') || output.includes('Verification code')) {
+                if (output.includes('Enter 2FA') || output.includes('Verification code') || output.includes('2FA Code') || output.includes('two-factor')) {
                     this.emit('requires_2fa');
                 }
             }
         });
         this.process.stderr?.on('data', (data) => {
             const output = data.toString().trim();
-            if (output)
+            if (output) {
                 this.log(`[ERROR] ${output}`);
+                if (output.includes('Enter 2FA') || output.includes('Verification code') || output.includes('2FA Code') || output.includes('two-factor')) {
+                    this.emit('requires_2fa');
+                }
+            }
         });
         this.process.on('close', (code) => {
             this.log(`Wrapper exited with code ${code}`);
@@ -169,12 +164,22 @@ class AppleMusicWrapperManager extends events_1.EventEmitter {
         this.emit('started', this.process.pid);
     }
     stop() {
+        this.log("Stopping wrapper process & cleaning up ports...");
+        // Execute cleanup similar to stop_wrapper.sh
+        const child = (0, child_process_1.spawn)('bash', ['-c', `
+            echo "Killing wrapper..."
+            pkill -f wrapper || true
+            sleep 1
+            pkill -9 -f wrapper || true
+            fuser -k 10020/tcp 20020/tcp >/dev/null 2>&1 || true
+            echo "Cleanup complete."
+        `]);
+        child.stdout.on('data', (d) => this.log(d.toString().trim()));
         if (this.process) {
-            this.log("Stopping wrapper...");
             this.process.kill('SIGTERM');
             this.process = null;
-            this.emit('stopped');
         }
+        this.emit('stopped');
     }
     sendInput(text) {
         if (!this.process || !this.process.stdin) {

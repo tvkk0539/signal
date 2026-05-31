@@ -404,15 +404,15 @@ export const AppleMusicApp: React.FC = () => {
         </div>
         </>
         ) : activeTab === 'WRAPPER' ? (
-           <div className="w-full h-full overflow-y-auto">
+           <div className="w-full h-full overflow-y-auto relative z-20 pointer-events-auto">
               <AppleMusicWrapperUI />
            </div>
         ) : activeTab === 'CONFIG' ? (
-           <div className="w-full h-full overflow-y-auto">
+           <div className="w-full h-full overflow-y-auto relative z-20 pointer-events-auto">
               <AppleMusicConfigUI />
            </div>
         ) : (
-           <div className="w-full h-full overflow-y-auto">
+           <div className="w-full h-full overflow-y-auto relative z-20 pointer-events-auto">
               <AppleMusicSettingsUI />
            </div>
         )}
