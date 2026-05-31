@@ -1,8 +1,8 @@
 import { EventEmitter } from 'events';
 export declare class AppleMusicWrapperManager extends EventEmitter {
     private static instance;
-    private readonly APP_DIR;
-    private readonly WRAPPER_DIR;
+    private APP_DIR;
+    private WRAPPER_DIR;
     private readonly BINARY_NAME;
     private readonly DOWNLOAD_URL_X86;
     private readonly DOWNLOAD_URL_ARM;
