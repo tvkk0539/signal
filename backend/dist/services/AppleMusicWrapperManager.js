@@ -204,7 +204,7 @@ class AppleMusicWrapperManager extends events_1.EventEmitter {
             if (output) {
                 this.log(output);
                 // The crucial 2FA detection logic!
-                if (output.includes('Enter 2FA') || output.includes('Verification code') || output.includes('2FA Code') || output.includes('two-factor')) {
+                if (output.includes('Enter 2FA') || output.includes('Verification code') || output.includes('2FA Code') || output.includes('two-factor') || output.includes('2FA: true')) {
                     this.emit('requires_2fa');
                 }
             }
@@ -215,7 +215,7 @@ class AppleMusicWrapperManager extends events_1.EventEmitter {
                 // The wrapper binary uses stderr for standard INFO logging (e.g. "[+] starting...").
                 // We map it directly instead of prepending [ERROR] to keep the UI terminal clean.
                 this.log(output);
-                if (output.includes('Enter 2FA') || output.includes('Verification code') || output.includes('2FA Code') || output.includes('two-factor')) {
+                if (output.includes('Enter 2FA') || output.includes('Verification code') || output.includes('2FA Code') || output.includes('two-factor') || output.includes('2FA: true')) {
                     this.emit('requires_2fa');
                 }
             }
