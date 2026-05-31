@@ -115,12 +115,14 @@ FROM node:20-bookworm-slim AS runner
 
 WORKDIR /app
 
-# Install robust runtime dependencies
+# Install robust runtime dependencies (including libc6-dev for CGO JIT compilation)
 RUN apt-get update && apt-get install -y --no-install-recommends \
     ffmpeg \
     libxml2 \
     libxslt1.1 \
     gcc \
+    libc6-dev \
+    build-essential \
     file \
     unzip \
     curl \
