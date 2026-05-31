@@ -51,10 +51,15 @@ When a user pastes an Apple Music URL and clicks "Initialize" in the UI, the fol
 5.  **The Symlink Bridge:** Because the third-party Go ripper blindly reads `config.yaml` from its current execution directory and crashes if given unknown flags, we treat it as an immutable black box. The backend creates a hardlink (`fs.linkSync`) of the permanent `am-ripper` binary directly into the VFS Vault.
 6.  **Execution:** Node.js executes the symlinked binary *from within the vault* (`cwd: workspaceDir`). The Go binary natively believes it is running in its own private directory, reads the dynamic `config.yaml` automatically, and prevents cross-contamination between concurrent jobs.
 
-### Phase C: The Telemetry Pipe (The Magic)
-6.  **Stream Interception:** As the Go application processes the download (fetching M3U8s, decrypting chunks), it outputs logs to `stdout`.
-7.  **Real-Time Relay:** Node.js intercepts this stream byte-by-byte and immediately emits it via WebSocket `TASK_PROGRESS` events.
-8.  **UI Immersion:** The React frontend receives these logs and renders them in the retro-futuristic Terminal Window, giving the user a real-time, transparent view of the remote ripping process.
+### Phase C: The Hybrid Intelligent URL Router (The Precision)
+To prevent the Go binary from erroneously downloading entire albums when only a single song is requested, or freezing while waiting for interactive terminal input, the system utilizes a Hybrid URL Router:
+6.  **Frontend Auto-Detection:** The React UI analyzes the user's pasted URL on the fly. If it detects `?i=` query parameters, it automatically switches the request to 'Single Song' mode. If it detects `/artist/`, it switches to 'Entire Artist' mode. The user can visually see this detection and override it manually if desired.
+7.  **Backend Translation:** The Node.js orchestrator reads this explicit mode and injects exact arguments (`--song` or `--all-album`) into the Go binary's execution path, mathematically guaranteeing the binary only downloads what is explicitly intended.
+
+### Phase D: The Telemetry Pipe (The Magic)
+8.  **Stream Interception:** As the Go application processes the download (fetching M3U8s, decrypting chunks), it outputs logs to `stdout`.
+9.  **Real-Time Relay:** Node.js intercepts this stream byte-by-byte and immediately emits it via WebSocket `TASK_PROGRESS` events.
+10. **UI Immersion:** The React frontend receives these logs and renders them in the retro-futuristic Terminal Window, giving the user a real-time, transparent view of the remote ripping process.
 
 ### Phase D: Zero-Disk Cloud Handoff (The Swarm Way)
 9.  **Completion:** The Go application finishes muxing the audio and leaves a massive `.m4a` or `.flac` file in the temporary workspace, exiting with Code 0.
