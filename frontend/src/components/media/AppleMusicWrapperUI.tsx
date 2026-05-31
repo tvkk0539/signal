@@ -133,12 +133,12 @@ export const AppleMusicWrapperUI: React.FC = () => {
             </div>
         </div>
 
-        <div className="flex gap-6 h-[400px]">
+        <div className="flex gap-6 min-h-[500px]">
             {/* Left Col: Credentials & 2FA */}
             <div className="w-1/3 flex flex-col gap-6">
 
                 {/* Credentials */}
-                <div className="p-6 bg-black/40 border border-white/10 rounded-2xl backdrop-blur-sm flex-1">
+                <div className="p-6 bg-black/40 border border-white/10 rounded-2xl backdrop-blur-sm shrink-0">
                     <h4 className="text-sm uppercase tracking-wider text-muted-foreground font-bold mb-4">DRM Authentication</h4>
                     <div className="space-y-4">
                         <div className="space-y-1">
@@ -167,7 +167,7 @@ export const AppleMusicWrapperUI: React.FC = () => {
                 </div>
 
                 {/* 2FA Slide-In Prompt */}
-                <div className={`border rounded-2xl backdrop-blur-sm transition-all duration-500 overflow-hidden ${
+                <div className={`border rounded-2xl backdrop-blur-sm transition-all duration-500 overflow-hidden shrink-0 ${
                     needs2FA
                         ? 'bg-orange-500/10 border-orange-500/30 shadow-[0_0_20px_rgba(249,115,22,0.15)] opacity-100 p-6 max-h-[500px] pointer-events-auto'
                         : 'bg-black/40 border-transparent opacity-0 p-0 max-h-0 m-0 pointer-events-none'
