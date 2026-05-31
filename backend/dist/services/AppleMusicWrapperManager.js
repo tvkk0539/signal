@@ -132,9 +132,9 @@ class AppleMusicWrapperManager extends events_1.EventEmitter {
         if (username && password) {
             args.push('-L', `${username}:${password}`);
         }
-        this.log(`Starting wrapper proxy: ./wrapper ${args.join(' ')}`);
-        // Spawn actual wrapper process
-        this.process = (0, child_process_1.spawn)('./' + this.BINARY_NAME, args, {
+        this.log(`Starting wrapper proxy: ${exePath} ${args.join(' ')}`);
+        // Spawn actual wrapper process using the absolute path to prevent ENOENT
+        this.process = (0, child_process_1.spawn)(exePath, args, {
             cwd: this.WRAPPER_DIR,
             stdio: ['pipe', 'pipe', 'pipe']
         });

@@ -117,10 +117,10 @@ export class AppleMusicWrapperManager extends EventEmitter {
             args.push('-L', `${username}:${password}`);
         }
 
-        this.log(`Starting wrapper proxy: ./wrapper ${args.join(' ')}`);
+        this.log(`Starting wrapper proxy: ${exePath} ${args.join(' ')}`);
 
-        // Spawn actual wrapper process
-        this.process = spawn('./' + this.BINARY_NAME, args, {
+        // Spawn actual wrapper process using the absolute path to prevent ENOENT
+        this.process = spawn(exePath, args, {
             cwd: this.WRAPPER_DIR,
             stdio: ['pipe', 'pipe', 'pipe']
         });
