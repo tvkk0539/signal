@@ -42,8 +42,8 @@ class AppleMusicWrapperManager extends events_1.EventEmitter {
     static instance;
     // The user explicitly requested to follow the original bash script structure
     // which installs the wrapper globally in /app instead of the temporary folder.
-    APP_DIR = '/app';
-    WRAPPER_DIR = '/app/wrapper';
+    APP_DIR;
+    WRAPPER_DIR;
     BINARY_NAME = 'wrapper';
     DOWNLOAD_URL_X86 = 'https://github.com/zhaarey/wrapper/releases/download/linux.V2/wrapper.x86_64.tar.gz';
     DOWNLOAD_URL_ARM = 'https://github.com/zhaarey/wrapper/releases/download/arm64/wrapper.arm64.tar.gz';
@@ -52,20 +52,25 @@ class AppleMusicWrapperManager extends events_1.EventEmitter {
     MAX_LOGS = 100;
     constructor() {
         super();
-        // Ensure base directories exist gracefully if not running as root
+        // Evaluate permissions dynamically ONCE during initialization
+        const targetAppDir = '/app';
         try {
-            if (!fs.existsSync(this.APP_DIR)) {
-                fs.mkdirSync(this.APP_DIR, { recursive: true });
+            if (!fs.existsSync(targetAppDir)) {
+                fs.mkdirSync(targetAppDir, { recursive: true });
             }
+            // If we successfully created/accessed /app, use it
+            this.APP_DIR = targetAppDir;
+            this.WRAPPER_DIR = path.join(targetAppDir, 'wrapper');
         }
         catch (e) {
-            console.warn(`[AM Wrapper] Failed to create ${this.APP_DIR}. Ensure the user has permissions, or use a local folder. Using /tmp/app fallback. Error: ${e.message}`);
+            console.warn(`[AM Wrapper] Failed to create ${targetAppDir}. Ensure the user has permissions, or use a local folder. Using /tmp/app fallback. Error: ${e.message}`);
             this.APP_DIR = '/tmp/app';
             this.WRAPPER_DIR = '/tmp/app/wrapper';
             if (!fs.existsSync(this.APP_DIR)) {
                 fs.mkdirSync(this.APP_DIR, { recursive: true });
             }
         }
+        console.log(`[AM Wrapper] Resolved Base Execution Path to: ${this.WRAPPER_DIR}`);
     }
     static getInstance() {
         if (!AppleMusicWrapperManager.instance) {
