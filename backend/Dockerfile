@@ -5,7 +5,7 @@ WORKDIR /app
 
 # Install OS dependencies required for rclone and potential ffmpeg encoding
 RUN apt-get update && apt-get install -y --no-install-recommends \
-    curl unzip bash ffmpeg \
+    curl unzip bash ffmpeg ca-certificates \
     && rm -rf /var/lib/apt/lists/*
 
 # Copy root configurations
@@ -31,7 +31,7 @@ WORKDIR /app
 
 # Install rclone, git, and go in the final runner image for JIT Chimera Worker support
 RUN apt-get update && apt-get install -y --no-install-recommends \
-    curl unzip bash ffmpeg fuse git golang-go \
+    curl unzip bash ffmpeg fuse git golang-go ca-certificates \
     && rm -rf /var/lib/apt/lists/* \
     && curl https://rclone.org/install.sh | bash
 
