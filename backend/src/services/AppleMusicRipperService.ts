@@ -24,6 +24,24 @@ export interface RipperConfig {
     saveArtistCover?: boolean;
     useSongInfoForPlaylist?: boolean;
     alacFix?: boolean;
+    coverSize?: string;
+    coverFormat?: 'jpg' | 'png' | 'original';
+    explicitChoice?: string;
+    cleanChoice?: string;
+    appleMasterChoice?: string;
+    albumFolderFormat?: string;
+    playlistFolderFormat?: string;
+    songFileFormat?: string;
+    artistFolderFormat?: string;
+    maxMemoryLimit?: number;
+    exitOnError?: boolean;
+    getM3u8Mode?: 'all' | 'hires';
+    aacType?: 'aac-lc' | 'aac' | 'aac-binaural' | 'aac-downmix';
+    mvAudioType?: 'atmos' | 'ac3' | 'aac';
+    mvMax?: number;
+    limitMax?: number;
+    dlAlbumcoverForPlaylist?: boolean;
+    embyAnimatedArtwork?: boolean;
 }
 
 export class AppleMusicRipperService extends EventEmitter {
@@ -67,10 +85,10 @@ export class AppleMusicRipperService extends EventEmitter {
             'save-lrc-file': config.saveLrcFile ?? false,
             'save-artist-cover': config.saveArtistCover ?? false,
             'save-animated-artwork': config.animatedArt,
-            'emby-animated-artwork': false,
+            'emby-animated-artwork': config.embyAnimatedArtwork ?? false,
             'embed-cover': true,
-            'cover-size': "5000x5000",
-            'cover-format': "jpg",
+            'cover-size': config.coverSize || "5000x5000",
+            'cover-format': config.coverFormat || "jpg",
             'tag-sort-order': config.tagSortOrder ?? true,
             'tag-itunes-id': true,
 
@@ -80,31 +98,31 @@ export class AppleMusicRipperService extends EventEmitter {
             'aac-save-folder': downloadsDir,
             'mv-save-folder': downloadsDir,
 
-            'max-memory-limit': 256,
+            'max-memory-limit': config.maxMemoryLimit ?? 256,
             'decrypt-m3u8-port': "127.0.0.1:10020",
             'get-m3u8-port': "127.0.0.1:20020",
             'get-m3u8-from-device': true,
-            'exit-on-error': true,
+            'exit-on-error': config.exitOnError ?? false,
 
-            'get-m3u8-mode': "hires",
-            'aac-type': "aac-lc",
+            'get-m3u8-mode': config.getM3u8Mode || "hires",
+            'aac-type': config.aacType || "aac-lc",
             'alac-max': parseInt(config.qualityLimit),
             'atmos-max': 2768,
-            'limit-max': 200,
+            'limit-max': config.limitMax ?? 200,
 
-            'album-folder-format': "{AlbumName}",
-            'playlist-folder-format': "{PlaylistName}",
-            'song-file-format': "{SongNumer}. {SongName}",
-            'artist-folder-format': "{UrlArtistName}",
+            'album-folder-format': config.albumFolderFormat || "{AlbumName}",
+            'playlist-folder-format': config.playlistFolderFormat || "{PlaylistName}",
+            'song-file-format': config.songFileFormat || "{SongNumer}. {SongName}",
+            'artist-folder-format': config.artistFolderFormat || "{UrlArtistName}",
 
-            'explicit-choice': "[E]",
-            'clean-choice': "[C]",
-            'apple-master-choice': "[M]",
+            'explicit-choice': config.explicitChoice !== undefined ? config.explicitChoice : "[E]",
+            'clean-choice': config.cleanChoice !== undefined ? config.cleanChoice : "[C]",
+            'apple-master-choice': config.appleMasterChoice !== undefined ? config.appleMasterChoice : "[M]",
 
             'use-songinfo-for-playlist': config.useSongInfoForPlaylist ?? false,
-            'dl-albumcover-for-playlist': false,
-            'mv-audio-type': "atmos",
-            'mv-max': 2160,
+            'dl-albumcover-for-playlist': config.dlAlbumcoverForPlaylist ?? false,
+            'mv-audio-type': config.mvAudioType || "atmos",
+            'mv-max': config.mvMax ?? 2160,
 
             'storefront': config.storefront || "us",
             'alac-fix': config.alacFix ?? false,

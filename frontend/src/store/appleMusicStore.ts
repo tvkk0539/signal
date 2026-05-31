@@ -13,6 +13,25 @@ interface AppleMusicState {
     saveLrcFile: boolean;
     saveArtistCover: boolean;
     useSongInfoForPlaylist: boolean;
+    coverSize: string;
+    coverFormat: 'jpg' | 'png' | 'original';
+    explicitChoice: string;
+    cleanChoice: string;
+    appleMasterChoice: string;
+    albumFolderFormat: string;
+    playlistFolderFormat: string;
+    songFileFormat: string;
+    artistFolderFormat: string;
+    maxMemoryLimit: number;
+    exitOnError: boolean;
+    getM3u8Mode: 'all' | 'hires';
+    aacType: 'aac-lc' | 'aac' | 'aac-binaural' | 'aac-downmix';
+    mvAudioType: 'atmos' | 'ac3' | 'aac';
+    mvMax: number;
+    limitMax: number;
+    dlAlbumcoverForPlaylist: boolean;
+    embyAnimatedArtwork: boolean;
+
     setMediaUserToken: (val: string) => void;
     setStorefront: (val: string) => void;
     setAlacFix: (val: boolean) => void;
@@ -25,6 +44,24 @@ interface AppleMusicState {
     setSaveLrcFile: (val: boolean) => void;
     setSaveArtistCover: (val: boolean) => void;
     setUseSongInfoForPlaylist: (val: boolean) => void;
+    setCoverSize: (val: string) => void;
+    setCoverFormat: (val: 'jpg' | 'png' | 'original') => void;
+    setExplicitChoice: (val: string) => void;
+    setCleanChoice: (val: string) => void;
+    setAppleMasterChoice: (val: string) => void;
+    setAlbumFolderFormat: (val: string) => void;
+    setPlaylistFolderFormat: (val: string) => void;
+    setSongFileFormat: (val: string) => void;
+    setArtistFolderFormat: (val: string) => void;
+    setMaxMemoryLimit: (val: number) => void;
+    setExitOnError: (val: boolean) => void;
+    setGetM3u8Mode: (val: 'all' | 'hires') => void;
+    setAacType: (val: 'aac-lc' | 'aac' | 'aac-binaural' | 'aac-downmix') => void;
+    setMvAudioType: (val: 'atmos' | 'ac3' | 'aac') => void;
+    setMvMax: (val: number) => void;
+    setLimitMax: (val: number) => void;
+    setDlAlbumcoverForPlaylist: (val: boolean) => void;
+    setEmbyAnimatedArtwork: (val: boolean) => void;
 
     // Advanced Wrapper Telemetry State
     wrapperIsInstalled: boolean;
@@ -50,6 +87,25 @@ export const useAppleMusicStore = create<AppleMusicState>((set) => ({
     saveLrcFile: false,
     saveArtistCover: false,
     useSongInfoForPlaylist: false,
+    coverSize: "5000x5000",
+    coverFormat: "jpg",
+    explicitChoice: "[E]",
+    cleanChoice: "[C]",
+    appleMasterChoice: "[M]",
+    albumFolderFormat: "{AlbumName}",
+    playlistFolderFormat: "{PlaylistName}",
+    songFileFormat: "{SongNumer}. {SongName}",
+    artistFolderFormat: "{UrlArtistName}",
+    maxMemoryLimit: 256,
+    exitOnError: false,
+    getM3u8Mode: "hires",
+    aacType: "aac-lc",
+    mvAudioType: "atmos",
+    mvMax: 2160,
+    limitMax: 200,
+    dlAlbumcoverForPlaylist: false,
+    embyAnimatedArtwork: false,
+
     setMediaUserToken: (val) => set({ mediaUserToken: val }),
     setStorefront: (val) => set({ storefront: val }),
     setAlacFix: (val) => set({ alacFix: val }),
@@ -62,6 +118,24 @@ export const useAppleMusicStore = create<AppleMusicState>((set) => ({
     setSaveLrcFile: (val) => set({ saveLrcFile: val }),
     setSaveArtistCover: (val) => set({ saveArtistCover: val }),
     setUseSongInfoForPlaylist: (val) => set({ useSongInfoForPlaylist: val }),
+    setCoverSize: (val) => set({ coverSize: val }),
+    setCoverFormat: (val) => set({ coverFormat: val }),
+    setExplicitChoice: (val) => set({ explicitChoice: val }),
+    setCleanChoice: (val) => set({ cleanChoice: val }),
+    setAppleMasterChoice: (val) => set({ appleMasterChoice: val }),
+    setAlbumFolderFormat: (val) => set({ albumFolderFormat: val }),
+    setPlaylistFolderFormat: (val) => set({ playlistFolderFormat: val }),
+    setSongFileFormat: (val) => set({ songFileFormat: val }),
+    setArtistFolderFormat: (val) => set({ artistFolderFormat: val }),
+    setMaxMemoryLimit: (val) => set({ maxMemoryLimit: val }),
+    setExitOnError: (val) => set({ exitOnError: val }),
+    setGetM3u8Mode: (val) => set({ getM3u8Mode: val }),
+    setAacType: (val) => set({ aacType: val }),
+    setMvAudioType: (val) => set({ mvAudioType: val }),
+    setMvMax: (val) => set({ mvMax: val }),
+    setLimitMax: (val) => set({ limitMax: val }),
+    setDlAlbumcoverForPlaylist: (val) => set({ dlAlbumcoverForPlaylist: val }),
+    setEmbyAnimatedArtwork: (val) => set({ embyAnimatedArtwork: val }),
 
     wrapperIsInstalled: false,
     wrapperIsRunning: false,

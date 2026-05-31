@@ -30,7 +30,25 @@ export const AppleMusicApp: React.FC = () => {
   const {
     mediaUserToken, storefront, setMediaUserToken, setStorefront, setAutoUpload, setRcloneRemote,
     alacFix, autoUpload, rcloneRemote, lrcFormat, lrcType, language, tagSortOrder, saveLrcFile, saveArtistCover, useSongInfoForPlaylist,
-    setWrapperStatus, setWrapperNeeds2FA, setLrcFormat, setLrcType, setLanguage, setTagSortOrder, setSaveLrcFile, setSaveArtistCover, setUseSongInfoForPlaylist, setAlacFix
+    setWrapperStatus, setWrapperNeeds2FA, setLrcFormat, setLrcType, setLanguage, setTagSortOrder, setSaveLrcFile, setSaveArtistCover, setUseSongInfoForPlaylist, setAlacFix,
+    coverSize, setCoverSize,
+    coverFormat, setCoverFormat,
+    explicitChoice, setExplicitChoice,
+    cleanChoice, setCleanChoice,
+    appleMasterChoice, setAppleMasterChoice,
+    albumFolderFormat, setAlbumFolderFormat,
+    playlistFolderFormat, setPlaylistFolderFormat,
+    songFileFormat, setSongFileFormat,
+    artistFolderFormat, setArtistFolderFormat,
+    maxMemoryLimit, setMaxMemoryLimit,
+    exitOnError, setExitOnError,
+    getM3u8Mode, setGetM3u8Mode,
+    aacType, setAacType,
+    mvAudioType, setMvAudioType,
+    mvMax, setMvMax,
+    limitMax, setLimitMax,
+    dlAlbumcoverForPlaylist, setDlAlbumcoverForPlaylist,
+    embyAnimatedArtwork, setEmbyAnimatedArtwork
   } = useAppleMusicStore();
 
   React.useEffect(() => {
@@ -52,6 +70,24 @@ export const AppleMusicApp: React.FC = () => {
          if (msg.saveLrcFile !== undefined) setSaveLrcFile(msg.saveLrcFile);
          if (msg.saveArtistCover !== undefined) setSaveArtistCover(msg.saveArtistCover);
          if (msg.useSongInfoForPlaylist !== undefined) setUseSongInfoForPlaylist(msg.useSongInfoForPlaylist);
+         if (msg.coverSize !== undefined) setCoverSize(msg.coverSize);
+         if (msg.coverFormat !== undefined) setCoverFormat(msg.coverFormat as any);
+         if (msg.explicitChoice !== undefined) setExplicitChoice(msg.explicitChoice);
+         if (msg.cleanChoice !== undefined) setCleanChoice(msg.cleanChoice);
+         if (msg.appleMasterChoice !== undefined) setAppleMasterChoice(msg.appleMasterChoice);
+         if (msg.albumFolderFormat !== undefined) setAlbumFolderFormat(msg.albumFolderFormat);
+         if (msg.playlistFolderFormat !== undefined) setPlaylistFolderFormat(msg.playlistFolderFormat);
+         if (msg.songFileFormat !== undefined) setSongFileFormat(msg.songFileFormat);
+         if (msg.artistFolderFormat !== undefined) setArtistFolderFormat(msg.artistFolderFormat);
+         if (msg.maxMemoryLimit !== undefined) setMaxMemoryLimit(msg.maxMemoryLimit);
+         if (msg.exitOnError !== undefined) setExitOnError(msg.exitOnError);
+         if (msg.getM3u8Mode !== undefined) setGetM3u8Mode(msg.getM3u8Mode as any);
+         if (msg.aacType !== undefined) setAacType(msg.aacType as any);
+         if (msg.mvAudioType !== undefined) setMvAudioType(msg.mvAudioType as any);
+         if (msg.mvMax !== undefined) setMvMax(msg.mvMax);
+         if (msg.limitMax !== undefined) setLimitMax(msg.limitMax);
+         if (msg.dlAlbumcoverForPlaylist !== undefined) setDlAlbumcoverForPlaylist(msg.dlAlbumcoverForPlaylist);
+         if (msg.embyAnimatedArtwork !== undefined) setEmbyAnimatedArtwork(msg.embyAnimatedArtwork);
     };
 
     const handleTelemetry = (msg: RipperTelemetryMessage) => {
@@ -117,7 +153,25 @@ export const AppleMusicApp: React.FC = () => {
        tagSortOrder,
        saveLrcFile,
        saveArtistCover,
-       useSongInfoForPlaylist
+       useSongInfoForPlaylist,
+       coverSize,
+       coverFormat,
+       explicitChoice,
+       cleanChoice,
+       appleMasterChoice,
+       albumFolderFormat,
+       playlistFolderFormat,
+       songFileFormat,
+       artistFolderFormat,
+       maxMemoryLimit,
+       exitOnError,
+       getM3u8Mode,
+       aacType,
+       mvAudioType,
+       mvMax,
+       limitMax,
+       dlAlbumcoverForPlaylist,
+       embyAnimatedArtwork
     };
 
     socketManager.emit(MessageType.APPLE_MUSIC_RIP_REQUEST, payload);
@@ -350,15 +404,15 @@ export const AppleMusicApp: React.FC = () => {
         </div>
         </>
         ) : activeTab === 'WRAPPER' ? (
-           <div className="w-full h-full overflow-y-auto">
+           <div className="w-full h-full overflow-y-auto relative z-20 pointer-events-auto">
               <AppleMusicWrapperUI />
            </div>
         ) : activeTab === 'CONFIG' ? (
-           <div className="w-full h-full overflow-y-auto">
+           <div className="w-full h-full overflow-y-auto relative z-20 pointer-events-auto">
               <AppleMusicConfigUI />
            </div>
         ) : (
-           <div className="w-full h-full overflow-y-auto">
+           <div className="w-full h-full overflow-y-auto relative z-20 pointer-events-auto">
               <AppleMusicSettingsUI />
            </div>
         )}

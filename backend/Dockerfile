@@ -31,6 +31,24 @@ WORKDIR /app
 RUN apk add --no-cache curl unzip bash ffmpeg fuse git go \
     && curl https://rclone.org/install.sh | bash
 
+# Setup Widevine Decryption Wrapper Environment
+# Based on system architecture, download the appropriate wrapper and set up the `/app` ecosystem
+RUN ARCH=$(uname -m) && \
+    if [ "$ARCH" = "x86_64" ]; then \
+        WRAPPER_URL="https://github.com/zhaarey/wrapper/releases/download/linux.V2/wrapper.x86_64.tar.gz"; \
+    elif [ "$ARCH" = "aarch64" ]; then \
+        WRAPPER_URL="https://github.com/zhaarey/wrapper/releases/download/arm64/wrapper.arm64.tar.gz"; \
+    else \
+        echo "Unsupported architecture for decryption wrapper: $ARCH" && exit 1; \
+    fi && \
+    mkdir -p /app/wrapper && \
+    mkdir -p /app/rootfs/data && \
+    curl -sL "$WRAPPER_URL" -o /app/wrapper/wrapper.tar.gz && \
+    tar -xzf /app/wrapper/wrapper.tar.gz -C /app/wrapper && \
+    rm /app/wrapper/wrapper.tar.gz && \
+    chmod +x /app/wrapper/wrapper && \
+    chmod -R 777 /app/rootfs/data
+
 # Set production environment variable for bootstrap
 ENV NODE_ENV=production
 

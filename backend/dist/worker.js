@@ -477,7 +477,25 @@ async function bootWorker() {
                 saveLrcFile: msg.saveLrcFile,
                 saveArtistCover: msg.saveArtistCover,
                 useSongInfoForPlaylist: msg.useSongInfoForPlaylist,
-                alacFix: msg.alacFix
+                alacFix: msg.alacFix,
+                coverSize: msg.coverSize,
+                coverFormat: msg.coverFormat,
+                explicitChoice: msg.explicitChoice,
+                cleanChoice: msg.cleanChoice,
+                appleMasterChoice: msg.appleMasterChoice,
+                albumFolderFormat: msg.albumFolderFormat,
+                playlistFolderFormat: msg.playlistFolderFormat,
+                songFileFormat: msg.songFileFormat,
+                artistFolderFormat: msg.artistFolderFormat,
+                maxMemoryLimit: msg.maxMemoryLimit,
+                exitOnError: msg.exitOnError,
+                getM3u8Mode: msg.getM3u8Mode,
+                aacType: msg.aacType,
+                mvAudioType: msg.mvAudioType,
+                mvMax: msg.mvMax,
+                limitMax: msg.limitMax,
+                dlAlbumcoverForPlaylist: msg.dlAlbumcoverForPlaylist,
+                embyAnimatedArtwork: msg.embyAnimatedArtwork
             });
         }
         catch (e) {

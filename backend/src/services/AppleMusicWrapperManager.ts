@@ -7,9 +7,10 @@ import { EventEmitter } from 'events';
 export class AppleMusicWrapperManager extends EventEmitter {
     private static instance: AppleMusicWrapperManager;
 
-    private readonly BASE_DIR = process.env.DOWNLOAD_ROOT || '/tmp/swarm_data';
-    private readonly APP_DIR = path.join(this.BASE_DIR, 'apple_music');
-    private readonly WRAPPER_DIR = path.join(this.APP_DIR, 'wrapper');
+    // The user explicitly requested to follow the original bash script structure
+    // which installs the wrapper globally in /app instead of the temporary folder.
+    private readonly APP_DIR = '/app';
+    private readonly WRAPPER_DIR = '/app/wrapper';
     private readonly BINARY_NAME = 'wrapper';
 
     private readonly DOWNLOAD_URL_X86 = 'https://github.com/zhaarey/wrapper/releases/download/linux.V2/wrapper.x86_64.tar.gz';
@@ -59,36 +60,20 @@ export class AppleMusicWrapperManager extends EventEmitter {
         };
     }
 
-    // Note: In a real environment, we'd use 'tar' via child_process to extract, similar to the bash script.
-    // This is a structural blueprint for the TypeScript side.
     public async install(): Promise<void> {
-        this.log("Starting installation process...");
-        const arch = process.arch;
-        const url = arch === 'arm64' ? this.DOWNLOAD_URL_ARM : this.DOWNLOAD_URL_X86;
-
-        this.log(`Detected architecture: ${arch}. Using URL: ${url}`);
+        this.log("Verifying wrapper installation...");
 
         return new Promise((resolve, reject) => {
-            // Simulated install delay for blueprint purposes
-            setTimeout(() => {
-                this.log("Simulating tar extraction and chmod +x...");
-                if (!fs.existsSync(this.WRAPPER_DIR)) {
-                    fs.mkdirSync(this.WRAPPER_DIR, { recursive: true });
-                }
-                // Create dummy executable to satisfy isInstalled()
-                const exePath = path.join(this.WRAPPER_DIR, this.BINARY_NAME);
-                fs.writeFileSync(exePath, '#!/bin/bash\necho "Wrapper Proxy Active"');
-                fs.chmodSync(exePath, '755');
+            const exePath = path.join(this.WRAPPER_DIR, this.BINARY_NAME);
 
-                // Simulate rootfs creation
-                const rootFs = path.join(this.APP_DIR, 'rootfs', 'data');
-                if (!fs.existsSync(rootFs)) {
-                    fs.mkdirSync(rootFs, { recursive: true });
-                }
-
-                this.log("Installation successful.");
+            if (fs.existsSync(exePath)) {
+                this.log("Wrapper proxy is already installed by Docker orchestrator.");
                 resolve();
-            }, 2000);
+            } else {
+                this.log("[ERROR] Wrapper binary not found at " + exePath);
+                this.log("Please ensure the Swarm Worker Docker image is built properly or manually run setup_wrapper.sh if deployed on bare-metal.");
+                reject(new Error("Wrapper binary missing."));
+            }
         });
     }
 
@@ -107,26 +92,10 @@ export class AppleMusicWrapperManager extends EventEmitter {
             args.push('-L', `${username}:${password}`);
         }
 
-        this.log(`Starting wrapper proxy with args: ${args.join(' ')}`);
+        this.log(`Starting wrapper proxy: ${exePath} ${args.join(' ')}`);
 
-        // We use a mock process spawn for this iteration to test the UI flow securely
-        this.process = spawn('bash', ['-c', `
-            echo "Starting Wrapper Decryption Proxy v2.0..."
-            sleep 1
-            echo "Binding to 0.0.0.0:10020..."
-            sleep 1
-            echo "Authenticating with Apple Servers..."
-            sleep 2
-            echo "Enter 2FA Code:"
-            # Wait for input
-            read -r code
-            echo "Verifying code $code..."
-            sleep 2
-            echo "Authentication Successful."
-            echo "Proxy is now listening for requests."
-            # Keep process alive
-            tail -f /dev/null
-        `], {
+        // Spawn actual wrapper process using the absolute path to prevent ENOENT
+        this.process = spawn(exePath, args, {
             cwd: this.WRAPPER_DIR,
             stdio: ['pipe', 'pipe', 'pipe']
         });
@@ -136,7 +105,7 @@ export class AppleMusicWrapperManager extends EventEmitter {
             if (output) {
                 this.log(output);
                 // The crucial 2FA detection logic!
-                if (output.includes('Enter 2FA') || output.includes('Verification code')) {
+                if (output.includes('Enter 2FA') || output.includes('Verification code') || output.includes('2FA Code') || output.includes('two-factor')) {
                     this.emit('requires_2fa');
                 }
             }
@@ -144,7 +113,12 @@ export class AppleMusicWrapperManager extends EventEmitter {
 
         this.process.stderr?.on('data', (data) => {
             const output = data.toString().trim();
-            if (output) this.log(`[ERROR] ${output}`);
+            if (output) {
+                this.log(`[ERROR] ${output}`);
+                 if (output.includes('Enter 2FA') || output.includes('Verification code') || output.includes('2FA Code') || output.includes('two-factor')) {
+                    this.emit('requires_2fa');
+                }
+            }
         });
 
         this.process.on('close', (code) => {
@@ -157,12 +131,25 @@ export class AppleMusicWrapperManager extends EventEmitter {
     }
 
     public stop(): void {
+        this.log("Stopping wrapper process & cleaning up ports...");
+
+        // Execute cleanup similar to stop_wrapper.sh
+        const child = spawn('bash', ['-c', `
+            echo "Killing wrapper..."
+            pkill -f wrapper || true
+            sleep 1
+            pkill -9 -f wrapper || true
+            fuser -k 10020/tcp 20020/tcp >/dev/null 2>&1 || true
+            echo "Cleanup complete."
+        `]);
+
+        child.stdout.on('data', (d) => this.log(d.toString().trim()));
+
         if (this.process) {
-            this.log("Stopping wrapper...");
             this.process.kill('SIGTERM');
             this.process = null;
-            this.emit('stopped');
         }
+        this.emit('stopped');
     }
 
     public sendInput(text: string): void {
