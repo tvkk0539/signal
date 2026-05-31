@@ -8,6 +8,7 @@ export interface RipperConfig {
     url: string;
     mediaUserToken: string;
     authorizationToken?: string;
+    ripMode?: 'auto' | 'song' | 'album' | 'artist';
     format: 'alac' | 'flac' | 'atmos' | 'aac';
     qualityLimit: '192000' | '96000' | '48000';
     embedLrc: boolean;
@@ -220,6 +221,16 @@ convert-delete-bad-alac: false # If true, delete if ALAC is damaged
             // By executing from the VFS root, the Go binary natively reads ./config.yaml
             if (config.format === 'atmos') args.push('--atmos');
             if (config.format === 'aac') args.push('--aac');
+
+            // Intelligent URL Router & Mode Selector
+            let mode = config.ripMode || 'auto';
+            if (mode === 'auto') {
+                if (config.url.includes('?i=')) mode = 'song';
+                else if (config.url.includes('/artist/')) mode = 'artist';
+            }
+
+            if (mode === 'song') args.push('--song');
+            else if (mode === 'artist') args.push('--all-album');
 
             args.push(config.url);
         }

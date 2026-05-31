@@ -1,4 +1,4 @@
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import { useLayoutStore } from '../../store/layoutStore';
 import { Apple, ArrowLeft, Download, Settings2, Terminal, Disc3, PlayCircle, Radio, KeyRound, Cog, Database } from 'lucide-react';
 import { AppleMusicWrapperUI } from './AppleMusicWrapperUI';
@@ -16,6 +16,7 @@ export const AppleMusicApp: React.FC = () => {
   const [url, setUrl] = useState('');
   const [format, setFormat] = useState<'alac' | 'flac' | 'atmos' | 'aac'>('alac');
   const [quality, setQuality] = useState<'192000' | '96000' | '48000'>('192000');
+  const [ripMode, setRipMode] = useState<'auto' | 'song' | 'album' | 'artist'>('auto');
 
   const [embedLrc, setEmbedLrc] = useState(true);
   const [animatedArt, setAnimatedArt] = useState(false);
@@ -125,6 +126,30 @@ export const AppleMusicApp: React.FC = () => {
     };
   }, [setWrapperStatus, setWrapperNeeds2FA, setMediaUserToken, setStorefront, setAutoUpload, setRcloneRemote]);
 
+  // Hybrid Auto-Detector: Parse URL on the fly
+  useEffect(() => {
+    if (!url) {
+      setRipMode('auto');
+      return;
+    }
+    try {
+      const urlObj = new URL(url);
+      if (urlObj.searchParams.has('i')) {
+        setRipMode('song');
+      } else if (urlObj.pathname.includes('/artist/')) {
+        setRipMode('artist');
+      } else if (urlObj.pathname.includes('/album/')) {
+        setRipMode('album');
+      } else if (urlObj.pathname.includes('/playlist/')) {
+        setRipMode('album');
+      } else {
+        setRipMode('auto');
+      }
+    } catch {
+      // Invalid URL while typing, ignore
+    }
+  }, [url]);
+
   const handleRip = (e: React.FormEvent) => {
     e.preventDefault();
     if (!url) return;
@@ -138,6 +163,7 @@ export const AppleMusicApp: React.FC = () => {
        timestamp: Date.now(),
        workerId: 'target-worker-id', // In a full implementation, this is selected via Relay routing
        url,
+       ripMode,
        format,
        qualityLimit: quality,
        embedLrc,
@@ -269,10 +295,25 @@ export const AppleMusicApp: React.FC = () => {
           <div className="p-8 space-y-8">
             {/* Input Section */}
             <form onSubmit={handleRip} className="space-y-4">
-              <label className="text-sm font-semibold text-white/80 flex items-center gap-2">
-                <Download size={16} className="text-[#FA243C]" />
-                Target URL (Track, Album, Playlist)
-              </label>
+              <div className="flex items-center justify-between">
+                <label className="text-sm font-semibold text-white/80 flex items-center gap-2">
+                  <Download size={16} className="text-[#FA243C]" />
+                  Target URL (Track, Album, Playlist)
+                </label>
+                <div className="flex items-center gap-2">
+                  <span className="text-xs text-muted-foreground uppercase font-bold tracking-wider">Mode:</span>
+                  <select
+                    value={ripMode}
+                    onChange={(e) => setRipMode(e.target.value as any)}
+                    className="bg-black/50 border border-white/10 text-white text-xs rounded-md px-2 py-1 focus:ring-[#FA243C]/50 outline-none"
+                  >
+                    <option value="auto">Auto-Detect</option>
+                    <option value="song">Single Song</option>
+                    <option value="album">Full Album</option>
+                    <option value="artist">Entire Artist</option>
+                  </select>
+                </div>
+              </div>
               <div className="flex gap-3">
                 <input
                   type="url"

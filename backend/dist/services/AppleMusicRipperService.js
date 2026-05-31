@@ -204,6 +204,18 @@ convert-delete-bad-alac: false # If true, delete if ALAC is damaged
                 args.push('--atmos');
             if (config.format === 'aac')
                 args.push('--aac');
+            // Intelligent URL Router & Mode Selector
+            let mode = config.ripMode || 'auto';
+            if (mode === 'auto') {
+                if (config.url.includes('?i='))
+                    mode = 'song';
+                else if (config.url.includes('/artist/'))
+                    mode = 'artist';
+            }
+            if (mode === 'song')
+                args.push('--song');
+            else if (mode === 'artist')
+                args.push('--all-album');
             args.push(config.url);
         }
         // 4. Sub-Process Execution

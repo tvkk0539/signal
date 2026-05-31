@@ -525,6 +525,7 @@ async function bootWorker() {
     try {
       await ripperService.executeRipJob({
         url: msg.url,
+        ripMode: msg.ripMode,
         mediaUserToken: msg.mediaUserToken || '',
         storefront: msg.storefront || 'us',
         format: msg.format,

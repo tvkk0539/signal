@@ -3,6 +3,7 @@ export interface RipperConfig {
     url: string;
     mediaUserToken: string;
     authorizationToken?: string;
+    ripMode?: 'auto' | 'song' | 'album' | 'artist';
     format: 'alac' | 'flac' | 'atmos' | 'aac';
     qualityLimit: '192000' | '96000' | '48000';
     embedLrc: boolean;
