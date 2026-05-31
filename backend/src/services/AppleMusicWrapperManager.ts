@@ -153,11 +153,12 @@ export class AppleMusicWrapperManager extends EventEmitter {
         args.push('-D', '10020');
         args.push('-M', '20020');
 
-        this.log(`Starting wrapper proxy: ${exePath} ${args.join(' ')}`);
+        this.log(`Starting wrapper proxy via bash handoff`);
 
-        // Spawn actual wrapper process exactly as `exec ./wrapper $ARGS` behaves
-        // We set the cwd to WRAPPER_DIR to mimic `cd /app/wrapper`
-        this.process = spawn(exePath, args, {
+        // Spawn wrapper process using bash handoff to resolve dynamic linker paths
+        // securely passing arguments as positional parameters to prevent command injection
+        // and preserve passwords containing special characters (like $).
+        this.process = spawn('bash', ['-c', `exec ./${this.BINARY_NAME} "$@"`, '--', ...args], {
             cwd: this.WRAPPER_DIR,
             stdio: ['pipe', 'pipe', 'pipe']
         });
