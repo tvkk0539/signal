@@ -2,7 +2,6 @@ import { spawn, ChildProcess } from 'child_process';
 import * as fs from 'fs';
 import * as path from 'path';
 import { EventEmitter } from 'events';
-import * as yaml from 'js-yaml';
 import * as crypto from 'crypto';
 
 export interface RipperConfig {
@@ -69,79 +68,112 @@ export class AppleMusicRipperService extends EventEmitter {
 
     /**
      * Dynamically generates the config.yaml required by the Go Ripper.
+     * Engineered as a Zero-Dependency Configuration Template Engine to guarantee 1:1 parity
+     * with the original Go binary's expected structure, preserving comments and exact quoting.
      */
     private generateConfigYaml(workspaceDir: string, config: RipperConfig): string {
         const downloadsDir = path.join(workspaceDir, 'downloads');
         if (!fs.existsSync(downloadsDir)) fs.mkdirSync(downloadsDir, { recursive: true });
 
-        // Map UI configuration to the Go Ripper's specific YAML structure
-        const yamlData = {
-            'media-user-token': config.mediaUserToken,
-            'authorization-token': config.authorizationToken || "",
-            'language': config.language || "",
-            'lrc-type': config.lrcType || "lyrics",
-            'lrc-format': config.lrcFormat || "lrc",
-            'embed-lrc': config.embedLrc,
-            'save-lrc-file': config.saveLrcFile ?? false,
-            'save-artist-cover': config.saveArtistCover ?? false,
-            'save-animated-artwork': config.animatedArt,
-            'emby-animated-artwork': config.embyAnimatedArtwork ?? false,
-            'embed-cover': true,
-            'cover-size': config.coverSize || "5000x5000",
-            'cover-format': config.coverFormat || "jpg",
-            'tag-sort-order': config.tagSortOrder ?? true,
-            'tag-itunes-id': true,
-
-            // Route all formats to the same isolated download folder for this job
-            'alac-save-folder': downloadsDir,
-            'atmos-save-folder': downloadsDir,
-            'aac-save-folder': downloadsDir,
-            'mv-save-folder': downloadsDir,
-
-            'max-memory-limit': config.maxMemoryLimit ?? 256,
-            'decrypt-m3u8-port': "127.0.0.1:10020",
-            'get-m3u8-port': "127.0.0.1:20020",
-            'get-m3u8-from-device': true,
-            'exit-on-error': config.exitOnError ?? false,
-
-            'get-m3u8-mode': config.getM3u8Mode || "hires",
-            'aac-type': config.aacType || "aac-lc",
-            'alac-max': parseInt(config.qualityLimit),
-            'atmos-max': 2768,
-            'limit-max': config.limitMax ?? 200,
-
-            'album-folder-format': config.albumFolderFormat || "{AlbumName}",
-            'playlist-folder-format': config.playlistFolderFormat || "{PlaylistName}",
-            'song-file-format': config.songFileFormat || "{SongNumer}. {SongName}",
-            'artist-folder-format': config.artistFolderFormat || "{UrlArtistName}",
-
-            'explicit-choice': config.explicitChoice !== undefined ? config.explicitChoice : "[E]",
-            'clean-choice': config.cleanChoice !== undefined ? config.cleanChoice : "[C]",
-            'apple-master-choice': config.appleMasterChoice !== undefined ? config.appleMasterChoice : "[M]",
-
-            'use-songinfo-for-playlist': config.useSongInfoForPlaylist ?? false,
-            'dl-albumcover-for-playlist': config.dlAlbumcoverForPlaylist ?? false,
-            'mv-audio-type': config.mvAudioType || "atmos",
-            'mv-max': config.mvMax ?? 2160,
-
-            'storefront': config.storefront || "us",
-            'alac-fix': config.alacFix ?? false,
-
-            'convert-after-download': config.format === 'flac',
-            'convert-format': "flac",
-            'convert-keep-original': false,
-            'convert-skip-if-source-matches': true,
-            'ffmpeg-path': "ffmpeg",
-            'convert-extra-args': "",
-            'convert-with-metadata': true,
-            'convert-warn-lossy-to-lossless': true,
-            'convert-skip-lossy-to-lossless': true,
-            'convert-check-bad-alac': false,
-            'convert-delete-bad-alac': false
+        // Helper to safely format string values inside quotes
+        const q = (val: string | undefined, defaultVal: string) => `"${val !== undefined ? val : defaultVal}"`;
+        // Helper to format string values without quotes if needed
+        const raw = (val: string | undefined, defaultVal: string) => `${val !== undefined && val !== "" ? val : defaultVal}`;
+        // Helper for booleans
+        const b = (val: boolean | undefined, defaultVal: boolean) => val !== undefined ? val : defaultVal;
+        // Helper for numbers
+        const n = (val: string | number | undefined, defaultVal: number) => {
+             if (val === undefined) return defaultVal;
+             return typeof val === 'string' ? parseInt(val) : val;
         };
 
+        const rawYamlTemplate = `media-user-token: ${q(config.mediaUserToken, '')} #If you need to obtain lyrics and aac-lc, need to change it
+authorization-token: ${q(config.authorizationToken, '')} #You don't need to change it; it can automatically obtain token
+language: ${q(config.language, '')}         #supportedLanguage by each storefront --> https://gist.github.com/itouakirai/c8ba9df9dc65bd300094103b058731d0
+lrc-type: ${q(config.lrcType, 'lyrics')}   #lyrics or syllable-lyrics
+lrc-format: ${q(config.lrcFormat, 'lrc')}   #lrc or ttml
+embed-lrc: ${b(config.embedLrc, true)}
+save-lrc-file: ${b(config.saveLrcFile, false)}
+save-artist-cover: ${b(config.saveArtistCover, false)}
+save-animated-artwork: ${b(config.animatedArt, false)}    # If enabled, requires ffmpeg
+emby-animated-artwork: ${b(config.embyAnimatedArtwork, false)}    # If enabled, requires ffmpeg
+embed-cover: true
+cover-size: ${raw(config.coverSize, '5000x5000')}
+cover-format: ${raw(config.coverFormat, 'jpg')}       #jpg png or original
+tag-sort-order: ${b(config.tagSortOrder, true)}
+tag-itunes-id: true
+alac-save-folder: ${downloadsDir}
+atmos-save-folder: ${downloadsDir}
+aac-save-folder: ${downloadsDir}
+mv-save-folder: ${downloadsDir}
+max-memory-limit: ${n(config.maxMemoryLimit, 256)} # MB
+decrypt-m3u8-port: "127.0.0.1:10020"
+get-m3u8-port: "127.0.0.1:20020"
+get-m3u8-from-device: true
+
+# set to 'true' to exit on error instead of requiring manual intervention. (for using this program in scripts)
+exit-on-error: ${b(config.exitOnError, false)}
+
+#set 'all' to retrieve all m3u8, and set 'hires' to only detect hires m3u8.
+get-m3u8-mode: ${raw(config.getM3u8Mode, 'hires')} # all hires
+aac-type: ${raw(config.aacType, 'aac-lc')} # aac-lc aac aac-binaural aac-downmix
+alac-max: ${n(config.qualityLimit, 192000)}  #192000 96000 48000 44100
+atmos-max: 2768  #2768 2448
+limit-max: ${n(config.limitMax, 200)}
+
+#{AlbumId} {AlbumName} {ArtistName} {ReleaseDate} {ReleaseYear} {UPC} {Copyright} {Quality} {Codec} {Tag} {RecordLabel}
+#example: {ReleaseYear} - {ArtistName} - {AlbumName}({AlbumId})({UPC})({Copyright}){Codec}
+album-folder-format: ${q(config.albumFolderFormat, '{AlbumName}')}
+
+#{PlaylistId} {PlaylistName} {ArtistName} {Quality} {Codec} {Tag}
+playlist-folder-format: ${q(config.playlistFolderFormat, '{PlaylistName}')}
+
+#{SongId} {SongNumer} {SongName} {DiscNumber} {TrackNumber} {Quality} {Codec} {Tag}
+#example: Disk {DiscNumber} - Track {TrackNumber} {SongName} [{Quality}]{{Tag}}"
+song-file-format: ${q(config.songFileFormat, '{SongNumer}. {SongName}')}
+
+#{ArtistId} {ArtistName}/{UrlArtistName}
+#if artist-folder-format set "",will not make artist folder
+artist-folder-format: ${q(config.artistFolderFormat, '{UrlArtistName}')}
+
+#if set "" will not add tag
+explicit-choice : ${q(config.explicitChoice, '[E]')}
+clean-choice : ${q(config.cleanChoice, '[C]')}
+apple-master-choice : ${q(config.appleMasterChoice, '[M]')}
+
+#if set true,for playlst,will use songinfo for meta #albumname track disk
+use-songinfo-for-playlist: ${b(config.useSongInfoForPlaylist, false)}
+
+#if set true,will download album cover for playlist
+dl-albumcover-for-playlist: ${b(config.dlAlbumcoverForPlaylist, false)}
+mv-audio-type: ${raw(config.mvAudioType, 'atmos')}  #atmos ac3 aac
+mv-max: ${n(config.mvMax, 2160)}
+
+# storefront will be used only in searching.
+# storefront is the 2-letter country code that are available in the urls (jp, ca, us etc.).
+# if your account is from Japan, you must use jp.
+# if the storefront is different from your account, you will see a "failed to get lyrics" error in most of the songs. By default the storefront is set to US if not set.
+storefront: ${q(config.storefront, 'us')}
+alac-fix: ${b(config.alacFix, false)}                   # Patch malformed ALAC packets
+
+# Conversion settings
+convert-after-download: ${config.format === 'flac'}     # Enable post-download conversion (requires ffmpeg)
+convert-format: "flac"            # flac | mp3 | opus | wav | copy (no re-encode)
+convert-keep-original: false       # Keep original file after successful conversion
+convert-skip-if-source-matches: true  # If already in target format, skip
+ffmpeg-path: "ffmpeg"             # Override if ffmpeg is not in PATH
+convert-extra-args: ""            # Additional raw args appended (advanced)
+convert-with-metadata: true      # If true, keep the same metadata in converted files
+
+# Conversion warnings and behavior
+convert-warn-lossy-to-lossless: true # If true, print a warning when converting a detected lossy source to a lossless container
+convert-skip-lossy-to-lossless: true # If true, skip converting detected lossy sources to lossless target formats (flac/wav)
+convert-check-bad-alac: false # If true, check and report if ALAC is damaged
+convert-delete-bad-alac: false # If true, delete if ALAC is damaged
+`;
+
         const configPath = path.join(workspaceDir, 'config.yaml');
-        fs.writeFileSync(configPath, yaml.dump(yamlData));
+        fs.writeFileSync(configPath, rawYamlTemplate);
         return configPath;
     }
 
