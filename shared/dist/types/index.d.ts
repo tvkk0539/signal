@@ -242,6 +242,7 @@ export interface WrapperStatusUpdateMessage extends BaseMessage {
 export interface AppleMusicRipRequestMessage extends BaseMessage {
     type: MessageType.APPLE_MUSIC_RIP_REQUEST;
     workerId: string;
+    jobId: string;
     url: string;
     ripMode?: 'auto' | 'song' | 'album' | 'artist';
     format: 'alac' | 'flac' | 'atmos' | 'aac';
@@ -320,6 +321,11 @@ export interface AppleMusicConfigSaveMessage extends BaseMessage {
     limitMax?: number;
     dlAlbumcoverForPlaylist?: boolean;
     embyAnimatedArtwork?: boolean;
+}
+export interface AppleMusicCancelRequestMessage extends BaseMessage {
+    type: MessageType.APPLE_MUSIC_CANCEL_REQUEST;
+    workerId: string;
+    jobId: string;
 }
 export interface AppleMusicConfigDataMessage extends BaseMessage {
     type: MessageType.APPLE_MUSIC_CONFIG_DATA;

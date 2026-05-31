@@ -1,5 +1,6 @@
 import { EventEmitter } from 'events';
 export interface RipperConfig {
+    jobId?: string;
     url: string;
     mediaUserToken: string;
     authorizationToken?: string;

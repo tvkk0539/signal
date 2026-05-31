@@ -469,6 +469,13 @@ async function bootWorker() {
   });
 
   // --- Phase 9: WebSocket Ingestion Handlers ---
+  socket.on(MessageType.APPLE_MUSIC_CANCEL_REQUEST, (msg: any) => {
+    console.log(`[Worker] Received APPLE_MUSIC_CANCEL_REQUEST for Job: ${msg.jobId}`);
+    if (msg.jobId) {
+      ripperService.cancelJob(msg.jobId);
+    }
+  });
+
   socket.on(MessageType.WRAPPER_START_REQUEST, async (msg: any) => {
     console.log(`[Worker] Received WRAPPER_START_REQUEST`);
     try {
@@ -524,6 +531,7 @@ async function bootWorker() {
     console.log(`[Worker] Received APPLE_MUSIC_RIP_REQUEST for URL: ${msg.url}`);
     try {
       await ripperService.executeRipJob({
+        jobId: msg.jobId,
         url: msg.url,
         ripMode: msg.ripMode,
         mediaUserToken: msg.mediaUserToken || '',

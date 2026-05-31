@@ -172,7 +172,7 @@ convert-delete-bad-alac: false # If true, delete if ALAC is damaged
      */
     async executeRipJob(config) {
         // 1. Isolation (VFS Vault Creation): Create a highly specific workspace to prevent cross-contamination
-        const jobId = crypto.randomUUID();
+        const jobId = config.jobId || crypto.randomUUID();
         const workspaceDir = path.join(this.APP_DIR, `job_${jobId}`);
         fs.mkdirSync(workspaceDir, { recursive: true });
         this.log(jobId, `Initializing new isolated VFS Sandbox at ${workspaceDir}`);

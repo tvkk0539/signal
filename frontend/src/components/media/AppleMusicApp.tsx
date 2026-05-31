@@ -1,17 +1,20 @@
 import React, { useState, useEffect } from 'react';
 import { useLayoutStore } from '../../store/layoutStore';
-import { Apple, ArrowLeft, Download, Settings2, Terminal, Disc3, PlayCircle, Radio, KeyRound, Cog, Database } from 'lucide-react';
+import { Apple, ArrowLeft, Download, Settings2, Terminal, Radio, KeyRound, Cog, Database } from 'lucide-react';
 import { AppleMusicWrapperUI } from './AppleMusicWrapperUI';
 import { AppleMusicConfigUI } from './AppleMusicConfigUI';
 import { AppleMusicSettingsUI } from './AppleMusicSettingsUI';
+import { AppleMusicQueueUI } from './AppleMusicQueueUI';
 import { SocketManager } from '../../worker/SocketManager';
 import { MessageType } from '@swarm/shared';
 import type { AppleMusicRipRequestMessage, RipperTelemetryMessage, WrapperStatusUpdateMessage, Wrapper2FAChallengeMessage } from '@swarm/shared';
 import { useAppleMusicStore } from '../../store/appleMusicStore';
+import { useAppleMusicQueueStore } from '../../store/appleMusicQueueStore';
+import { v4 as uuidv4 } from 'uuid';
 
 export const AppleMusicApp: React.FC = () => {
   const { setActiveView } = useLayoutStore();
-  const [activeTab, setActiveTab] = useState<'RIPPER' | 'WRAPPER' | 'CONFIG' | 'SETTINGS'>('RIPPER');
+  const [activeTab, setActiveTab] = useState<'RIPPER' | 'QUEUE' | 'WRAPPER' | 'CONFIG' | 'SETTINGS'>('RIPPER');
 
   const [url, setUrl] = useState('');
   const [format, setFormat] = useState<'alac' | 'flac' | 'atmos' | 'aac'>('alac');
@@ -24,12 +27,7 @@ export const AppleMusicApp: React.FC = () => {
   const [printJson, setPrintJson] = useState(false);
   const [debugMode, setDebugMode] = useState(false);
 
-  const [isRipping, setIsRipping] = useState(false);
-  const [telemetryLogs, setTelemetryLogs] = useState<string[]>([
-    "# Swarm Worker Go Ripper Environment Ready",
-    "[INFO] Awaiting Rip Initialization..."
-  ]);
-  const [_currentJobId, setCurrentJobId] = useState<string | null>(null);
+  const { addJob, appendLog, updateJobStatus } = useAppleMusicQueueStore();
 
   const {
     mediaUserToken, storefront, setMediaUserToken, setStorefront, setAutoUpload, setRcloneRemote,
@@ -95,16 +93,13 @@ export const AppleMusicApp: React.FC = () => {
     };
 
     const handleTelemetry = (msg: RipperTelemetryMessage) => {
-       setIsRipping(true);
-       setCurrentJobId(msg.jobId);
-       setTelemetryLogs(prev => {
-          const newLogs = [...prev, msg.log];
-          return newLogs.length > 100 ? newLogs.slice(newLogs.length - 100) : newLogs;
-       });
-
-       if (msg.log.includes('exited with code') || msg.log.includes('finished with status')) {
-           setIsRipping(false);
-           setCurrentJobId(null);
+       if (msg.log && msg.jobId) {
+          appendLog(msg.jobId, msg.log);
+          if (msg.log.includes('SUCCESS') || msg.log.includes('finished with status')) {
+              updateJobStatus(msg.jobId, 'COMPLETED');
+          } else if (msg.log.includes('FAILED') || msg.log.includes('ERROR') || msg.log.includes('exited with code')) {
+              updateJobStatus(msg.jobId, 'FAILED');
+          }
        }
     };
 
@@ -157,14 +152,22 @@ export const AppleMusicApp: React.FC = () => {
     e.preventDefault();
     if (!url) return;
 
-    setIsRipping(true);
-    setTelemetryLogs(["[SYSTEM] Emitting APPLE_MUSIC_RIP_REQUEST to Swarm..."]);
+    const newJobId = uuidv4();
+
+    addJob({
+      jobId: newJobId,
+      url,
+      status: 'QUEUED',
+      configSnapshot: { mode: ripMode, format },
+      logs: ["[SYSTEM] Job created and dispatched to Swarm Ledger..."]
+    });
 
     const socketManager = SocketManager.getInstance();
     const payload: AppleMusicRipRequestMessage = {
        type: MessageType.APPLE_MUSIC_RIP_REQUEST,
        timestamp: Date.now(),
-       workerId: 'target-worker-id', // In a full implementation, this is selected via Relay routing
+       workerId: 'target-worker-id',
+       jobId: newJobId,
        url,
        ripMode,
        format,
@@ -207,6 +210,8 @@ export const AppleMusicApp: React.FC = () => {
     };
 
     socketManager.emit(MessageType.APPLE_MUSIC_RIP_REQUEST, payload);
+    setUrl(''); // Clear the input for the next job
+    setActiveTab('QUEUE'); // Auto-switch to the ledger to watch it run
   };
 
   return (
@@ -260,6 +265,15 @@ export const AppleMusicApp: React.FC = () => {
             Ripper Engine
           </button>
           <button
+            onClick={() => setActiveTab('QUEUE')}
+            className={`flex items-center gap-2 px-4 py-2 rounded-lg text-sm font-semibold transition-all whitespace-nowrap ${
+              activeTab === 'QUEUE' ? 'bg-white/10 text-white shadow-sm' : 'text-muted-foreground hover:text-white/80'
+            }`}
+          >
+            <Terminal size={16} />
+            Queue & Ledger
+          </button>
+          <button
             onClick={() => setActiveTab('WRAPPER')}
             className={`flex items-center gap-2 px-4 py-2 rounded-lg text-sm font-semibold transition-all whitespace-nowrap ${
               activeTab === 'WRAPPER' ? 'bg-white/10 text-white shadow-sm' : 'text-muted-foreground hover:text-white/80'
@@ -295,8 +309,8 @@ export const AppleMusicApp: React.FC = () => {
 
         {activeTab === 'RIPPER' ? (
         <>
-        {/* Left Side: Control Deck */}
-        <div className="w-1/2 flex flex-col border-r border-white/10 bg-[#0a0a0a]/40 backdrop-blur-sm overflow-y-auto">
+        {/* Full Width: Control Deck */}
+        <div className="w-full flex flex-col bg-[#0a0a0a]/40 backdrop-blur-sm overflow-y-auto max-w-4xl mx-auto">
 
           <div className="p-8 space-y-8">
             {/* Input Section */}
@@ -331,14 +345,10 @@ export const AppleMusicApp: React.FC = () => {
                 />
                 <button
                   type="submit"
-                  disabled={isRipping || !url}
+                  disabled={!url}
                   className="px-6 py-3 bg-[#FA243C] hover:bg-[#fa5e6e] disabled:opacity-50 disabled:bg-[#FA243C] text-white font-bold rounded-xl transition-all shadow-[0_0_15px_rgba(250,36,60,0.3)] flex items-center gap-2"
                 >
-                  {isRipping ? (
-                    <span className="flex items-center gap-2"><Disc3 size={18} className="animate-spin" /> Ripping...</span>
-                  ) : (
-                    'Initialize'
-                  )}
+                  Dispatch
                 </button>
               </div>
             </form>
@@ -416,56 +426,13 @@ export const AppleMusicApp: React.FC = () => {
               </div>
             </div>
 
-            {/* Active Queue (Simulated) */}
-            {isRipping && (
-              <div className="space-y-4">
-                <h3 className="text-sm font-semibold text-white/80 flex items-center gap-2">
-                  <PlayCircle size={16} className="text-[#FA243C]" />
-                  Active Rip Queue
-                </h3>
-                <div className="p-4 rounded-xl bg-black/40 border border-white/10 flex items-center gap-4">
-                  <div className="w-16 h-16 rounded-md bg-gradient-to-br from-blue-900 to-purple-900 flex-shrink-0 animate-pulse border border-white/20" />
-                  <div className="flex-1 min-w-0">
-                    <h4 className="text-white font-medium truncate text-sm">Acquiring Track Metadata...</h4>
-                    <p className="text-muted-foreground text-xs truncate">Resolving M3U8 stream via decryption proxy</p>
-                    <div className="mt-2 h-1.5 w-full bg-white/10 rounded-full overflow-hidden">
-                      <div className="h-full bg-[#FA243C] w-[30%] animate-pulse rounded-full" />
-                    </div>
-                  </div>
-                </div>
-              </div>
-            )}
           </div>
-        </div>
-
-        {/* Right Side: Telemetry Terminal */}
-        <div className="w-1/2 bg-[#050505] border-l border-white/5 flex flex-col relative font-mono">
-
-          <div className="px-4 py-2 bg-white/5 border-b border-white/5 flex items-center gap-2 text-xs text-muted-foreground">
-            <Terminal size={14} />
-            <span>Worker Node [tty0] - stdout</span>
-          </div>
-
-          <div className="flex-1 p-4 overflow-y-auto text-[11px] leading-relaxed text-green-500/80 space-y-1">
-            {telemetryLogs.map((log, idx) => (
-                <div key={idx} className={
-                    log.includes('ERROR') ? 'text-red-400' :
-                    log.includes('SUCCESS') ? 'text-blue-400' :
-                    log.includes('WARN') ? 'text-yellow-500 animate-pulse' :
-                    log.startsWith('#') ? 'text-white/40' : ''
-                }>
-                    {log}
-                </div>
-            ))}
-            {isRipping && (
-                <div className="animate-pulse opacity-50">_</div>
-            )}
-          </div>
-
-          {/* Terminal Scanline Overlay */}
-          <div className="absolute inset-0 pointer-events-none bg-[linear-gradient(rgba(18,16,16,0)_50%,rgba(0,0,0,0.25)_50%),linear-gradient(90deg,rgba(255,0,0,0.06),rgba(0,255,0,0.02),rgba(0,0,255,0.06))] bg-[length:100%_4px,3px_100%] opacity-20" />
         </div>
         </>
+        ) : activeTab === 'QUEUE' ? (
+           <div className="w-full h-full relative z-20 overflow-hidden pointer-events-auto">
+              <AppleMusicQueueUI />
+           </div>
         ) : activeTab === 'WRAPPER' ? (
            <div className="w-full h-full overflow-y-auto relative z-20 pointer-events-auto">
               <AppleMusicWrapperUI />

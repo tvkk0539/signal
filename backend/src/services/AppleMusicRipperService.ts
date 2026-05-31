@@ -5,6 +5,7 @@ import { EventEmitter } from 'events';
 import * as crypto from 'crypto';
 
 export interface RipperConfig {
+    jobId?: string;
     url: string;
     mediaUserToken: string;
     authorizationToken?: string;
@@ -187,7 +188,7 @@ convert-delete-bad-alac: false # If true, delete if ALAC is damaged
      */
     public async executeRipJob(config: RipperConfig): Promise<{ jobId: string }> {
         // 1. Isolation (VFS Vault Creation): Create a highly specific workspace to prevent cross-contamination
-        const jobId = crypto.randomUUID();
+        const jobId = config.jobId || crypto.randomUUID();
         const workspaceDir = path.join(this.APP_DIR, `job_${jobId}`);
         fs.mkdirSync(workspaceDir, { recursive: true });
 
