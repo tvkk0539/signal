@@ -41,6 +41,14 @@ export interface RipperConfig {
     limitMax?: number;
     dlAlbumcoverForPlaylist?: boolean;
     embyAnimatedArtwork?: boolean;
+    convertFormat?: string;
+    convertKeepOriginal?: boolean;
+    convertSkipIfSourceMatches?: boolean;
+    convertWithMetadata?: boolean;
+    convertWarnLossyToLossless?: boolean;
+    convertSkipLossyToLossless?: boolean;
+    convertCheckBadAlac?: boolean;
+    convertDeleteBadAlac?: boolean;
 }
 export declare class AppleMusicRipperService extends EventEmitter {
     private readonly BASE_DIR;

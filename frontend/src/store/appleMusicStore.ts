@@ -31,6 +31,14 @@ interface AppleMusicState {
     limitMax: number;
     dlAlbumcoverForPlaylist: boolean;
     embyAnimatedArtwork: boolean;
+    convertFormat: string;
+    convertKeepOriginal: boolean;
+    convertSkipIfSourceMatches: boolean;
+    convertWithMetadata: boolean;
+    convertWarnLossyToLossless: boolean;
+    convertSkipLossyToLossless: boolean;
+    convertCheckBadAlac: boolean;
+    convertDeleteBadAlac: boolean;
 
     setMediaUserToken: (val: string) => void;
     setStorefront: (val: string) => void;
@@ -62,6 +70,14 @@ interface AppleMusicState {
     setLimitMax: (val: number) => void;
     setDlAlbumcoverForPlaylist: (val: boolean) => void;
     setEmbyAnimatedArtwork: (val: boolean) => void;
+    setConvertFormat: (val: string) => void;
+    setConvertKeepOriginal: (val: boolean) => void;
+    setConvertSkipIfSourceMatches: (val: boolean) => void;
+    setConvertWithMetadata: (val: boolean) => void;
+    setConvertWarnLossyToLossless: (val: boolean) => void;
+    setConvertSkipLossyToLossless: (val: boolean) => void;
+    setConvertCheckBadAlac: (val: boolean) => void;
+    setConvertDeleteBadAlac: (val: boolean) => void;
 
     // Advanced Wrapper Telemetry State
     wrapperIsInstalled: boolean;
@@ -105,6 +121,14 @@ export const useAppleMusicStore = create<AppleMusicState>((set) => ({
     limitMax: 200,
     dlAlbumcoverForPlaylist: false,
     embyAnimatedArtwork: false,
+    convertFormat: "flac",
+    convertKeepOriginal: false,
+    convertSkipIfSourceMatches: true,
+    convertWithMetadata: true,
+    convertWarnLossyToLossless: true,
+    convertSkipLossyToLossless: true,
+    convertCheckBadAlac: false,
+    convertDeleteBadAlac: false,
 
     setMediaUserToken: (val) => set({ mediaUserToken: val }),
     setStorefront: (val) => set({ storefront: val }),
@@ -136,6 +160,14 @@ export const useAppleMusicStore = create<AppleMusicState>((set) => ({
     setLimitMax: (val) => set({ limitMax: val }),
     setDlAlbumcoverForPlaylist: (val) => set({ dlAlbumcoverForPlaylist: val }),
     setEmbyAnimatedArtwork: (val) => set({ embyAnimatedArtwork: val }),
+    setConvertFormat: (val) => set({ convertFormat: val }),
+    setConvertKeepOriginal: (val) => set({ convertKeepOriginal: val }),
+    setConvertSkipIfSourceMatches: (val) => set({ convertSkipIfSourceMatches: val }),
+    setConvertWithMetadata: (val) => set({ convertWithMetadata: val }),
+    setConvertWarnLossyToLossless: (val) => set({ convertWarnLossyToLossless: val }),
+    setConvertSkipLossyToLossless: (val) => set({ convertSkipLossyToLossless: val }),
+    setConvertCheckBadAlac: (val) => set({ convertCheckBadAlac: val }),
+    setConvertDeleteBadAlac: (val) => set({ convertDeleteBadAlac: val }),
 
     wrapperIsInstalled: false,
     wrapperIsRunning: false,

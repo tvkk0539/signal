@@ -148,19 +148,19 @@ storefront: ${q(config.storefront, 'us')}
 alac-fix: ${b(config.alacFix, false)}                   # Patch malformed ALAC packets
 
 # Conversion settings
-convert-after-download: ${config.format === 'flac'}     # Enable post-download conversion (requires ffmpeg)
-convert-format: "flac"            # flac | mp3 | opus | wav | copy (no re-encode)
-convert-keep-original: false       # Keep original file after successful conversion
-convert-skip-if-source-matches: true  # If already in target format, skip
+convert-after-download: ${b(config.convertFormat !== 'copy', false)}     # Enable post-download conversion (requires ffmpeg)
+convert-format: ${q(config.convertFormat, 'flac')}            # flac | mp3 | opus | wav | copy (no re-encode)
+convert-keep-original: ${b(config.convertKeepOriginal, false)}       # Keep original file after successful conversion
+convert-skip-if-source-matches: ${b(config.convertSkipIfSourceMatches, true)}  # If already in target format, skip
 ffmpeg-path: "ffmpeg"             # Override if ffmpeg is not in PATH
 convert-extra-args: ""            # Additional raw args appended (advanced)
-convert-with-metadata: true      # If true, keep the same metadata in converted files
+convert-with-metadata: ${b(config.convertWithMetadata, true)}      # If true, keep the same metadata in converted files
 
 # Conversion warnings and behavior
-convert-warn-lossy-to-lossless: true # If true, print a warning when converting a detected lossy source to a lossless container
-convert-skip-lossy-to-lossless: true # If true, skip converting detected lossy sources to lossless target formats (flac/wav)
-convert-check-bad-alac: false # If true, check and report if ALAC is damaged
-convert-delete-bad-alac: false # If true, delete if ALAC is damaged
+convert-warn-lossy-to-lossless: ${b(config.convertWarnLossyToLossless, true)} # If true, print a warning when converting a detected lossy source to a lossless container
+convert-skip-lossy-to-lossless: ${b(config.convertSkipLossyToLossless, true)} # If true, skip converting detected lossy sources to lossless target formats (flac/wav)
+convert-check-bad-alac: ${b(config.convertCheckBadAlac, false)} # If true, check and report if ALAC is damaged
+convert-delete-bad-alac: ${b(config.convertDeleteBadAlac, false)} # If true, delete if ALAC is damaged
 `;
         const configPath = path.join(workspaceDir, 'config.yaml');
         fs.writeFileSync(configPath, rawYamlTemplate);

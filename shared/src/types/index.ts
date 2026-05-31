@@ -306,6 +306,14 @@ export interface AppleMusicRipRequestMessage extends BaseMessage {
   limitMax?: number;
   dlAlbumcoverForPlaylist?: boolean;
   embyAnimatedArtwork?: boolean;
+  convertFormat?: string;
+  convertKeepOriginal?: boolean;
+  convertSkipIfSourceMatches?: boolean;
+  convertWithMetadata?: boolean;
+  convertWarnLossyToLossless?: boolean;
+  convertSkipLossyToLossless?: boolean;
+  convertCheckBadAlac?: boolean;
+  convertDeleteBadAlac?: boolean;
 }
 
 export interface RipperTelemetryMessage extends BaseMessage {
@@ -347,6 +355,14 @@ export interface AppleMusicConfigSaveMessage extends BaseMessage {
   limitMax?: number;
   dlAlbumcoverForPlaylist?: boolean;
   embyAnimatedArtwork?: boolean;
+  convertFormat?: string;
+  convertKeepOriginal?: boolean;
+  convertSkipIfSourceMatches?: boolean;
+  convertWithMetadata?: boolean;
+  convertWarnLossyToLossless?: boolean;
+  convertSkipLossyToLossless?: boolean;
+  convertCheckBadAlac?: boolean;
+  convertDeleteBadAlac?: boolean;
 }
 
 export interface AppleMusicCancelRequestMessage extends BaseMessage {
@@ -387,4 +403,12 @@ export interface AppleMusicConfigDataMessage extends BaseMessage {
   limitMax?: number;
   dlAlbumcoverForPlaylist?: boolean;
   embyAnimatedArtwork?: boolean;
+  convertFormat?: string;
+  convertKeepOriginal?: boolean;
+  convertSkipIfSourceMatches?: boolean;
+  convertWithMetadata?: boolean;
+  convertWarnLossyToLossless?: boolean;
+  convertSkipLossyToLossless?: boolean;
+  convertCheckBadAlac?: boolean;
+  convertDeleteBadAlac?: boolean;
 }

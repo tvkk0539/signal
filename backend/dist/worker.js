@@ -525,7 +525,15 @@ async function bootWorker() {
                 mvMax: msg.mvMax,
                 limitMax: msg.limitMax,
                 dlAlbumcoverForPlaylist: msg.dlAlbumcoverForPlaylist,
-                embyAnimatedArtwork: msg.embyAnimatedArtwork
+                embyAnimatedArtwork: msg.embyAnimatedArtwork,
+                convertFormat: msg.convertFormat,
+                convertKeepOriginal: msg.convertKeepOriginal,
+                convertSkipIfSourceMatches: msg.convertSkipIfSourceMatches,
+                convertWithMetadata: msg.convertWithMetadata,
+                convertWarnLossyToLossless: msg.convertWarnLossyToLossless,
+                convertSkipLossyToLossless: msg.convertSkipLossyToLossless,
+                convertCheckBadAlac: msg.convertCheckBadAlac,
+                convertDeleteBadAlac: msg.convertDeleteBadAlac
             });
         }
         catch (e) {
