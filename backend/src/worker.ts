@@ -532,6 +532,9 @@ async function bootWorker() {
         qualityLimit: msg.qualityLimit,
         embedLrc: msg.embedLrc,
         animatedArt: msg.animatedArt,
+        saveM3u8Playlist: msg.saveM3u8Playlist,
+        printJson: msg.printJson,
+        debugMode: msg.debugMode,
         // Pass through routing preferences to the 'job_complete' handler
         autoUpload: msg.autoUpload ?? true,
         rcloneRemote: msg.rcloneRemote || 'remote:/Media/AppleMusic_Rips',

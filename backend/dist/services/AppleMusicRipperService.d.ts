@@ -8,6 +8,9 @@ export interface RipperConfig {
     qualityLimit: '192000' | '96000' | '48000';
     embedLrc: boolean;
     animatedArt: boolean;
+    saveM3u8Playlist?: boolean;
+    printJson?: boolean;
+    debugMode?: boolean;
     storefront?: string;
     autoUpload?: boolean;
     rcloneRemote?: string;

@@ -13,6 +13,9 @@ export interface RipperConfig {
     qualityLimit: '192000' | '96000' | '48000';
     embedLrc: boolean;
     animatedArt: boolean;
+    saveM3u8Playlist?: boolean;
+    printJson?: boolean;
+    debugMode?: boolean;
     storefront?: string;
     autoUpload?: boolean;
     rcloneRemote?: string;
@@ -231,6 +234,11 @@ convert-delete-bad-alac: false # If true, delete if ALAC is damaged
 
             if (mode === 'song') args.push('--song');
             else if (mode === 'artist') args.push('--all-album');
+
+            // Advanced Engine Flags
+            if (config.saveM3u8Playlist) args.push('--save-m3u8-playlist');
+            if (config.printJson) args.push('--json');
+            if (config.debugMode) args.push('--debug');
 
             args.push(config.url);
         }

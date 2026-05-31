@@ -248,6 +248,9 @@ export interface AppleMusicRipRequestMessage extends BaseMessage {
     qualityLimit: '192000' | '96000' | '48000';
     embedLrc: boolean;
     animatedArt: boolean;
+    saveM3u8Playlist?: boolean;
+    printJson?: boolean;
+    debugMode?: boolean;
     mediaUserToken: string;
     storefront: string;
     autoUpload?: boolean;

@@ -216,6 +216,13 @@ convert-delete-bad-alac: false # If true, delete if ALAC is damaged
                 args.push('--song');
             else if (mode === 'artist')
                 args.push('--all-album');
+            // Advanced Engine Flags
+            if (config.saveM3u8Playlist)
+                args.push('--save-m3u8-playlist');
+            if (config.printJson)
+                args.push('--json');
+            if (config.debugMode)
+                args.push('--debug');
             args.push(config.url);
         }
         // 4. Sub-Process Execution

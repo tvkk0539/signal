@@ -20,6 +20,9 @@ export const AppleMusicApp: React.FC = () => {
 
   const [embedLrc, setEmbedLrc] = useState(true);
   const [animatedArt, setAnimatedArt] = useState(false);
+  const [saveM3u8Playlist, setSaveM3u8Playlist] = useState(false);
+  const [printJson, setPrintJson] = useState(false);
+  const [debugMode, setDebugMode] = useState(false);
 
   const [isRipping, setIsRipping] = useState(false);
   const [telemetryLogs, setTelemetryLogs] = useState<string[]>([
@@ -168,6 +171,9 @@ export const AppleMusicApp: React.FC = () => {
        qualityLimit: quality,
        embedLrc,
        animatedArt,
+       saveM3u8Playlist,
+       printJson,
+       debugMode,
        mediaUserToken,
        storefront,
        alacFix,
@@ -388,6 +394,22 @@ export const AppleMusicApp: React.FC = () => {
                     <label className="flex items-center justify-between cursor-pointer group">
                       <span className="text-sm font-medium text-muted-foreground group-hover:text-white transition-colors">Save Animated Artwork (MP4)</span>
                       <input type="checkbox" checked={animatedArt} onChange={(e) => setAnimatedArt(e.target.checked)} className="accent-[#FA243C] w-4 h-4" />
+                    </label>
+                  </div>
+
+                  <div className="space-y-3">
+                    <label className="text-xs uppercase tracking-wider text-muted-foreground font-bold">Advanced Engine Flags</label>
+                    <label className="flex items-center justify-between cursor-pointer group">
+                      <span className="text-sm font-medium text-muted-foreground group-hover:text-white transition-colors" title="Saves the raw stream chunks map for debugging">Keep M3U8 Playlists</span>
+                      <input type="checkbox" checked={saveM3u8Playlist} onChange={(e) => setSaveM3u8Playlist(e.target.checked)} className="accent-[#FA243C] w-4 h-4" />
+                    </label>
+                    <label className="flex items-center justify-between cursor-pointer group">
+                      <span className="text-sm font-medium text-muted-foreground group-hover:text-white transition-colors" title="Outputs completion payload as machine-readable JSON">Print Final JSON Payload</span>
+                      <input type="checkbox" checked={printJson} onChange={(e) => setPrintJson(e.target.checked)} className="accent-[#FA243C] w-4 h-4" />
+                    </label>
+                    <label className="flex items-center justify-between cursor-pointer group">
+                      <span className="text-sm font-medium text-muted-foreground group-hover:text-white transition-colors" title="Displays deep audio quality and decryption diagnostics">Enable Telemetry Debug Mode</span>
+                      <input type="checkbox" checked={debugMode} onChange={(e) => setDebugMode(e.target.checked)} className="accent-[#FA243C] w-4 h-4" />
                     </label>
                   </div>
                 </div>
