@@ -24,7 +24,8 @@ const io = new Server(server, {
   cors: {
     origin: '*',
     methods: ['GET', 'POST']
-  }
+  },
+  maxHttpBufferSize: 1e8 // 100MB for Ephemeral State Hydration payloads
 });
 
 setupSockets(io);

@@ -475,14 +475,39 @@ async function bootWorker() {
       if (!wrapperManager.isInstalled()) {
         await wrapperManager.install();
       }
-      await wrapperManager.start(msg.username, msg.password);
+
+      // Ephemeral State Hydration: Ask Relay for saved state before starting
+      socket.emit(MessageType.WRAPPER_STATE_LOAD, { workerId: socket.id });
+
+      const handleStateData = async (stateMsg: any) => {
+          if (stateMsg.workerId === socket.id) {
+              socket.off(MessageType.WRAPPER_STATE_DATA, handleStateData);
+              if (stateMsg.payload) {
+                  await wrapperManager.importState(stateMsg.payload);
+              }
+              await wrapperManager.start(msg.username, msg.password);
+          }
+      };
+
+      socket.on(MessageType.WRAPPER_STATE_DATA, handleStateData);
+
     } catch (e: any) {
       console.error(`[Worker] Wrapper Start Error:`, e);
     }
   });
 
-  socket.on(MessageType.WRAPPER_STOP_REQUEST, (msg: any) => {
+  socket.on(MessageType.WRAPPER_STOP_REQUEST, async (msg: any) => {
     console.log(`[Worker] Received WRAPPER_STOP_REQUEST`);
+
+    // Ephemeral State Hydration: Save the DRM keys before killing it
+    const statePayload = await wrapperManager.exportState();
+    if (statePayload) {
+        socket.emit(MessageType.WRAPPER_STATE_SAVE, {
+            payload: statePayload,
+            workerId: socket.id
+        });
+    }
+
     wrapperManager.stop();
   });
 

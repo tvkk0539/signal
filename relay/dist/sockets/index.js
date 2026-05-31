@@ -353,6 +353,48 @@ function setupSockets(io) {
                 console.error(`[Relay] Failed to load Apple Music Config:`, e.message);
             }
         });
+        socket.on(shared_1.MessageType.WRAPPER_STATE_SAVE, async (msg) => {
+            try {
+                const db = db_1.dbManager.getAppleMusic();
+                await db.saveConfig({
+                    wrapperStatePayload: msg.payload
+                });
+                console.log(`[Relay] Ephemeral Wrapper State Saved (Length: ${msg.payload.length})`);
+            }
+            catch (e) {
+                console.error(`[Relay] Failed to save Wrapper State:`, e.message);
+            }
+        });
+        socket.on(shared_1.MessageType.WRAPPER_STATE_LOAD, async (msg) => {
+            try {
+                const db = db_1.dbManager.getAppleMusic();
+                const config = await db.getConfig();
+                if (config && config.wrapperStatePayload) {
+                    console.log(`[Relay] Sending Hydration State to Worker ${socket.id}`);
+                    socket.emit(shared_1.MessageType.WRAPPER_STATE_DATA, {
+                        type: shared_1.MessageType.WRAPPER_STATE_DATA,
+                        payload: config.wrapperStatePayload,
+                        workerId: msg.workerId
+                    });
+                }
+                else {
+                    console.log(`[Relay] No state found to hydrate for Worker ${socket.id}`);
+                    socket.emit(shared_1.MessageType.WRAPPER_STATE_DATA, {
+                        type: shared_1.MessageType.WRAPPER_STATE_DATA,
+                        payload: null,
+                        workerId: msg.workerId
+                    });
+                }
+            }
+            catch (e) {
+                console.error(`[Relay] Failed to load Wrapper State:`, e.message);
+                socket.emit(shared_1.MessageType.WRAPPER_STATE_DATA, {
+                    type: shared_1.MessageType.WRAPPER_STATE_DATA,
+                    payload: null,
+                    workerId: msg.workerId
+                });
+            }
+        });
         // Reverse Routing: From Worker back to UI clients
         socket.on(shared_1.MessageType.WRAPPER_STATUS_UPDATE, (msg) => {
             exports.connectedUIClients.forEach((clientSocket) => {

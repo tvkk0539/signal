@@ -21,6 +21,7 @@ export class InMemoryAppleMusicRepository implements IAppleMusicRepository {
       saveLrcFile: config.saveLrcFile ?? false,
       saveArtistCover: config.saveArtistCover ?? false,
       useSongInfoForPlaylist: config.useSongInfoForPlaylist ?? false,
+      wrapperStatePayload: config.wrapperStatePayload !== undefined ? config.wrapperStatePayload : this.config?.wrapperStatePayload,
       updatedAt: new Date()
     };
     return this.config;
