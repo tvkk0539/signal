@@ -1,12 +1,17 @@
 import { EventEmitter } from 'events';
 export interface RipperConfig {
+    jobId?: string;
     url: string;
     mediaUserToken: string;
     authorizationToken?: string;
+    ripMode?: 'auto' | 'song' | 'album' | 'artist' | 'mv';
     format: 'alac' | 'flac' | 'atmos' | 'aac';
     qualityLimit: '192000' | '96000' | '48000';
     embedLrc: boolean;
     animatedArt: boolean;
+    saveM3u8Playlist?: boolean;
+    printJson?: boolean;
+    debugMode?: boolean;
     storefront?: string;
     autoUpload?: boolean;
     rcloneRemote?: string;
@@ -36,6 +41,14 @@ export interface RipperConfig {
     limitMax?: number;
     dlAlbumcoverForPlaylist?: boolean;
     embyAnimatedArtwork?: boolean;
+    convertFormat?: string;
+    convertKeepOriginal?: boolean;
+    convertSkipIfSourceMatches?: boolean;
+    convertWithMetadata?: boolean;
+    convertWarnLossyToLossless?: boolean;
+    convertSkipLossyToLossless?: boolean;
+    convertCheckBadAlac?: boolean;
+    convertDeleteBadAlac?: boolean;
 }
 export declare class AppleMusicRipperService extends EventEmitter {
     private readonly BASE_DIR;
@@ -51,7 +64,8 @@ export declare class AppleMusicRipperService extends EventEmitter {
      */
     private generateConfigYaml;
     /**
-     * Initializes an isolated Workspace, generates the config, and spawns the Go Ripper.
+     * Initializes an isolated Virtual File System (VFS) Sandbox, generates the config,
+     * and spawns the Go Ripper perfectly isolated via symlinking.
      */
     executeRipJob(config: RipperConfig): Promise<{
         jobId: string;

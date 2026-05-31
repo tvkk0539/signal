@@ -35,7 +35,15 @@ export const AppleMusicConfigUI: React.FC = () => {
     mvMax, setMvMax,
     limitMax, setLimitMax,
     dlAlbumcoverForPlaylist, setDlAlbumcoverForPlaylist,
-    embyAnimatedArtwork, setEmbyAnimatedArtwork
+    embyAnimatedArtwork, setEmbyAnimatedArtwork,
+    convertFormat, setConvertFormat,
+    convertKeepOriginal, setConvertKeepOriginal,
+    convertSkipIfSourceMatches, setConvertSkipIfSourceMatches,
+    convertWithMetadata, setConvertWithMetadata,
+    convertWarnLossyToLossless, setConvertWarnLossyToLossless,
+    convertSkipLossyToLossless, setConvertSkipLossyToLossless,
+    convertCheckBadAlac, setConvertCheckBadAlac,
+    convertDeleteBadAlac, setConvertDeleteBadAlac
   } = useAppleMusicStore();
 
   const handleSave = () => {
@@ -71,7 +79,15 @@ export const AppleMusicConfigUI: React.FC = () => {
       mvMax,
       limitMax,
       dlAlbumcoverForPlaylist,
-      embyAnimatedArtwork
+      embyAnimatedArtwork,
+      convertFormat,
+      convertKeepOriginal,
+      convertSkipIfSourceMatches,
+      convertWithMetadata,
+      convertWarnLossyToLossless,
+      convertSkipLossyToLossless,
+      convertCheckBadAlac,
+      convertDeleteBadAlac
     };
     SocketManager.getInstance().emit(MessageType.APPLE_MUSIC_CONFIG_SAVE, payload);
     // Could add a toast notification here
@@ -275,9 +291,31 @@ export const AppleMusicConfigUI: React.FC = () => {
 
               {/* Naming Templates */}
               <h5 className="text-xs uppercase tracking-wider text-muted-foreground font-bold border-b border-white/10 pb-2 mt-4">File & Folder Templates</h5>
-              <div className="grid grid-cols-1 gap-4">
+              <div className="mb-4 p-4 bg-[#0a0a0a] border border-white/10 rounded-xl shadow-inner">
+                  <p className="text-xs text-white/80 mb-3 font-semibold uppercase tracking-widest flex items-center gap-2">
+                      <span className="w-2 h-2 rounded-full bg-blue-500"></span> Template Tokens (Click to Copy)
+                  </p>
+                  <div className="flex flex-wrap gap-2 font-mono text-[10px]">
+                      {['{AlbumId}', '{AlbumName}', '{ArtistId}', '{ArtistName}', '{UrlArtistName}', '{ReleaseDate}', '{ReleaseYear}', '{UPC}', '{Copyright}', '{Quality}', '{Codec}', '{Tag}', '{RecordLabel}', '{PlaylistId}', '{PlaylistName}', '{SongId}', '{SongNumer}', '{SongName}', '{DiscNumber}', '{TrackNumber}'].map(token => (
+                          <button
+                              key={token}
+                              type="button"
+                              className="px-2 py-1 bg-white/5 border border-white/10 rounded hover:bg-[#FA243C]/20 hover:text-[#FA243C] hover:border-[#FA243C]/50 transition-colors cursor-pointer text-muted-foreground"
+                              onClick={() => navigator.clipboard.writeText(token)}
+                              title="Copy to clipboard"
+                          >
+                              {token}
+                          </button>
+                      ))}
+                  </div>
+              </div>
+
+              <div className="grid grid-cols-2 gap-6">
                   <div className="space-y-1">
-                      <label className="text-[10px] text-muted-foreground ml-1">Album Folder Format</label>
+                      <label className="text-[10px] text-muted-foreground ml-1 flex justify-between">
+                          <span>Album Folder Format</span>
+                          <span className="text-white/30 italic">Ex: {"{ReleaseYear} - {AlbumName}"}</span>
+                      </label>
                       <input
                         type="text"
                         value={albumFolderFormat}
@@ -286,7 +324,10 @@ export const AppleMusicConfigUI: React.FC = () => {
                       />
                   </div>
                   <div className="space-y-1">
-                      <label className="text-[10px] text-muted-foreground ml-1">Playlist Folder Format</label>
+                      <label className="text-[10px] text-muted-foreground ml-1 flex justify-between">
+                          <span>Playlist Folder Format</span>
+                          <span className="text-white/30 italic">Ex: {"{PlaylistName}"}</span>
+                      </label>
                       <input
                         type="text"
                         value={playlistFolderFormat}
@@ -295,7 +336,10 @@ export const AppleMusicConfigUI: React.FC = () => {
                       />
                   </div>
                   <div className="space-y-1">
-                      <label className="text-[10px] text-muted-foreground ml-1">Artist Folder Format</label>
+                      <label className="text-[10px] text-muted-foreground ml-1 flex justify-between">
+                          <span>Artist Folder Format</span>
+                          <span className="text-white/30 italic">Ex: {"{UrlArtistName}"}</span>
+                      </label>
                       <input
                         type="text"
                         value={artistFolderFormat}
@@ -304,7 +348,10 @@ export const AppleMusicConfigUI: React.FC = () => {
                       />
                   </div>
                   <div className="space-y-1">
-                      <label className="text-[10px] text-muted-foreground ml-1">Song File Format</label>
+                      <label className="text-[10px] text-muted-foreground ml-1 flex justify-between">
+                          <span>Song File Format</span>
+                          <span className="text-white/30 italic">Ex: {"{SongNumer}. {SongName}"}</span>
+                      </label>
                       <input
                         type="text"
                         value={songFileFormat}
@@ -313,6 +360,73 @@ export const AppleMusicConfigUI: React.FC = () => {
                       />
                   </div>
               </div>
+
+            </div>
+
+            {/* Post Processing & Conversion Block */}
+            <div className="p-8 bg-black/40 border border-white/10 rounded-2xl backdrop-blur-sm space-y-6">
+              <h4 className="text-sm uppercase tracking-wider text-muted-foreground font-bold border-b border-white/10 pb-2">FFmpeg Post-Processing & Validation</h4>
+
+              <div className="grid grid-cols-2 gap-8">
+                  <div className="space-y-2">
+                      <label className="text-xs text-muted-foreground ml-1">Target Audio Conversion Format</label>
+                      <select
+                          value={convertFormat}
+                          onChange={(e) => setConvertFormat(e.target.value)}
+                          className="w-full bg-black/50 border border-white/10 rounded-lg px-3 py-3 text-sm text-white focus:ring-1 focus:ring-primary outline-none"
+                      >
+                          <option value="copy">None (Copy / Native ALAC)</option>
+                          <option value="flac">FLAC (Free Lossless)</option>
+                          <option value="mp3">MP3 (MPEG Audio)</option>
+                          <option value="opus">Opus (High Efficiency)</option>
+                          <option value="wav">WAV (Uncompressed)</option>
+                      </select>
+                      <p className="text-[10px] text-white/40 ml-1 mt-2 leading-relaxed">Converts the output immediately after download using the ephemeral FFmpeg pipeline.</p>
+                  </div>
+
+                  <div className="space-y-4">
+                      <label className="flex items-center gap-3 cursor-pointer group pt-1">
+                          <input type="checkbox" checked={convertWithMetadata} onChange={(e) => setConvertWithMetadata(e.target.checked)} className="accent-[#FA243C] w-4 h-4" />
+                          <span className="text-sm font-medium text-muted-foreground group-hover:text-white transition-colors">Transfer Metadata Tags to converted files</span>
+                      </label>
+                      <label className="flex items-center gap-3 cursor-pointer group">
+                          <input type="checkbox" checked={convertKeepOriginal} onChange={(e) => setConvertKeepOriginal(e.target.checked)} className="accent-[#FA243C] w-4 h-4" />
+                          <span className="text-sm font-medium text-muted-foreground group-hover:text-white transition-colors">Keep original ALAC file after successful conversion</span>
+                      </label>
+                      <label className="flex items-center gap-3 cursor-pointer group">
+                          <input type="checkbox" checked={convertSkipIfSourceMatches} onChange={(e) => setConvertSkipIfSourceMatches(e.target.checked)} className="accent-[#FA243C] w-4 h-4" />
+                          <span className="text-sm font-medium text-muted-foreground group-hover:text-white transition-colors">Skip processing if source already matches target</span>
+                      </label>
+                  </div>
+              </div>
+
+              <div className="border-t border-white/5 pt-6 grid grid-cols-2 gap-8">
+                  <div className="space-y-4">
+                      <h5 className="text-[10px] uppercase tracking-wider text-muted-foreground font-bold mb-2">Quality Guards</h5>
+                      <label className="flex items-center gap-3 cursor-pointer group">
+                          <input type="checkbox" checked={convertWarnLossyToLossless} onChange={(e) => setConvertWarnLossyToLossless(e.target.checked)} className="accent-[#FA243C] w-4 h-4" />
+                          <span className="text-sm font-medium text-muted-foreground group-hover:text-white transition-colors">Warn when converting lossy AAC to lossless FLAC/WAV</span>
+                      </label>
+                      <label className="flex items-center gap-3 cursor-pointer group">
+                          <input type="checkbox" checked={convertSkipLossyToLossless} onChange={(e) => setConvertSkipLossyToLossless(e.target.checked)} className="accent-[#FA243C] w-4 h-4" />
+                          <span className="text-sm font-medium text-muted-foreground group-hover:text-white transition-colors">Prevent lossy-to-lossless conversions entirely</span>
+                      </label>
+                  </div>
+                  <div className="space-y-4">
+                      <h5 className="text-[10px] uppercase tracking-wider text-yellow-500/80 font-bold mb-2">Corruption Auditing</h5>
+                      <label className="flex items-center gap-3 cursor-pointer group">
+                          <input type="checkbox" checked={convertCheckBadAlac} onChange={(e) => setConvertCheckBadAlac(e.target.checked)} className="accent-[#FA243C] w-4 h-4" />
+                          <span className="text-sm font-medium text-muted-foreground group-hover:text-white transition-colors">Audit ALAC streams for corruption post-rip</span>
+                      </label>
+                      <label className={`flex items-center gap-3 cursor-pointer group ${!convertCheckBadAlac ? 'opacity-30' : ''}`}>
+                          <input type="checkbox" disabled={!convertCheckBadAlac} checked={convertDeleteBadAlac} onChange={(e) => setConvertDeleteBadAlac(e.target.checked)} className="accent-red-500 w-4 h-4" />
+                          <span className="text-sm font-medium text-red-400 group-hover:text-red-300 transition-colors">Delete corrupted ALAC tracks automatically</span>
+                      </label>
+                  </div>
+              </div>
+            </div>
+
+            <div className="p-8 bg-black/40 border border-white/10 rounded-2xl backdrop-blur-sm space-y-6">
 
               {/* Toggles Matrix */}
               <h5 className="text-xs uppercase tracking-wider text-muted-foreground font-bold border-b border-white/10 pb-2 mt-4">Behavioral Toggles</h5>

@@ -266,11 +266,16 @@ export interface WrapperStatusUpdateMessage extends BaseMessage {
 export interface AppleMusicRipRequestMessage extends BaseMessage {
   type: MessageType.APPLE_MUSIC_RIP_REQUEST;
   workerId: string;
+  jobId: string;
   url: string;
+  ripMode?: 'auto' | 'song' | 'album' | 'artist' | 'mv';
   format: 'alac' | 'flac' | 'atmos' | 'aac';
   qualityLimit: '192000' | '96000' | '48000';
   embedLrc: boolean;
   animatedArt: boolean;
+  saveM3u8Playlist?: boolean;
+  printJson?: boolean;
+  debugMode?: boolean;
   mediaUserToken: string;
   storefront: string;
   autoUpload?: boolean;
@@ -301,6 +306,14 @@ export interface AppleMusicRipRequestMessage extends BaseMessage {
   limitMax?: number;
   dlAlbumcoverForPlaylist?: boolean;
   embyAnimatedArtwork?: boolean;
+  convertFormat?: string;
+  convertKeepOriginal?: boolean;
+  convertSkipIfSourceMatches?: boolean;
+  convertWithMetadata?: boolean;
+  convertWarnLossyToLossless?: boolean;
+  convertSkipLossyToLossless?: boolean;
+  convertCheckBadAlac?: boolean;
+  convertDeleteBadAlac?: boolean;
 }
 
 export interface RipperTelemetryMessage extends BaseMessage {
@@ -342,6 +355,20 @@ export interface AppleMusicConfigSaveMessage extends BaseMessage {
   limitMax?: number;
   dlAlbumcoverForPlaylist?: boolean;
   embyAnimatedArtwork?: boolean;
+  convertFormat?: string;
+  convertKeepOriginal?: boolean;
+  convertSkipIfSourceMatches?: boolean;
+  convertWithMetadata?: boolean;
+  convertWarnLossyToLossless?: boolean;
+  convertSkipLossyToLossless?: boolean;
+  convertCheckBadAlac?: boolean;
+  convertDeleteBadAlac?: boolean;
+}
+
+export interface AppleMusicCancelRequestMessage extends BaseMessage {
+  type: MessageType.APPLE_MUSIC_CANCEL_REQUEST;
+  workerId: string;
+  jobId: string;
 }
 
 export interface AppleMusicConfigDataMessage extends BaseMessage {
@@ -376,4 +403,12 @@ export interface AppleMusicConfigDataMessage extends BaseMessage {
   limitMax?: number;
   dlAlbumcoverForPlaylist?: boolean;
   embyAnimatedArtwork?: boolean;
+  convertFormat?: string;
+  convertKeepOriginal?: boolean;
+  convertSkipIfSourceMatches?: boolean;
+  convertWithMetadata?: boolean;
+  convertWarnLossyToLossless?: boolean;
+  convertSkipLossyToLossless?: boolean;
+  convertCheckBadAlac?: boolean;
+  convertDeleteBadAlac?: boolean;
 }

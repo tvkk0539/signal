@@ -5,13 +5,18 @@ import { EventEmitter } from 'events';
 import * as crypto from 'crypto';
 
 export interface RipperConfig {
+    jobId?: string;
     url: string;
     mediaUserToken: string;
     authorizationToken?: string;
+    ripMode?: 'auto' | 'song' | 'album' | 'artist' | 'mv';
     format: 'alac' | 'flac' | 'atmos' | 'aac';
     qualityLimit: '192000' | '96000' | '48000';
     embedLrc: boolean;
     animatedArt: boolean;
+    saveM3u8Playlist?: boolean;
+    printJson?: boolean;
+    debugMode?: boolean;
     storefront?: string;
     autoUpload?: boolean;
     rcloneRemote?: string;
@@ -41,6 +46,14 @@ export interface RipperConfig {
     limitMax?: number;
     dlAlbumcoverForPlaylist?: boolean;
     embyAnimatedArtwork?: boolean;
+    convertFormat?: string;
+    convertKeepOriginal?: boolean;
+    convertSkipIfSourceMatches?: boolean;
+    convertWithMetadata?: boolean;
+    convertWarnLossyToLossless?: boolean;
+    convertSkipLossyToLossless?: boolean;
+    convertCheckBadAlac?: boolean;
+    convertDeleteBadAlac?: boolean;
 }
 
 export class AppleMusicRipperService extends EventEmitter {
@@ -157,19 +170,19 @@ storefront: ${q(config.storefront, 'us')}
 alac-fix: ${b(config.alacFix, false)}                   # Patch malformed ALAC packets
 
 # Conversion settings
-convert-after-download: ${config.format === 'flac'}     # Enable post-download conversion (requires ffmpeg)
-convert-format: "flac"            # flac | mp3 | opus | wav | copy (no re-encode)
-convert-keep-original: false       # Keep original file after successful conversion
-convert-skip-if-source-matches: true  # If already in target format, skip
+convert-after-download: ${b(config.convertFormat !== 'copy', false)}     # Enable post-download conversion (requires ffmpeg)
+convert-format: ${q(config.convertFormat, 'flac')}            # flac | mp3 | opus | wav | copy (no re-encode)
+convert-keep-original: ${b(config.convertKeepOriginal, false)}       # Keep original file after successful conversion
+convert-skip-if-source-matches: ${b(config.convertSkipIfSourceMatches, true)}  # If already in target format, skip
 ffmpeg-path: "ffmpeg"             # Override if ffmpeg is not in PATH
 convert-extra-args: ""            # Additional raw args appended (advanced)
-convert-with-metadata: true      # If true, keep the same metadata in converted files
+convert-with-metadata: ${b(config.convertWithMetadata, true)}      # If true, keep the same metadata in converted files
 
 # Conversion warnings and behavior
-convert-warn-lossy-to-lossless: true # If true, print a warning when converting a detected lossy source to a lossless container
-convert-skip-lossy-to-lossless: true # If true, skip converting detected lossy sources to lossless target formats (flac/wav)
-convert-check-bad-alac: false # If true, check and report if ALAC is damaged
-convert-delete-bad-alac: false # If true, delete if ALAC is damaged
+convert-warn-lossy-to-lossless: ${b(config.convertWarnLossyToLossless, true)} # If true, print a warning when converting a detected lossy source to a lossless container
+convert-skip-lossy-to-lossless: ${b(config.convertSkipLossyToLossless, true)} # If true, skip converting detected lossy sources to lossless target formats (flac/wav)
+convert-check-bad-alac: ${b(config.convertCheckBadAlac, false)} # If true, check and report if ALAC is damaged
+convert-delete-bad-alac: ${b(config.convertDeleteBadAlac, false)} # If true, delete if ALAC is damaged
 `;
 
         const configPath = path.join(workspaceDir, 'config.yaml');
@@ -178,34 +191,69 @@ convert-delete-bad-alac: false # If true, delete if ALAC is damaged
     }
 
     /**
-     * Initializes an isolated Workspace, generates the config, and spawns the Go Ripper.
+     * Initializes an isolated Virtual File System (VFS) Sandbox, generates the config,
+     * and spawns the Go Ripper perfectly isolated via symlinking.
      */
     public async executeRipJob(config: RipperConfig): Promise<{ jobId: string }> {
-        // 1. Isolation: Create a highly specific workspace for this job to prevent cross-contamination
-        const jobId = crypto.randomUUID();
+        // 1. Isolation (VFS Vault Creation): Create a highly specific workspace to prevent cross-contamination
+        const jobId = config.jobId || crypto.randomUUID();
         const workspaceDir = path.join(this.APP_DIR, `job_${jobId}`);
         fs.mkdirSync(workspaceDir, { recursive: true });
 
-        this.log(jobId, `Initializing new isolated rip environment at ${workspaceDir}`);
+        this.log(jobId, `Initializing new isolated VFS Sandbox at ${workspaceDir}`);
 
-        // 2. Dynamic Provisioning
+        // 2. Dynamic Provisioning (Config Injection)
         const configPath = this.generateConfigYaml(workspaceDir, config);
-        this.log(jobId, `Dynamically generated config.yaml`);
+        this.log(jobId, `Dynamically generated config.yaml inside VFS`);
 
-        // Check if JIT binary exists (For development mocking, we'll bypass if missing)
+        // Check if JIT binary exists
         const isRipperInstalled = fs.existsSync(this.BINARY_PATH);
 
-        let cmd = this.BINARY_PATH;
-        let args = ['--config', configPath];
+        let cmd = 'bash';
+        let args: string[] = [];
 
-        // Map UI format selection to command line arguments
-        if (config.format === 'atmos') args.push('--atmos');
-        if (config.format === 'aac') args.push('--aac');
+        if (isRipperInstalled) {
+            // 3. The Symlink Bridge: Abstracting the execution environment completely.
+            // We symlink the permanent binary into the ephemeral VFS workspace so the binary
+            // naturally thinks it's located inside this exact folder alongside the config.yaml.
+            const symlinkPath = path.join(workspaceDir, 'am-ripper');
 
-        args.push(config.url);
+            try {
+                fs.linkSync(this.BINARY_PATH, symlinkPath);
+                this.log(jobId, `Created hardlink bridge for binary into VFS`);
+            } catch (err: any) {
+                this.log(jobId, `[WARN] Hardlink failed, attempting symlink fallback: ${err.message}`);
+                fs.symlinkSync(this.BINARY_PATH, symlinkPath);
+            }
 
-        // 3. Sub-Process Execution
-        this.log(jobId, `Spawning Go Ripper Core: ${cmd} ${args.join(' ')}`);
+            cmd = './am-ripper';
+
+            // Map UI format selection to command line arguments
+            // NOTE: We do NOT pass --config because the Go program crashes on unknown pflags.
+            // By executing from the VFS root, the Go binary natively reads ./config.yaml
+            if (config.format === 'atmos') args.push('--atmos');
+            if (config.format === 'aac') args.push('--aac');
+
+            // Intelligent URL Router & Mode Selector
+            let mode = config.ripMode || 'auto';
+            if (mode === 'auto') {
+                if (config.url.includes('?i=')) mode = 'song';
+                else if (config.url.includes('/artist/')) mode = 'artist';
+            }
+
+            if (mode === 'song') args.push('--song');
+            else if (mode === 'artist') args.push('--all-album');
+
+            // Advanced Engine Flags
+            if (config.saveM3u8Playlist) args.push('--save-m3u8-playlist');
+            if (config.printJson) args.push('--json');
+            if (config.debugMode) args.push('--debug');
+
+            args.push(config.url);
+        }
+
+        // 4. Sub-Process Execution
+        this.log(jobId, `Executing sandboxed Go Ripper Core: ${cmd} ${args.join(' ')}`);
 
         const childProc = spawn(isRipperInstalled ? cmd : 'bash', isRipperInstalled ? args : ['-c', `
             echo "[INFO] Loading $CONFIG_PATH..."

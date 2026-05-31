@@ -469,6 +469,13 @@ async function bootWorker() {
   });
 
   // --- Phase 9: WebSocket Ingestion Handlers ---
+  socket.on(MessageType.APPLE_MUSIC_CANCEL_REQUEST, (msg: any) => {
+    console.log(`[Worker] Received APPLE_MUSIC_CANCEL_REQUEST for Job: ${msg.jobId}`);
+    if (msg.jobId) {
+      ripperService.cancelJob(msg.jobId);
+    }
+  });
+
   socket.on(MessageType.WRAPPER_START_REQUEST, async (msg: any) => {
     console.log(`[Worker] Received WRAPPER_START_REQUEST`);
     try {
@@ -524,13 +531,18 @@ async function bootWorker() {
     console.log(`[Worker] Received APPLE_MUSIC_RIP_REQUEST for URL: ${msg.url}`);
     try {
       await ripperService.executeRipJob({
+        jobId: msg.jobId,
         url: msg.url,
+        ripMode: msg.ripMode,
         mediaUserToken: msg.mediaUserToken || '',
         storefront: msg.storefront || 'us',
         format: msg.format,
         qualityLimit: msg.qualityLimit,
         embedLrc: msg.embedLrc,
         animatedArt: msg.animatedArt,
+        saveM3u8Playlist: msg.saveM3u8Playlist,
+        printJson: msg.printJson,
+        debugMode: msg.debugMode,
         // Pass through routing preferences to the 'job_complete' handler
         autoUpload: msg.autoUpload ?? true,
         rcloneRemote: msg.rcloneRemote || 'remote:/Media/AppleMusic_Rips',
@@ -559,7 +571,15 @@ async function bootWorker() {
         mvMax: msg.mvMax,
         limitMax: msg.limitMax,
         dlAlbumcoverForPlaylist: msg.dlAlbumcoverForPlaylist,
-        embyAnimatedArtwork: msg.embyAnimatedArtwork
+        embyAnimatedArtwork: msg.embyAnimatedArtwork,
+        convertFormat: msg.convertFormat,
+        convertKeepOriginal: msg.convertKeepOriginal,
+        convertSkipIfSourceMatches: msg.convertSkipIfSourceMatches,
+        convertWithMetadata: msg.convertWithMetadata,
+        convertWarnLossyToLossless: msg.convertWarnLossyToLossless,
+        convertSkipLossyToLossless: msg.convertSkipLossyToLossless,
+        convertCheckBadAlac: msg.convertCheckBadAlac,
+        convertDeleteBadAlac: msg.convertDeleteBadAlac
       });
     } catch (e: any) {
       console.error(`[Worker] Ripper Execution Error:`, e);

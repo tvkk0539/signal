@@ -28,5 +28,11 @@
     "react-native"
   ],
   "author": "Architecture Team",
-  "license": "MIT"
+  "license": "MIT",
+  "dependencies": {
+    "uuid": "^14.0.0"
+  },
+  "devDependencies": {
+    "@types/uuid": "^10.0.0"
+  }
 }
