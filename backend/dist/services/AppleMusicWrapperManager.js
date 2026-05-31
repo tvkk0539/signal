@@ -160,12 +160,29 @@ class AppleMusicWrapperManager extends events_1.EventEmitter {
         if (!this.isInstalled()) {
             throw new Error("Wrapper is not installed.");
         }
-        const exePath = path.join(this.WRAPPER_DIR, this.BINARY_NAME);
+        // Enforce strict credential validation to prevent anonymous wrapper boots
+        if (!username || !password) {
+            throw new Error("Strict Authentication Enforced: Wrapper requires valid Apple ID credentials to start.");
+        }
+        // Host Timezone Mapping Fix: Map the container's tzdata into the wrapper's fake rootfs
+        // This permanently silences the '__bionic_open_tzdata: couldn't find any tzdata' warning
+        try {
+            const hostTzPath = '/usr/share/zoneinfo';
+            const wrapperTzPath = path.join(this.APP_DIR, 'rootfs', 'system', 'usr', 'share', 'zoneinfo');
+            if (fs.existsSync(hostTzPath)) {
+                if (!fs.existsSync(wrapperTzPath)) {
+                    fs.mkdirSync(wrapperTzPath, { recursive: true });
+                }
+                // Use bash to perform a safe copy to prevent cross-device link errors
+                (0, child_process_1.spawn)('bash', ['-c', `cp -rn ${hostTzPath}/* ${wrapperTzPath}/ || true`]);
+            }
+        }
+        catch (e) {
+            this.log(`[WARN] Failed to map host tzdata to wrapper rootfs: ${e.message}`);
+        }
         // Exact argument parsing based on configure_environment in setup_wrapper.sh
         const args = ['-H', '0.0.0.0'];
-        if (username && password) {
-            args.push('-L', `${username}:${password}`);
-        }
+        args.push('-L', `${username}:${password}`);
         args.push('-D', '10020');
         args.push('-M', '20020');
         this.log(`Starting wrapper proxy via bash handoff`);
