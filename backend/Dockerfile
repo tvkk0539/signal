@@ -64,6 +64,52 @@ RUN ARCH=$(uname -m) && \
     tar -C /usr/local -xzf /tmp/go.tar.gz && \
     rm /tmp/go.tar.gz
 
+# Install Bento4
+RUN ARCH=$(uname -m) && \
+    if [ "$ARCH" = "x86_64" ]; then \
+        BENTO4_URL="https://github.com/kishorkumartv000/amd-bootstrap-for-test/raw/refs/heads/main/Bento4-SDK-1-6-0-641.x86_64-unknown-linux.zip"; \
+    elif [ "$ARCH" = "aarch64" ]; then \
+        BENTO4_URL="https://github.com/axiomatic-systems/Bento4/releases/download/v1.6.0-639/Bento4-SDK-1.6.0-639.aarch64-unknown-linux.zip"; \
+    else \
+        echo "Unsupported architecture: $ARCH"; exit 1; \
+    fi && \
+    mkdir -p /tmp/Bento4 && \
+    cd /tmp/Bento4 && \
+    wget -q "$BENTO4_URL" -O bento4.zip && \
+    unzip -o -q bento4.zip && \
+    cd Bento4-SDK-* && \
+    mkdir -p /usr/local/bin/Bento4 && \
+    find bin/ -maxdepth 1 -type f -executable -exec cp {} /usr/local/bin/Bento4/ \; && \
+    cp -r include /usr/local/include/Bento4 && \
+    cp -r lib /usr/local/lib/Bento4 && \
+    rm -rf /tmp/Bento4
+
+# Build GPAC (MP4Box)
+RUN mkdir -p /tmp/gpac && \
+    cd /tmp/gpac && \
+    git clone https://github.com/gpac/gpac.git && \
+    cd gpac && \
+    ./configure --static-bin && \
+    make -j"$(nproc)" && \
+    make install && \
+    chmod +x /usr/local/bin/MP4Box && \
+    rm -rf /tmp/gpac
+
+# Install N_m3u8DL-RE (Architecture aware)
+RUN ARCH=$(uname -m) && \
+    if [ "$ARCH" = "x86_64" ]; then \
+        RE_URL="https://github.com/nilaoda/N_m3u8DL-RE/releases/download/v0.3.0-beta/N_m3u8DL-RE_v0.3.0-beta_linux-x64_20241203.tar.gz"; \
+    elif [ "$ARCH" = "aarch64" ]; then \
+        RE_URL="https://github.com/nilaoda/N_m3u8DL-RE/releases/download/v0.3.0-beta/N_m3u8DL-RE_v0.3.0-beta_linux-arm64_20241203.tar.gz"; \
+    fi && \
+    mkdir -p /tmp/N_m3u8DL-RE && \
+    cd /tmp/N_m3u8DL-RE && \
+    wget -q "$RE_URL" -O re.tar.gz && \
+    tar -xzf re.tar.gz && \
+    find . -type f -name "N_m3u8DL-RE" -exec cp {} /usr/local/bin/N_m3u8DL-RE \; && \
+    chmod +x /usr/local/bin/N_m3u8DL-RE && \
+    rm -rf /tmp/N_m3u8DL-RE
+
 # Stage 2: Production Run
 FROM node:20-bookworm-slim AS runner
 
@@ -94,9 +140,16 @@ RUN apt-get update && apt-get install -y --no-install-recommends \
 # Copy modern Go from builder
 COPY --from=builder /usr/local/go /usr/local/go
 
-# Set production environment variables
+# Copy Advanced Media Tools from builder
+COPY --from=builder /usr/local/bin/Bento4 /usr/local/bin/Bento4
+COPY --from=builder /usr/local/bin/MP4Box /usr/local/bin/MP4Box
+COPY --from=builder /usr/local/bin/N_m3u8DL-RE /usr/local/bin/N_m3u8DL-RE
+COPY --from=builder /usr/local/lib/Bento4 /usr/local/lib/Bento4
+COPY --from=builder /usr/local/include/Bento4 /usr/local/include/Bento4
+
+# Set production environment variables (Add Go and Bento4 to PATH)
 ENV NODE_ENV=production \
-    PATH="/usr/local/go/bin:$PATH"
+    PATH="/usr/local/go/bin:/usr/local/bin/Bento4:$PATH"
 
 # Copy built assets
 COPY --from=builder /app/package.json ./
