@@ -174,7 +174,13 @@ class AppleMusicWrapperManager extends events_1.EventEmitter {
         // and preserve passwords containing special characters (like $).
         this.process = (0, child_process_1.spawn)('bash', ['-c', `exec ./${this.BINARY_NAME} "$@"`, '--', ...args], {
             cwd: this.WRAPPER_DIR,
-            stdio: ['pipe', 'pipe', 'pipe']
+            stdio: ['pipe', 'pipe', 'pipe'],
+            env: {
+                ...process.env,
+                // Inject fake Android env vars to silence noisy __bionic_open_tzdata_path warnings
+                ANDROID_ROOT: '/system',
+                ANDROID_DATA: '/data'
+            }
         });
         this.process.stdout?.on('data', (data) => {
             const output = data.toString().trim();
@@ -189,7 +195,9 @@ class AppleMusicWrapperManager extends events_1.EventEmitter {
         this.process.stderr?.on('data', (data) => {
             const output = data.toString().trim();
             if (output) {
-                this.log(`[ERROR] ${output}`);
+                // The wrapper binary uses stderr for standard INFO logging (e.g. "[+] starting...").
+                // We map it directly instead of prepending [ERROR] to keep the UI terminal clean.
+                this.log(output);
                 if (output.includes('Enter 2FA') || output.includes('Verification code') || output.includes('2FA Code') || output.includes('two-factor')) {
                     this.emit('requires_2fa');
                 }
