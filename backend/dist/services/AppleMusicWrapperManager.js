@@ -40,9 +40,10 @@ const path = __importStar(require("path"));
 const events_1 = require("events");
 class AppleMusicWrapperManager extends events_1.EventEmitter {
     static instance;
-    BASE_DIR = process.env.DOWNLOAD_ROOT || '/tmp/swarm_data';
-    APP_DIR = path.join(this.BASE_DIR, 'apple_music');
-    WRAPPER_DIR = path.join(this.APP_DIR, 'wrapper');
+    // The user explicitly requested to follow the original bash script structure
+    // which installs the wrapper globally in /app instead of the temporary folder.
+    APP_DIR = '/app';
+    WRAPPER_DIR = '/app/wrapper';
     BINARY_NAME = 'wrapper';
     DOWNLOAD_URL_X86 = 'https://github.com/zhaarey/wrapper/releases/download/linux.V2/wrapper.x86_64.tar.gz';
     DOWNLOAD_URL_ARM = 'https://github.com/zhaarey/wrapper/releases/download/arm64/wrapper.arm64.tar.gz';

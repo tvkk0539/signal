@@ -7,9 +7,10 @@ import { EventEmitter } from 'events';
 export class AppleMusicWrapperManager extends EventEmitter {
     private static instance: AppleMusicWrapperManager;
 
-    private readonly BASE_DIR = process.env.DOWNLOAD_ROOT || '/tmp/swarm_data';
-    private readonly APP_DIR = path.join(this.BASE_DIR, 'apple_music');
-    private readonly WRAPPER_DIR = path.join(this.APP_DIR, 'wrapper');
+    // The user explicitly requested to follow the original bash script structure
+    // which installs the wrapper globally in /app instead of the temporary folder.
+    private readonly APP_DIR = '/app';
+    private readonly WRAPPER_DIR = '/app/wrapper';
     private readonly BINARY_NAME = 'wrapper';
 
     private readonly DOWNLOAD_URL_X86 = 'https://github.com/zhaarey/wrapper/releases/download/linux.V2/wrapper.x86_64.tar.gz';
