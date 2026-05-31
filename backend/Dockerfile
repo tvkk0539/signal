@@ -1,10 +1,12 @@
 # Stage 1: Build
-FROM node:20-alpine AS builder
+FROM node:20-bookworm-slim AS builder
 
 WORKDIR /app
 
 # Install OS dependencies required for rclone and potential ffmpeg encoding
-RUN apk add --no-cache curl unzip bash ffmpeg
+RUN apt-get update && apt-get install -y --no-install-recommends \
+    curl unzip bash ffmpeg \
+    && rm -rf /var/lib/apt/lists/*
 
 # Copy root configurations
 COPY package.json package-lock.json tsconfig.base.json ./
@@ -23,12 +25,14 @@ RUN npm run build --workspace=shared
 RUN npm run build --workspace=backend
 
 # Stage 2: Production Run
-FROM node:20-alpine AS runner
+FROM node:20-bookworm-slim AS runner
 
 WORKDIR /app
 
 # Install rclone, git, and go in the final runner image for JIT Chimera Worker support
-RUN apk add --no-cache curl unzip bash ffmpeg fuse git go \
+RUN apt-get update && apt-get install -y --no-install-recommends \
+    curl unzip bash ffmpeg fuse git golang-go \
+    && rm -rf /var/lib/apt/lists/* \
     && curl https://rclone.org/install.sh | bash
 
 # Set production environment variable for bootstrap
