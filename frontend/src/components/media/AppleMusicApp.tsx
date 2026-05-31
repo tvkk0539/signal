@@ -19,7 +19,7 @@ export const AppleMusicApp: React.FC = () => {
   const [url, setUrl] = useState('');
   const [format, setFormat] = useState<'alac' | 'flac' | 'atmos' | 'aac'>('alac');
   const [quality, setQuality] = useState<'192000' | '96000' | '48000'>('192000');
-  const [ripMode, setRipMode] = useState<'auto' | 'song' | 'album' | 'artist'>('auto');
+  const [ripMode, setRipMode] = useState<'auto' | 'song' | 'album' | 'artist' | 'mv'>('auto');
 
   const [embedLrc, setEmbedLrc] = useState(true);
   const [animatedArt, setAnimatedArt] = useState(false);
@@ -134,6 +134,8 @@ export const AppleMusicApp: React.FC = () => {
       const urlObj = new URL(url);
       if (urlObj.searchParams.has('i')) {
         setRipMode('song');
+      } else if (urlObj.pathname.includes('/music-video/')) {
+        setRipMode('mv');
       } else if (urlObj.pathname.includes('/artist/')) {
         setRipMode('artist');
       } else if (urlObj.pathname.includes('/album/')) {
@@ -373,6 +375,7 @@ export const AppleMusicApp: React.FC = () => {
                     <option value="song">Single Song</option>
                     <option value="album">Full Album</option>
                     <option value="artist">Entire Artist</option>
+                    <option value="mv">Music Video</option>
                   </select>
                 </div>
               </div>
@@ -447,6 +450,29 @@ export const AppleMusicApp: React.FC = () => {
                       <span className="text-sm font-medium text-muted-foreground group-hover:text-white transition-colors">Save Animated Artwork (MP4)</span>
                       <input type="checkbox" checked={animatedArt} onChange={(e) => setAnimatedArt(e.target.checked)} className="accent-[#FA243C] w-4 h-4" />
                     </label>
+                  </div>
+
+                  <div className="space-y-3">
+                    <label className="text-xs uppercase tracking-wider text-muted-foreground font-bold text-[#FA243C]">Music Video Settings</label>
+                    <select
+                      value={mvMax}
+                      onChange={(e) => setMvMax(Number(e.target.value))}
+                      className="w-full bg-black/50 border border-white/10 text-white text-sm rounded-lg p-2.5 focus:ring-[#FA243C]/50 focus:border-[#FA243C]/50 outline-none mb-3"
+                    >
+                      <option value={2160}>4K (2160p)</option>
+                      <option value={1080}>HD (1080p)</option>
+                      <option value={720}>SD (720p)</option>
+                      <option value={480}>Low (480p)</option>
+                    </select>
+                    <select
+                      value={mvAudioType}
+                      onChange={(e) => setMvAudioType(e.target.value as any)}
+                      className="w-full bg-black/50 border border-white/10 text-white text-sm rounded-lg p-2.5 focus:ring-[#FA243C]/50 focus:border-[#FA243C]/50 outline-none"
+                    >
+                      <option value="atmos">Dolby Atmos Audio</option>
+                      <option value="ac3">AC3 Surround Audio</option>
+                      <option value="aac">AAC Stereo Audio</option>
+                    </select>
                   </div>
 
                   <div className="space-y-3">

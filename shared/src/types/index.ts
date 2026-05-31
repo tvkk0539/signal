@@ -268,7 +268,7 @@ export interface AppleMusicRipRequestMessage extends BaseMessage {
   workerId: string;
   jobId: string;
   url: string;
-  ripMode?: 'auto' | 'song' | 'album' | 'artist';
+  ripMode?: 'auto' | 'song' | 'album' | 'artist' | 'mv';
   format: 'alac' | 'flac' | 'atmos' | 'aac';
   qualityLimit: '192000' | '96000' | '48000';
   embedLrc: boolean;
