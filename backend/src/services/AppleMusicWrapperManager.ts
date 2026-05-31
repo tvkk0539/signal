@@ -9,8 +9,8 @@ export class AppleMusicWrapperManager extends EventEmitter {
 
     // The user explicitly requested to follow the original bash script structure
     // which installs the wrapper globally in /app instead of the temporary folder.
-    private readonly APP_DIR = '/app';
-    private readonly WRAPPER_DIR = '/app/wrapper';
+    private APP_DIR = '/app';
+    private WRAPPER_DIR = '/app/wrapper';
     private readonly BINARY_NAME = 'wrapper';
 
     private readonly DOWNLOAD_URL_X86 = 'https://github.com/zhaarey/wrapper/releases/download/linux.V2/wrapper.x86_64.tar.gz';
@@ -22,9 +22,18 @@ export class AppleMusicWrapperManager extends EventEmitter {
 
     private constructor() {
         super();
-        // Ensure base directories exist
-        if (!fs.existsSync(this.APP_DIR)) {
-            fs.mkdirSync(this.APP_DIR, { recursive: true });
+        // Ensure base directories exist gracefully if not running as root
+        try {
+            if (!fs.existsSync(this.APP_DIR)) {
+                fs.mkdirSync(this.APP_DIR, { recursive: true });
+            }
+        } catch (e: any) {
+            console.warn(`[AM Wrapper] Failed to create ${this.APP_DIR}. Ensure the user has permissions, or use a local folder. Using /tmp/app fallback. Error: ${e.message}`);
+            this.APP_DIR = '/tmp/app';
+            this.WRAPPER_DIR = '/tmp/app/wrapper';
+            if (!fs.existsSync(this.APP_DIR)) {
+                fs.mkdirSync(this.APP_DIR, { recursive: true });
+            }
         }
     }
 
@@ -62,8 +71,17 @@ export class AppleMusicWrapperManager extends EventEmitter {
 
     public async install(): Promise<void> {
         this.log("Starting installation process...");
+
+        // Detect system architecture as in the original setup_wrapper.sh
         const arch = process.arch;
-        const url = arch === 'arm64' ? this.DOWNLOAD_URL_ARM : this.DOWNLOAD_URL_X86;
+        let url = '';
+        if (arch === 'x64') { // Node process.arch 'x64' maps to bash 'x86_64'
+            url = this.DOWNLOAD_URL_X86;
+        } else if (arch === 'arm64') { // Node process.arch 'arm64' maps to bash 'aarch64'
+            url = this.DOWNLOAD_URL_ARM;
+        } else {
+            throw new Error(`Unsupported architecture: ${arch}`);
+        }
 
         this.log(`Detected architecture: ${arch}. Using URL: ${url}`);
 
@@ -72,20 +90,28 @@ export class AppleMusicWrapperManager extends EventEmitter {
                 fs.mkdirSync(this.WRAPPER_DIR, { recursive: true });
             }
 
+            // Exactly mimic the configure_environment data directory structure
             const rootFs = path.join(this.APP_DIR, 'rootfs', 'data');
             if (!fs.existsSync(rootFs)) {
                 fs.mkdirSync(rootFs, { recursive: true });
             }
 
-            this.log("Downloading wrapper tarball...");
-            const tarPath = path.join(this.WRAPPER_DIR, 'wrapper.tar.gz');
+            // Implement the missing chmod 777 permission fix for rootless environments
+            try {
+                fs.chmodSync(rootFs, 0o777);
+            } catch (e: any) {
+                this.log(`[WARN] Failed to apply 777 to ${rootFs} using Node. Fallback to bash chmod.`);
+            }
 
+            this.log("Downloading wrapper tarball...");
+
+            // Execute the precise commands from setup_wrapper.sh using local permissions
             const child = spawn('bash', ['-c', `
                 wget -q "${url}" -O wrapper.tar.gz && \
                 tar -xzf wrapper.tar.gz && \
                 rm wrapper.tar.gz && \
                 chmod +x ${this.BINARY_NAME} && \
-                chmod -R 777 ${rootFs}
+                chmod -R 777 "${rootFs}"
             `], { cwd: this.WRAPPER_DIR });
 
             child.stdout.on('data', (d) => this.log(d.toString().trim()));
@@ -111,15 +137,21 @@ export class AppleMusicWrapperManager extends EventEmitter {
         }
 
         const exePath = path.join(this.WRAPPER_DIR, this.BINARY_NAME);
-        const args: string[] = ['-H', '0.0.0.0', '-D', '10020', '-M', '20020'];
+
+        // Exact argument parsing based on configure_environment in setup_wrapper.sh
+        const args: string[] = ['-H', '0.0.0.0'];
 
         if (username && password) {
             args.push('-L', `${username}:${password}`);
         }
 
+        args.push('-D', '10020');
+        args.push('-M', '20020');
+
         this.log(`Starting wrapper proxy: ${exePath} ${args.join(' ')}`);
 
-        // Spawn actual wrapper process using the absolute path to prevent ENOENT
+        // Spawn actual wrapper process exactly as `exec ./wrapper $ARGS` behaves
+        // We set the cwd to WRAPPER_DIR to mimic `cd /app/wrapper`
         this.process = spawn(exePath, args, {
             cwd: this.WRAPPER_DIR,
             stdio: ['pipe', 'pipe', 'pipe']
@@ -158,17 +190,19 @@ export class AppleMusicWrapperManager extends EventEmitter {
     public stop(): void {
         this.log("Stopping wrapper process & cleaning up ports...");
 
-        // Execute cleanup similar to stop_wrapper.sh
+        // Execute EXACT cleanup sequence from stop_wrapper.sh
         const child = spawn('bash', ['-c', `
-            echo "Killing wrapper..."
-            pkill -f wrapper || true
+            echo "Stopping all wrapper processes..."
+            pkill -f wrapper || echo "No wrapper processes found"
             sleep 1
             pkill -9 -f wrapper || true
             fuser -k 10020/tcp 20020/tcp >/dev/null 2>&1 || true
-            echo "Cleanup complete."
+            echo "Cleanup complete. Current wrapper processes:"
+            ps aux | grep '[w]rapper'
         `]);
 
         child.stdout.on('data', (d) => this.log(d.toString().trim()));
+        child.stderr.on('data', (d) => this.log(`[ERROR] ${d.toString().trim()}`));
 
         if (this.process) {
             this.process.kill('SIGTERM');
