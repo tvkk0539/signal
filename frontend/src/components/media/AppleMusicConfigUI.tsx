@@ -36,6 +36,7 @@ export const AppleMusicConfigUI: React.FC = () => {
     limitMax, setLimitMax,
     dlAlbumcoverForPlaylist, setDlAlbumcoverForPlaylist,
     embyAnimatedArtwork, setEmbyAnimatedArtwork,
+    convertAfterDownload, setConvertAfterDownload,
     convertFormat, setConvertFormat,
     convertKeepOriginal, setConvertKeepOriginal,
     convertSkipIfSourceMatches, setConvertSkipIfSourceMatches,
@@ -80,6 +81,7 @@ export const AppleMusicConfigUI: React.FC = () => {
       limitMax,
       dlAlbumcoverForPlaylist,
       embyAnimatedArtwork,
+      convertAfterDownload,
       convertFormat,
       convertKeepOriginal,
       convertSkipIfSourceMatches,
@@ -291,23 +293,87 @@ export const AppleMusicConfigUI: React.FC = () => {
 
               {/* Naming Templates */}
               <h5 className="text-xs uppercase tracking-wider text-muted-foreground font-bold border-b border-white/10 pb-2 mt-4">File & Folder Templates</h5>
-              <div className="mb-4 p-4 bg-[#0a0a0a] border border-white/10 rounded-xl shadow-inner">
-                  <p className="text-xs text-white/80 mb-3 font-semibold uppercase tracking-widest flex items-center gap-2">
-                      <span className="w-2 h-2 rounded-full bg-blue-500"></span> Template Tokens (Click to Copy)
-                  </p>
-                  <div className="flex flex-wrap gap-2 font-mono text-[10px]">
-                      {['{AlbumId}', '{AlbumName}', '{ArtistId}', '{ArtistName}', '{UrlArtistName}', '{ReleaseDate}', '{ReleaseYear}', '{UPC}', '{Copyright}', '{Quality}', '{Codec}', '{Tag}', '{RecordLabel}', '{PlaylistId}', '{PlaylistName}', '{SongId}', '{SongNumer}', '{SongName}', '{DiscNumber}', '{TrackNumber}'].map(token => (
-                          <button
-                              key={token}
-                              type="button"
-                              className="px-2 py-1 bg-white/5 border border-white/10 rounded hover:bg-[#FA243C]/20 hover:text-[#FA243C] hover:border-[#FA243C]/50 transition-colors cursor-pointer text-muted-foreground"
-                              onClick={() => navigator.clipboard.writeText(token)}
-                              title="Copy to clipboard"
-                          >
-                              {token}
-                          </button>
-                      ))}
-                  </div>
+
+              <div className="space-y-4 mb-4">
+                {/* Album Folder Tokens */}
+                <div className="p-4 bg-[#0a0a0a] border border-white/10 rounded-xl shadow-inner">
+                    <p className="text-xs text-white/80 mb-3 font-semibold uppercase tracking-widest flex items-center gap-2">
+                        <span className="w-2 h-2 rounded-full bg-blue-500"></span> Album Folder Tokens (Click to Copy)
+                    </p>
+                    <div className="flex flex-wrap gap-2 font-mono text-[10px]">
+                        {['{AlbumId}', '{AlbumName}', '{ArtistName}', '{ReleaseDate}', '{ReleaseYear}', '{UPC}', '{Copyright}', '{Quality}', '{Codec}', '{Tag}', '{RecordLabel}'].map(token => (
+                            <button
+                                key={token}
+                                type="button"
+                                className="px-2 py-1 bg-white/5 border border-white/10 rounded hover:bg-[#FA243C]/20 hover:text-[#FA243C] hover:border-[#FA243C]/50 transition-colors cursor-pointer text-muted-foreground"
+                                onClick={() => navigator.clipboard.writeText(token)}
+                                title="Copy to clipboard"
+                            >
+                                {token}
+                            </button>
+                        ))}
+                    </div>
+                </div>
+
+                {/* Playlist Folder Tokens */}
+                <div className="p-4 bg-[#0a0a0a] border border-white/10 rounded-xl shadow-inner">
+                    <p className="text-xs text-white/80 mb-3 font-semibold uppercase tracking-widest flex items-center gap-2">
+                        <span className="w-2 h-2 rounded-full bg-purple-500"></span> Playlist Folder Tokens (Click to Copy)
+                    </p>
+                    <div className="flex flex-wrap gap-2 font-mono text-[10px]">
+                        {['{PlaylistId}', '{PlaylistName}', '{ArtistName}', '{Quality}', '{Codec}', '{Tag}'].map(token => (
+                            <button
+                                key={token}
+                                type="button"
+                                className="px-2 py-1 bg-white/5 border border-white/10 rounded hover:bg-[#FA243C]/20 hover:text-[#FA243C] hover:border-[#FA243C]/50 transition-colors cursor-pointer text-muted-foreground"
+                                onClick={() => navigator.clipboard.writeText(token)}
+                                title="Copy to clipboard"
+                            >
+                                {token}
+                            </button>
+                        ))}
+                    </div>
+                </div>
+
+                {/* Artist Folder Tokens */}
+                <div className="p-4 bg-[#0a0a0a] border border-white/10 rounded-xl shadow-inner">
+                    <p className="text-xs text-white/80 mb-3 font-semibold uppercase tracking-widest flex items-center gap-2">
+                        <span className="w-2 h-2 rounded-full bg-green-500"></span> Artist Folder Tokens (Click to Copy)
+                    </p>
+                    <div className="flex flex-wrap gap-2 font-mono text-[10px]">
+                        {['{ArtistId}', '{ArtistName}', '{UrlArtistName}'].map(token => (
+                            <button
+                                key={token}
+                                type="button"
+                                className="px-2 py-1 bg-white/5 border border-white/10 rounded hover:bg-[#FA243C]/20 hover:text-[#FA243C] hover:border-[#FA243C]/50 transition-colors cursor-pointer text-muted-foreground"
+                                onClick={() => navigator.clipboard.writeText(token)}
+                                title="Copy to clipboard"
+                            >
+                                {token}
+                            </button>
+                        ))}
+                    </div>
+                </div>
+
+                {/* Song File Tokens */}
+                <div className="p-4 bg-[#0a0a0a] border border-white/10 rounded-xl shadow-inner">
+                    <p className="text-xs text-white/80 mb-3 font-semibold uppercase tracking-widest flex items-center gap-2">
+                        <span className="w-2 h-2 rounded-full bg-yellow-500"></span> Song File Tokens (Click to Copy)
+                    </p>
+                    <div className="flex flex-wrap gap-2 font-mono text-[10px]">
+                        {['{SongId}', '{SongNumer}', '{SongName}', '{DiscNumber}', '{TrackNumber}', '{Quality}', '{Codec}', '{Tag}'].map(token => (
+                            <button
+                                key={token}
+                                type="button"
+                                className="px-2 py-1 bg-white/5 border border-white/10 rounded hover:bg-[#FA243C]/20 hover:text-[#FA243C] hover:border-[#FA243C]/50 transition-colors cursor-pointer text-muted-foreground"
+                                onClick={() => navigator.clipboard.writeText(token)}
+                                title="Copy to clipboard"
+                            >
+                                {token}
+                            </button>
+                        ))}
+                    </div>
+                </div>
               </div>
 
               <div className="grid grid-cols-2 gap-6">
@@ -367,7 +433,18 @@ export const AppleMusicConfigUI: React.FC = () => {
             <div className="p-8 bg-black/40 border border-white/10 rounded-2xl backdrop-blur-sm space-y-6">
               <h4 className="text-sm uppercase tracking-wider text-muted-foreground font-bold border-b border-white/10 pb-2">FFmpeg Post-Processing & Validation</h4>
 
-              <div className="grid grid-cols-2 gap-8">
+              <div className="flex items-center justify-between mb-6 pb-4 border-b border-white/5">
+                 <div>
+                    <h4 className="text-sm text-white font-medium">Enable Post-Processing Conversion</h4>
+                    <p className="text-xs text-muted-foreground mt-1">Convert downloaded audio into other formats via FFmpeg.</p>
+                 </div>
+                 <label className="relative inline-flex items-center cursor-pointer">
+                    <input type="checkbox" className="sr-only peer" checked={convertAfterDownload} onChange={(e) => setConvertAfterDownload(e.target.checked)} />
+                    <div className="w-11 h-6 bg-white/10 peer-focus:outline-none rounded-full peer peer-checked:after:translate-x-full peer-checked:after:border-white after:content-[''] after:absolute after:top-[2px] after:left-[2px] after:bg-white after:border-gray-300 after:border after:rounded-full after:h-5 after:w-5 after:transition-all peer-checked:bg-[#FA243C]"></div>
+                 </label>
+              </div>
+
+              <div className={`grid grid-cols-2 gap-8 transition-opacity duration-300 ${!convertAfterDownload ? 'opacity-30 pointer-events-none' : ''}`}>
                   <div className="space-y-2">
                       <label className="text-xs text-muted-foreground ml-1">Target Audio Conversion Format</label>
                       <select
@@ -375,7 +452,6 @@ export const AppleMusicConfigUI: React.FC = () => {
                           onChange={(e) => setConvertFormat(e.target.value)}
                           className="w-full bg-black/50 border border-white/10 rounded-lg px-3 py-3 text-sm text-white focus:ring-1 focus:ring-primary outline-none"
                       >
-                          <option value="copy">None (Copy / Native ALAC)</option>
                           <option value="flac">FLAC (Free Lossless)</option>
                           <option value="mp3">MP3 (MPEG Audio)</option>
                           <option value="opus">Opus (High Efficiency)</option>
@@ -400,7 +476,7 @@ export const AppleMusicConfigUI: React.FC = () => {
                   </div>
               </div>
 
-              <div className="border-t border-white/5 pt-6 grid grid-cols-2 gap-8">
+              <div className={`border-t border-white/5 pt-6 grid grid-cols-2 gap-8 transition-opacity duration-300 ${!convertAfterDownload ? 'opacity-30 pointer-events-none' : ''}`}>
                   <div className="space-y-4">
                       <h5 className="text-[10px] uppercase tracking-wider text-muted-foreground font-bold mb-2">Quality Guards</h5>
                       <label className="flex items-center gap-3 cursor-pointer group">

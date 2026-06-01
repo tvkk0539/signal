@@ -282,6 +282,7 @@ export interface AppleMusicRipRequestMessage extends BaseMessage {
     limitMax?: number;
     dlAlbumcoverForPlaylist?: boolean;
     embyAnimatedArtwork?: boolean;
+    convertAfterDownload?: boolean;
     convertFormat?: string;
     convertKeepOriginal?: boolean;
     convertSkipIfSourceMatches?: boolean;
@@ -329,6 +330,7 @@ export interface AppleMusicConfigSaveMessage extends BaseMessage {
     limitMax?: number;
     dlAlbumcoverForPlaylist?: boolean;
     embyAnimatedArtwork?: boolean;
+    convertAfterDownload?: boolean;
     convertFormat?: string;
     convertKeepOriginal?: boolean;
     convertSkipIfSourceMatches?: boolean;
@@ -375,6 +377,7 @@ export interface AppleMusicConfigDataMessage extends BaseMessage {
     limitMax?: number;
     dlAlbumcoverForPlaylist?: boolean;
     embyAnimatedArtwork?: boolean;
+    convertAfterDownload?: boolean;
     convertFormat?: string;
     convertKeepOriginal?: boolean;
     convertSkipIfSourceMatches?: boolean;

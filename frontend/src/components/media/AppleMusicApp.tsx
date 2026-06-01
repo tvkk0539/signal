@@ -50,7 +50,10 @@ export const AppleMusicApp: React.FC = () => {
     mvMax, setMvMax,
     limitMax, setLimitMax,
     dlAlbumcoverForPlaylist, setDlAlbumcoverForPlaylist,
-    embyAnimatedArtwork, setEmbyAnimatedArtwork
+    embyAnimatedArtwork, setEmbyAnimatedArtwork,
+    convertAfterDownload, convertFormat, convertKeepOriginal, convertSkipIfSourceMatches,
+    convertWithMetadata, convertWarnLossyToLossless, convertSkipLossyToLossless,
+    convertCheckBadAlac, convertDeleteBadAlac
   } = useAppleMusicStore();
 
   React.useEffect(() => {
@@ -195,7 +198,16 @@ export const AppleMusicApp: React.FC = () => {
        mvMax,
        limitMax,
        dlAlbumcoverForPlaylist,
-       embyAnimatedArtwork
+       embyAnimatedArtwork,
+       convertAfterDownload,
+       convertFormat,
+       convertKeepOriginal,
+       convertSkipIfSourceMatches,
+       convertWithMetadata,
+       convertWarnLossyToLossless,
+       convertSkipLossyToLossless,
+       convertCheckBadAlac,
+       convertDeleteBadAlac
     };
 
     addJob({
@@ -250,7 +262,16 @@ export const AppleMusicApp: React.FC = () => {
        mvMax,
        limitMax,
        dlAlbumcoverForPlaylist,
-       embyAnimatedArtwork
+       embyAnimatedArtwork,
+       convertAfterDownload,
+       convertFormat,
+       convertKeepOriginal,
+       convertSkipIfSourceMatches,
+       convertWithMetadata,
+       convertWarnLossyToLossless,
+       convertSkipLossyToLossless,
+       convertCheckBadAlac,
+       convertDeleteBadAlac
     };
 
     socketManager.emit(MessageType.APPLE_MUSIC_RIP_REQUEST, payload);
@@ -409,17 +430,17 @@ export const AppleMusicApp: React.FC = () => {
                 <div className="space-y-3">
                   <label className="text-xs uppercase tracking-wider text-muted-foreground font-bold">Codec / Format</label>
                   <div className="flex flex-col gap-2">
-                    {(['alac', 'flac', 'atmos', 'aac'] as const).map(f => (
+                    {(['alac', 'atmos', 'aac'] as const).map(f => (
                       <label key={f} className="flex items-center gap-3 cursor-pointer group">
                         <input
                           type="radio"
                           name="format"
                           checked={format === f}
-                          onChange={() => setFormat(f)}
+                          onChange={() => setFormat(f as any)}
                           className="w-4 h-4 accent-[#FA243C] bg-black/50 border-white/20"
                         />
                         <span className={`text-sm font-medium transition-colors ${format === f ? 'text-white' : 'text-muted-foreground group-hover:text-white/80'}`}>
-                          {f === 'alac' ? 'ALAC (Native Lossless)' : f === 'flac' ? 'FLAC (Converted)' : f === 'atmos' ? 'Dolby Atmos (EC3)' : 'AAC (256kbps)'}
+                          {f === 'alac' ? 'ALAC (Native Lossless)' : f === 'atmos' ? 'Dolby Atmos (EC3)' : 'AAC (256kbps)'}
                         </span>
                       </label>
                     ))}
