@@ -40,7 +40,7 @@ export const DatabaseOperationsCenter: React.FC = () => {
         </div>
 
         <div className="grid grid-cols-1 gap-6">
-          {(['AUTH', 'AUDIT', 'CHAT'] as const).map(domain => (
+          {(['AUTH', 'AUDIT', 'CHAT', 'APPLE_MUSIC'] as const).map(domain => (
              <DomainConfigRow key={domain} domain={domain} currentConfig={routing[domain]} socketManager={socketManager} />
           ))}
         </div>

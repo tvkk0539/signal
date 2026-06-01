@@ -7,6 +7,7 @@ import { MongoAuditLogRepository } from './providers/mongo/MongoAuditLogReposito
 import { InMemoryUserRepository } from './providers/mock/InMemoryUserRepository';
 import { InMemoryAuditLogRepository } from './providers/mock/InMemoryAuditLogRepository';
 import { InMemoryAppleMusicRepository } from './providers/mock/InMemoryAppleMusicRepository';
+import { MongoAppleMusicRepository } from './providers/mongo/MongoAppleMusicRepository';
 import { createMongoConnection } from './providers/mongo/connection';
 
 import { ReplicatedUserRepository } from './core/ReplicatedUserRepository';
@@ -66,14 +67,6 @@ class DatabaseManager {
   async hotSwapDomain(domain: DomainService, config: DomainRoutingConfig) {
     console.log(`[DB Manager] Hot-swapping ${domain} domain to Primary: ${config.primary.engine} with ${config.mirrors.length} mirrors...`);
 
-    if (domain === 'APPLE_MUSIC') {
-       const primaryAdapter = new InMemoryAppleMusicRepository();
-       const mirrorAdapters = config.mirrors.map(() => new InMemoryAppleMusicRepository());
-       this.appleMusicRepository = new ReplicatedAppleMusicRepository(primaryAdapter, mirrorAdapters);
-       this.currentRouting.APPLE_MUSIC = config;
-       return;
-    }
-
     try {
       // 1. Instantiate the Primary
       const primaryRepo = await this.instantiateDomainRepository(domain, config.primary);
@@ -99,6 +92,9 @@ class DatabaseManager {
           break;
         case 'CHAT':
           this.chatRepository = new ReplicatedChatRepository(primaryRepo as IChatRepository, mirrorRepos as IChatRepository[]);
+          break;
+        case 'APPLE_MUSIC':
+          this.appleMusicRepository = new ReplicatedAppleMusicRepository(primaryRepo as IAppleMusicRepository, mirrorRepos as IAppleMusicRepository[]);
           break;
       }
 
@@ -134,6 +130,7 @@ class DatabaseManager {
       case 'AUTH': return this.instantiateUserRepository(config);
       case 'AUDIT': return this.instantiateAuditRepository(config);
       case 'CHAT': return this.instantiateChatRepository(config);
+      case 'APPLE_MUSIC': return this.instantiateAppleMusicRepository(config);
     }
   }
 
@@ -180,6 +177,17 @@ class DatabaseManager {
     }
 
     throw new Error(`${config.engine} Chat Adapter not fully implemented yet.`);
+  }
+
+  private async instantiateAppleMusicRepository(config: DatabaseConfig): Promise<IAppleMusicRepository> {
+    if (config.engine === 'MONGODB') {
+       const conn = await createMongoConnection(config.connectionString);
+       return new MongoAppleMusicRepository(conn);
+    }
+    if (config.engine === 'MOCK') return new InMemoryAppleMusicRepository();
+    // if (config.engine === 'POSTGRES') return new PostgresAppleMusicRepository(config.connectionString); // Future addition
+
+    throw new Error(`${config.engine} Apple Music Adapter not fully implemented yet.`);
   }
 
   // --- Accessors ---
