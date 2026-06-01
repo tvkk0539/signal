@@ -27,10 +27,26 @@ export const AppleMusicWrapperUI: React.FC = () => {
 
   const socketManager = SocketManager.getInstance();
 
+  const usernameRef = useRef(username);
+  const selectedProfileIdRef = useRef(selectedProfileId);
+
+  useEffect(() => {
+      usernameRef.current = username;
+      selectedProfileIdRef.current = selectedProfileId;
+  }, [username, selectedProfileId]);
+
   useEffect(() => {
     const handleProfileList = (msg: any) => {
        if (msg.profiles) {
           setWrapperProfiles(msg.profiles);
+
+          // Auto-select the newly created profile if we are on "NEW" but a matching username appears
+          if (!selectedProfileIdRef.current && usernameRef.current) {
+             const newProfile = msg.profiles.find((p: any) => p.username === usernameRef.current);
+             if (newProfile) {
+                 setSelectedProfileId(newProfile.id);
+             }
+          }
        }
     };
 

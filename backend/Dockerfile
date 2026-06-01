@@ -24,6 +24,8 @@ RUN apt-get update && apt-get install -y --no-install-recommends \
     git \
     net-tools \
     iputils-ping \
+    procps \
+    psmisc \
     tar \
     make \
     automake \
@@ -132,6 +134,8 @@ RUN apt-get update && apt-get install -y --no-install-recommends \
     tar \
     net-tools \
     iputils-ping \
+    procps \
+    psmisc \
     zip \
     nano \
     ca-certificates \

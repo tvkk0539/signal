@@ -263,6 +263,13 @@ class AppleMusicWrapperManager extends events_1.EventEmitter {
             this.log("No state directory found to export.");
             return null;
         }
+        // Verify the directory actually has contents (specifically the app folder)
+        // A fresh/empty rootfs/data zips to ~100-115 bytes. We shouldn't save an empty shell.
+        const appDataDir = path.join(targetDir, 'data', 'com.apple.android.music');
+        if (!fs.existsSync(appDataDir)) {
+            this.log("[WARN] Apple Music data directory missing inside rootfs. State is likely empty or proxy never fully authenticated.");
+            return null;
+        }
         return new Promise((resolve, reject) => {
             const child = (0, child_process_1.spawn)('tar', ['-czf', '-', '-C', targetDir, '.']);
             const chunks = [];
@@ -270,8 +277,14 @@ class AppleMusicWrapperManager extends events_1.EventEmitter {
             child.on('close', (code) => {
                 if (code === 0) {
                     const buffer = Buffer.concat(chunks);
-                    this.log(`State exported successfully. (Size: ${buffer.length} bytes)`);
-                    resolve(buffer.toString('base64'));
+                    if (buffer.length < 500) {
+                        this.log(`[WARN] Exported state is too small (${buffer.length} bytes), likely empty. Aborting export.`);
+                        resolve(null);
+                    }
+                    else {
+                        this.log(`State exported successfully. (Size: ${buffer.length} bytes)`);
+                        resolve(buffer.toString('base64'));
+                    }
                 }
                 else {
                     this.log(`[ERROR] Failed to export state. Tar exited with code ${code}`);
