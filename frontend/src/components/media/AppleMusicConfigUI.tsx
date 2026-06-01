@@ -36,6 +36,7 @@ export const AppleMusicConfigUI: React.FC = () => {
     limitMax, setLimitMax,
     dlAlbumcoverForPlaylist, setDlAlbumcoverForPlaylist,
     embyAnimatedArtwork, setEmbyAnimatedArtwork,
+    convertAfterDownload, setConvertAfterDownload,
     convertFormat, setConvertFormat,
     convertKeepOriginal, setConvertKeepOriginal,
     convertSkipIfSourceMatches, setConvertSkipIfSourceMatches,
@@ -80,6 +81,7 @@ export const AppleMusicConfigUI: React.FC = () => {
       limitMax,
       dlAlbumcoverForPlaylist,
       embyAnimatedArtwork,
+      convertAfterDownload,
       convertFormat,
       convertKeepOriginal,
       convertSkipIfSourceMatches,
@@ -367,7 +369,18 @@ export const AppleMusicConfigUI: React.FC = () => {
             <div className="p-8 bg-black/40 border border-white/10 rounded-2xl backdrop-blur-sm space-y-6">
               <h4 className="text-sm uppercase tracking-wider text-muted-foreground font-bold border-b border-white/10 pb-2">FFmpeg Post-Processing & Validation</h4>
 
-              <div className="grid grid-cols-2 gap-8">
+              <div className="flex items-center justify-between mb-6 pb-4 border-b border-white/5">
+                 <div>
+                    <h4 className="text-sm text-white font-medium">Enable Post-Processing Conversion</h4>
+                    <p className="text-xs text-muted-foreground mt-1">Convert downloaded audio into other formats via FFmpeg.</p>
+                 </div>
+                 <label className="relative inline-flex items-center cursor-pointer">
+                    <input type="checkbox" className="sr-only peer" checked={convertAfterDownload} onChange={(e) => setConvertAfterDownload(e.target.checked)} />
+                    <div className="w-11 h-6 bg-white/10 peer-focus:outline-none rounded-full peer peer-checked:after:translate-x-full peer-checked:after:border-white after:content-[''] after:absolute after:top-[2px] after:left-[2px] after:bg-white after:border-gray-300 after:border after:rounded-full after:h-5 after:w-5 after:transition-all peer-checked:bg-[#FA243C]"></div>
+                 </label>
+              </div>
+
+              <div className={`grid grid-cols-2 gap-8 transition-opacity duration-300 ${!convertAfterDownload ? 'opacity-30 pointer-events-none' : ''}`}>
                   <div className="space-y-2">
                       <label className="text-xs text-muted-foreground ml-1">Target Audio Conversion Format</label>
                       <select
@@ -375,7 +388,6 @@ export const AppleMusicConfigUI: React.FC = () => {
                           onChange={(e) => setConvertFormat(e.target.value)}
                           className="w-full bg-black/50 border border-white/10 rounded-lg px-3 py-3 text-sm text-white focus:ring-1 focus:ring-primary outline-none"
                       >
-                          <option value="copy">None (Copy / Native ALAC)</option>
                           <option value="flac">FLAC (Free Lossless)</option>
                           <option value="mp3">MP3 (MPEG Audio)</option>
                           <option value="opus">Opus (High Efficiency)</option>
@@ -400,7 +412,7 @@ export const AppleMusicConfigUI: React.FC = () => {
                   </div>
               </div>
 
-              <div className="border-t border-white/5 pt-6 grid grid-cols-2 gap-8">
+              <div className={`border-t border-white/5 pt-6 grid grid-cols-2 gap-8 transition-opacity duration-300 ${!convertAfterDownload ? 'opacity-30 pointer-events-none' : ''}`}>
                   <div className="space-y-4">
                       <h5 className="text-[10px] uppercase tracking-wider text-muted-foreground font-bold mb-2">Quality Guards</h5>
                       <label className="flex items-center gap-3 cursor-pointer group">

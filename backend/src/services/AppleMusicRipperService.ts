@@ -46,6 +46,7 @@ export interface RipperConfig {
     limitMax?: number;
     dlAlbumcoverForPlaylist?: boolean;
     embyAnimatedArtwork?: boolean;
+    convertAfterDownload?: boolean;
     convertFormat?: string;
     convertKeepOriginal?: boolean;
     convertSkipIfSourceMatches?: boolean;
@@ -170,7 +171,7 @@ storefront: ${q(config.storefront, 'us')}
 alac-fix: ${b(config.alacFix, false)}                   # Patch malformed ALAC packets
 
 # Conversion settings
-convert-after-download: ${b(config.convertFormat !== 'copy', false)}     # Enable post-download conversion (requires ffmpeg)
+convert-after-download: ${b(config.convertAfterDownload, false)}     # Enable post-download conversion (requires ffmpeg)
 convert-format: ${q(config.convertFormat, 'flac')}            # flac | mp3 | opus | wav | copy (no re-encode)
 convert-keep-original: ${b(config.convertKeepOriginal, false)}       # Keep original file after successful conversion
 convert-skip-if-source-matches: ${b(config.convertSkipIfSourceMatches, true)}  # If already in target format, skip

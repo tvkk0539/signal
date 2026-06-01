@@ -31,6 +31,7 @@ interface AppleMusicState {
     limitMax: number;
     dlAlbumcoverForPlaylist: boolean;
     embyAnimatedArtwork: boolean;
+    convertAfterDownload: boolean;
     convertFormat: string;
     convertKeepOriginal: boolean;
     convertSkipIfSourceMatches: boolean;
@@ -70,6 +71,7 @@ interface AppleMusicState {
     setLimitMax: (val: number) => void;
     setDlAlbumcoverForPlaylist: (val: boolean) => void;
     setEmbyAnimatedArtwork: (val: boolean) => void;
+    setConvertAfterDownload: (val: boolean) => void;
     setConvertFormat: (val: string) => void;
     setConvertKeepOriginal: (val: boolean) => void;
     setConvertSkipIfSourceMatches: (val: boolean) => void;
@@ -121,6 +123,7 @@ export const useAppleMusicStore = create<AppleMusicState>((set) => ({
     limitMax: 200,
     dlAlbumcoverForPlaylist: false,
     embyAnimatedArtwork: false,
+    convertAfterDownload: false,
     convertFormat: "flac",
     convertKeepOriginal: false,
     convertSkipIfSourceMatches: true,
@@ -160,6 +163,7 @@ export const useAppleMusicStore = create<AppleMusicState>((set) => ({
     setLimitMax: (val) => set({ limitMax: val }),
     setDlAlbumcoverForPlaylist: (val) => set({ dlAlbumcoverForPlaylist: val }),
     setEmbyAnimatedArtwork: (val) => set({ embyAnimatedArtwork: val }),
+    setConvertAfterDownload: (val) => set({ convertAfterDownload: val }),
     setConvertFormat: (val) => set({ convertFormat: val }),
     setConvertKeepOriginal: (val) => set({ convertKeepOriginal: val }),
     setConvertSkipIfSourceMatches: (val) => set({ convertSkipIfSourceMatches: val }),

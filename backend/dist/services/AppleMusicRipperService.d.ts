@@ -41,6 +41,7 @@ export interface RipperConfig {
     limitMax?: number;
     dlAlbumcoverForPlaylist?: boolean;
     embyAnimatedArtwork?: boolean;
+    convertAfterDownload?: boolean;
     convertFormat?: string;
     convertKeepOriginal?: boolean;
     convertSkipIfSourceMatches?: boolean;
