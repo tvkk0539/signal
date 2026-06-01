@@ -1,5 +1,5 @@
-import React from 'react';
-import { Database, CloudUpload, HardDrive, ShieldCheck } from 'lucide-react';
+import React, { useState } from 'react';
+import { Database, CloudUpload, HardDrive, ShieldCheck, Loader2, Check } from 'lucide-react';
 import { useAppleMusicStore } from '../../store/appleMusicStore';
 import { SocketManager } from '../../worker/SocketManager';
 import { MessageType } from '@swarm/shared';
@@ -11,7 +11,13 @@ export const AppleMusicSettingsUI: React.FC = () => {
     lrcFormat, lrcType, language, tagSortOrder, saveLrcFile, saveArtistCover, useSongInfoForPlaylist
   } = useAppleMusicStore();
 
+  const [isSyncing, setIsSyncing] = useState(false);
+  const [syncSuccess, setSyncSuccess] = useState(false);
+
   const handleSync = () => {
+    setIsSyncing(true);
+    setSyncSuccess(false);
+
     const payload: AppleMusicConfigSaveMessage = {
       type: MessageType.APPLE_MUSIC_CONFIG_SAVE,
       timestamp: Date.now(),
@@ -29,6 +35,13 @@ export const AppleMusicSettingsUI: React.FC = () => {
       useSongInfoForPlaylist
     };
     SocketManager.getInstance().emit(MessageType.APPLE_MUSIC_CONFIG_SAVE, payload);
+
+    // Simulate network delay for UX feedback
+    setTimeout(() => {
+        setIsSyncing(false);
+        setSyncSuccess(true);
+        setTimeout(() => setSyncSuccess(false), 2000);
+    }, 500);
   };
 
   return (
@@ -112,9 +125,20 @@ export const AppleMusicSettingsUI: React.FC = () => {
                     </div>
                     <button
                       onClick={handleSync}
-                      className="px-4 py-2 bg-white/10 hover:bg-white/20 text-white text-sm rounded-lg transition-colors"
+                      disabled={isSyncing || syncSuccess}
+                      className={`flex items-center gap-2 px-4 py-2 text-sm font-semibold rounded-lg transition-all duration-300 disabled:opacity-80 disabled:cursor-not-allowed
+                        ${syncSuccess
+                            ? 'bg-green-500/20 text-green-400 border border-green-500/30'
+                            : 'bg-white/10 hover:bg-white/20 text-white border border-transparent'
+                        }`}
                     >
-                        Sync Now
+                        {isSyncing ? (
+                            <><Loader2 size={16} className="animate-spin" /> Syncing...</>
+                        ) : syncSuccess ? (
+                            <><Check size={16} /> Synced!</>
+                        ) : (
+                            'Sync Now'
+                        )}
                     </button>
                 </div>
             </div>
