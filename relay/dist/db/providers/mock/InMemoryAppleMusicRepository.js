@@ -3,6 +3,7 @@ Object.defineProperty(exports, "__esModule", { value: true });
 exports.InMemoryAppleMusicRepository = void 0;
 class InMemoryAppleMusicRepository {
     config = null;
+    wrapperProfiles = new Map();
     async getConfig() {
         return this.config;
     }
@@ -20,10 +21,31 @@ class InMemoryAppleMusicRepository {
             saveLrcFile: config.saveLrcFile ?? false,
             saveArtistCover: config.saveArtistCover ?? false,
             useSongInfoForPlaylist: config.useSongInfoForPlaylist ?? false,
-            wrapperStatePayload: config.wrapperStatePayload !== undefined ? config.wrapperStatePayload : this.config?.wrapperStatePayload,
             updatedAt: new Date()
         };
         return this.config;
+    }
+    async saveWrapperProfile(profile) {
+        this.wrapperProfiles.set(profile.id, profile);
+    }
+    async getWrapperProfiles() {
+        const profiles = [];
+        for (const profile of this.wrapperProfiles.values()) {
+            profiles.push({
+                id: profile.id,
+                name: profile.name,
+                username: profile.username,
+                timestamp: profile.timestamp
+            });
+        }
+        return profiles;
+    }
+    async getWrapperProfilePayload(profileId) {
+        const profile = this.wrapperProfiles.get(profileId);
+        return profile ? profile.payload : null;
+    }
+    async deleteWrapperProfile(profileId) {
+        this.wrapperProfiles.delete(profileId);
     }
 }
 exports.InMemoryAppleMusicRepository = InMemoryAppleMusicRepository;

@@ -437,24 +437,37 @@ async function bootWorker() {
             ripperService.cancelJob(msg.jobId);
         }
     });
+    // Keep track of active profile in this worker instance
+    let currentActiveProfileId = undefined;
+    let currentActiveProfileName = undefined;
+    let currentActiveUsername = undefined;
     socket.on(shared_1.MessageType.WRAPPER_START_REQUEST, async (msg) => {
-        console.log(`[Worker] Received WRAPPER_START_REQUEST`);
+        console.log(`[Worker] Received WRAPPER_START_REQUEST (Profile: ${msg.profileId || 'NEW'})`);
         try {
             if (!wrapperManager.isInstalled()) {
                 await wrapperManager.install();
             }
-            // Ephemeral State Hydration: Ask Relay for saved state before starting
-            socket.emit(shared_1.MessageType.WRAPPER_STATE_LOAD, { workerId: socket.id });
-            const handleStateData = async (stateMsg) => {
-                if (stateMsg.workerId === socket.id) {
-                    socket.off(shared_1.MessageType.WRAPPER_STATE_DATA, handleStateData);
-                    if (stateMsg.payload) {
-                        await wrapperManager.importState(stateMsg.payload);
+            currentActiveProfileId = msg.profileId;
+            currentActiveProfileName = msg.profileName;
+            currentActiveUsername = msg.username;
+            if (msg.profileId) {
+                // Ephemeral State Hydration: Ask Relay for saved state before starting
+                socket.emit(shared_1.MessageType.WRAPPER_STATE_LOAD, { workerId: socket.id, profileId: msg.profileId });
+                const handleStateData = async (stateMsg) => {
+                    if (stateMsg.workerId === socket.id) {
+                        socket.off(shared_1.MessageType.WRAPPER_STATE_DATA, handleStateData);
+                        if (stateMsg.payload) {
+                            await wrapperManager.importState(stateMsg.payload);
+                        }
+                        await wrapperManager.start(msg.username, msg.password);
                     }
-                    await wrapperManager.start(msg.username, msg.password);
-                }
-            };
-            socket.on(shared_1.MessageType.WRAPPER_STATE_DATA, handleStateData);
+                };
+                socket.on(shared_1.MessageType.WRAPPER_STATE_DATA, handleStateData);
+            }
+            else {
+                // Brand new profile, no state to hydrate
+                await wrapperManager.start(msg.username, msg.password);
+            }
         }
         catch (e) {
             console.error(`[Worker] Wrapper Start Error:`, e);
@@ -464,13 +477,22 @@ async function bootWorker() {
         console.log(`[Worker] Received WRAPPER_STOP_REQUEST`);
         // Ephemeral State Hydration: Save the DRM keys before killing it
         const statePayload = await wrapperManager.exportState();
+        // We use the msg.profileId if provided, otherwise the one we tracked, or generate a random one if it's new
+        const profileIdToSave = msg.profileId || currentActiveProfileId || `profile_${Date.now()}`;
+        const profileNameToSave = currentActiveProfileName || `Profile - ${currentActiveUsername || 'Unknown'}`;
         if (statePayload) {
             socket.emit(shared_1.MessageType.WRAPPER_STATE_SAVE, {
                 payload: statePayload,
-                workerId: socket.id
+                workerId: socket.id,
+                profileId: profileIdToSave,
+                profileName: profileNameToSave,
+                username: currentActiveUsername
             });
         }
         wrapperManager.stop();
+        currentActiveProfileId = undefined;
+        currentActiveProfileName = undefined;
+        currentActiveUsername = undefined;
     });
     socket.on(shared_1.MessageType.WRAPPER_2FA_SUBMIT, (msg) => {
         console.log(`[Worker] Received WRAPPER_2FA_SUBMIT`);

@@ -11,11 +11,24 @@ export interface AppleMusicConfig {
   saveLrcFile: boolean;
   saveArtistCover: boolean;
   useSongInfoForPlaylist: boolean;
-  wrapperStatePayload?: string;
   updatedAt: Date;
+}
+
+export interface WrapperProfileData {
+  id: string;
+  name: string;
+  username: string;
+  payload: string;
+  timestamp: number;
 }
 
 export interface IAppleMusicRepository {
   getConfig(): Promise<AppleMusicConfig | null>;
   saveConfig(config: Partial<AppleMusicConfig>): Promise<AppleMusicConfig>;
+
+  // Wrapper Profile Management
+  saveWrapperProfile(profile: WrapperProfileData): Promise<void>;
+  getWrapperProfiles(): Promise<Omit<WrapperProfileData, 'payload'>[]>;
+  getWrapperProfilePayload(profileId: string): Promise<string | null>;
+  deleteWrapperProfile(profileId: string): Promise<void>;
 }

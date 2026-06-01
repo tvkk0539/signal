@@ -5,4 +5,8 @@ export declare class ReplicatedAppleMusicRepository implements IAppleMusicReposi
     constructor(primary: IAppleMusicRepository, mirrors: IAppleMusicRepository[]);
     getConfig(): Promise<AppleMusicConfig | null>;
     saveConfig(config: Partial<AppleMusicConfig>): Promise<AppleMusicConfig>;
+    saveWrapperProfile(profile: any): Promise<void>;
+    getWrapperProfiles(): Promise<any[]>;
+    getWrapperProfilePayload(profileId: string): Promise<string | null>;
+    deleteWrapperProfile(profileId: string): Promise<void>;
 }

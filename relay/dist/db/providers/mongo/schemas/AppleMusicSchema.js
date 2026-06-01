@@ -1,7 +1,14 @@
 "use strict";
 Object.defineProperty(exports, "__esModule", { value: true });
-exports.AppleMusicSchema = void 0;
+exports.AppleMusicSchema = exports.WrapperProfileSchema = void 0;
 const mongoose_1 = require("mongoose");
+exports.WrapperProfileSchema = new mongoose_1.Schema({
+    id: { type: String, required: true, unique: true },
+    name: { type: String, required: true },
+    username: { type: String, required: true },
+    payload: { type: String, required: true },
+    timestamp: { type: Number, required: true }
+});
 exports.AppleMusicSchema = new mongoose_1.Schema({
     mediaUserToken: { type: String, default: '' },
     storefront: { type: String, default: 'us' },
@@ -15,7 +22,6 @@ exports.AppleMusicSchema = new mongoose_1.Schema({
     saveLrcFile: { type: Boolean, default: false },
     saveArtistCover: { type: Boolean, default: false },
     useSongInfoForPlaylist: { type: Boolean, default: false },
-    wrapperStatePayload: { type: String },
     updatedAt: { type: Date, default: Date.now }
 }, {
     timestamps: { updatedAt: 'updatedAt' }
