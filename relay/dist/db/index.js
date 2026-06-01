@@ -6,6 +6,7 @@ const MongoAuditLogRepository_1 = require("./providers/mongo/MongoAuditLogReposi
 const InMemoryUserRepository_1 = require("./providers/mock/InMemoryUserRepository");
 const InMemoryAuditLogRepository_1 = require("./providers/mock/InMemoryAuditLogRepository");
 const InMemoryAppleMusicRepository_1 = require("./providers/mock/InMemoryAppleMusicRepository");
+const MongoAppleMusicRepository_1 = require("./providers/mongo/MongoAppleMusicRepository");
 const connection_1 = require("./providers/mongo/connection");
 const ReplicatedUserRepository_1 = require("./core/ReplicatedUserRepository");
 const ReplicatedAuditLogRepository_1 = require("./core/ReplicatedAuditLogRepository");
@@ -43,13 +44,6 @@ class DatabaseManager {
     // The Magic Function: Hot-Swaps a specific domain's database engine (and its mirrors) at runtime
     async hotSwapDomain(domain, config) {
         console.log(`[DB Manager] Hot-swapping ${domain} domain to Primary: ${config.primary.engine} with ${config.mirrors.length} mirrors...`);
-        if (domain === 'APPLE_MUSIC') {
-            const primaryAdapter = new InMemoryAppleMusicRepository_1.InMemoryAppleMusicRepository();
-            const mirrorAdapters = config.mirrors.map(() => new InMemoryAppleMusicRepository_1.InMemoryAppleMusicRepository());
-            this.appleMusicRepository = new ReplicatedAppleMusicRepository_1.ReplicatedAppleMusicRepository(primaryAdapter, mirrorAdapters);
-            this.currentRouting.APPLE_MUSIC = config;
-            return;
-        }
         try {
             // 1. Instantiate the Primary
             const primaryRepo = await this.instantiateDomainRepository(domain, config.primary);
@@ -74,6 +68,9 @@ class DatabaseManager {
                     break;
                 case 'CHAT':
                     this.chatRepository = new ReplicatedChatRepository_1.ReplicatedChatRepository(primaryRepo, mirrorRepos);
+                    break;
+                case 'APPLE_MUSIC':
+                    this.appleMusicRepository = new ReplicatedAppleMusicRepository_1.ReplicatedAppleMusicRepository(primaryRepo, mirrorRepos);
                     break;
             }
             this.currentRouting[domain] = config;
@@ -106,6 +103,7 @@ class DatabaseManager {
             case 'AUTH': return this.instantiateUserRepository(config);
             case 'AUDIT': return this.instantiateAuditRepository(config);
             case 'CHAT': return this.instantiateChatRepository(config);
+            case 'APPLE_MUSIC': return this.instantiateAppleMusicRepository(config);
         }
     }
     // --- Adapter Factories ---
@@ -148,6 +146,16 @@ class DatabaseManager {
             return new PostgresChatRepository(config.connectionString);
         }
         throw new Error(`${config.engine} Chat Adapter not fully implemented yet.`);
+    }
+    async instantiateAppleMusicRepository(config) {
+        if (config.engine === 'MONGODB') {
+            const conn = await (0, connection_1.createMongoConnection)(config.connectionString);
+            return new MongoAppleMusicRepository_1.MongoAppleMusicRepository(conn);
+        }
+        if (config.engine === 'MOCK')
+            return new InMemoryAppleMusicRepository_1.InMemoryAppleMusicRepository();
+        // if (config.engine === 'POSTGRES') return new PostgresAppleMusicRepository(config.connectionString); // Future addition
+        throw new Error(`${config.engine} Apple Music Adapter not fully implemented yet.`);
     }
     // --- Accessors ---
     getUsers() {

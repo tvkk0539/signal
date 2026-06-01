@@ -34,6 +34,7 @@ declare class DatabaseManager {
     private instantiateUserRepository;
     private instantiateAuditRepository;
     private instantiateChatRepository;
+    private instantiateAppleMusicRepository;
     getUsers(): IUserRepository;
     getAuditLogs(): IAuditLogRepository;
     getChat(): IChatRepository;
