@@ -1,8 +1,8 @@
 import React, { useState, useEffect, useRef } from 'react';
-import { KeyRound, ShieldAlert, DownloadCloud, Play, Square, Loader2, Send } from 'lucide-react';
+import { KeyRound, ShieldAlert, DownloadCloud, Play, Square, Loader2, Send, Trash2 } from 'lucide-react';
 import { SocketManager } from '../../worker/SocketManager';
 import { MessageType } from '@swarm/shared';
-import type { WrapperStartRequestMessage, WrapperStopRequestMessage, Wrapper2FASubmitMessage } from '@swarm/shared';
+import type { WrapperStartRequestMessage, WrapperStopRequestMessage, Wrapper2FASubmitMessage, WrapperStateDeleteMessage } from '@swarm/shared';
 import { useAppleMusicStore } from '../../store/appleMusicStore';
 
 export const AppleMusicWrapperUI: React.FC = () => {
@@ -12,14 +12,37 @@ export const AppleMusicWrapperUI: React.FC = () => {
       wrapperPid: pid,
       wrapperLogs: logs,
       wrapperNeeds2FA: needs2FA,
+      wrapperProfiles,
+      selectedProfileId,
       setWrapperNeeds2FA,
-      appendWrapperLog
+      appendWrapperLog,
+      setWrapperProfiles,
+      setSelectedProfileId
   } = useAppleMusicStore();
 
   const [isInstalling, setIsInstalling] = useState(false);
   const [username, setUsername] = useState('');
   const [password, setPassword] = useState('');
   const [twoFaCode, setTwoFaCode] = useState('');
+
+  const socketManager = SocketManager.getInstance();
+
+  useEffect(() => {
+    const handleProfileList = (msg: any) => {
+       if (msg.profiles) {
+          setWrapperProfiles(msg.profiles);
+       }
+    };
+
+    socketManager.on(MessageType.WRAPPER_PROFILES_LIST, handleProfileList);
+
+    // Request initial list
+    socketManager.emit(MessageType.WRAPPER_PROFILES_REQUEST, { timestamp: Date.now() });
+
+    return () => {
+       socketManager.off(MessageType.WRAPPER_PROFILES_LIST, handleProfileList);
+    };
+  }, []);
 
   const logsEndRef = useRef<HTMLDivElement>(null);
 
@@ -47,8 +70,8 @@ export const AppleMusicWrapperUI: React.FC = () => {
   };
 
   const handleStart = () => {
-    if (!username || !password) {
-        appendWrapperLog("[UI-ERROR] Missing Apple ID or Password. Cannot start proxy.");
+    if (!selectedProfileId && (!username || !password)) {
+        appendWrapperLog("[UI-ERROR] Missing Apple ID or Password for new profile.");
         return;
     }
     const payload: WrapperStartRequestMessage = {
@@ -56,18 +79,51 @@ export const AppleMusicWrapperUI: React.FC = () => {
        timestamp: Date.now(),
        workerId: 'target-worker-id',
        username,
-       password
+       password,
+       profileId: selectedProfileId || undefined,
+       profileName: selectedProfileId ? undefined : `Profile - ${username}`
     };
-    SocketManager.getInstance().emit(MessageType.WRAPPER_START_REQUEST, payload);
+    socketManager.emit(MessageType.WRAPPER_START_REQUEST, payload);
   };
 
   const handleStop = () => {
     const payload: WrapperStopRequestMessage = {
        type: MessageType.WRAPPER_STOP_REQUEST,
        timestamp: Date.now(),
-       workerId: 'target-worker-id'
+       workerId: 'target-worker-id',
+       profileId: selectedProfileId || undefined
     };
-    SocketManager.getInstance().emit(MessageType.WRAPPER_STOP_REQUEST, payload);
+    socketManager.emit(MessageType.WRAPPER_STOP_REQUEST, payload);
+  };
+
+  const handlePurgeState = () => {
+     if (!selectedProfileId) return;
+     const payload: WrapperStateDeleteMessage = {
+         type: MessageType.WRAPPER_STATE_DELETE,
+         timestamp: Date.now(),
+         profileId: selectedProfileId
+     };
+     socketManager.emit(MessageType.WRAPPER_STATE_DELETE, payload);
+     setSelectedProfileId(null);
+     setUsername('');
+     setPassword('');
+     appendWrapperLog(`[UI] Purged state for profile: ${selectedProfileId}`);
+  };
+
+  const handleSelectProfile = (e: React.ChangeEvent<HTMLSelectElement>) => {
+      const val = e.target.value;
+      if (val === 'NEW') {
+          setSelectedProfileId(null);
+          setUsername('');
+          setPassword('');
+      } else {
+          setSelectedProfileId(val);
+          const profile = wrapperProfiles.find(p => p.id === val);
+          if (profile) {
+              setUsername(profile.username);
+              // Do NOT clear password, allow user to input if 2FA is needed
+          }
+      }
   };
 
   const handle2FASubmit = (e: React.FormEvent) => {
@@ -137,17 +193,39 @@ export const AppleMusicWrapperUI: React.FC = () => {
             {/* Left Col: Credentials & 2FA */}
             <div className="w-1/3 flex flex-col gap-6">
 
-                {/* Credentials */}
-                <div className="p-6 bg-black/40 border border-white/10 rounded-2xl backdrop-blur-sm shrink-0">
-                    <h4 className="text-sm uppercase tracking-wider text-muted-foreground font-bold mb-4">DRM Authentication</h4>
+                {/* Credentials & Profile Manager */}
+                <div className="p-6 bg-black/40 border border-white/10 rounded-2xl backdrop-blur-sm shrink-0 flex flex-col gap-4">
+                    <div className="flex justify-between items-center">
+                        <h4 className="text-sm uppercase tracking-wider text-muted-foreground font-bold">DRM Profiles</h4>
+                        {selectedProfileId && !isRunning && (
+                            <button onClick={handlePurgeState} className="text-red-400 hover:text-red-300 transition-colors flex items-center gap-1 text-xs" title="Purge Widevine State">
+                                <Trash2 size={14} /> Purge
+                            </button>
+                        )}
+                    </div>
+
                     <div className="space-y-4">
+                        <div className="space-y-1">
+                            <label className="text-xs text-muted-foreground ml-1">Identity</label>
+                            <select
+                                value={selectedProfileId || 'NEW'}
+                                onChange={handleSelectProfile}
+                                disabled={isRunning}
+                                className="w-full bg-black/50 border border-white/10 rounded-lg px-3 py-2 text-sm text-white focus:ring-1 focus:ring-primary outline-none disabled:opacity-50 appearance-none"
+                            >
+                                <option value="NEW">✨ Create New Profile</option>
+                                {wrapperProfiles.map((p: any) => (
+                                    <option key={p.id} value={p.id}>👤 {p.name}</option>
+                                ))}
+                            </select>
+                        </div>
                         <div className="space-y-1">
                             <label className="text-xs text-muted-foreground ml-1">Apple ID</label>
                             <input
                                 type="text"
                                 value={username}
                                 onChange={(e) => setUsername(e.target.value)}
-                                disabled={isRunning}
+                                disabled={isRunning || !!selectedProfileId}
                                 placeholder="music@apple.com"
                                 className="w-full bg-black/50 border border-white/10 rounded-lg px-3 py-2 text-sm text-white focus:ring-1 focus:ring-primary outline-none disabled:opacity-50"
                             />
@@ -159,7 +237,7 @@ export const AppleMusicWrapperUI: React.FC = () => {
                                 value={password}
                                 onChange={(e) => setPassword(e.target.value)}
                                 disabled={isRunning}
-                                placeholder="••••••••"
+                                placeholder={selectedProfileId ? "•••••••• (Optional if Hydrated)" : "••••••••"}
                                 className="w-full bg-black/50 border border-white/10 rounded-lg px-3 py-2 text-sm text-white focus:ring-1 focus:ring-primary outline-none disabled:opacity-50"
                             />
                         </div>

@@ -87,9 +87,13 @@ interface AppleMusicState {
     wrapperPid: number | null;
     wrapperLogs: string[];
     wrapperNeeds2FA: boolean;
+    wrapperProfiles: any[];
+    selectedProfileId: string | null;
     setWrapperStatus: (installed: boolean, running: boolean, pid: number | null, logs: string[]) => void;
     setWrapperNeeds2FA: (val: boolean) => void;
     appendWrapperLog: (log: string) => void;
+    setWrapperProfiles: (profiles: any[]) => void;
+    setSelectedProfileId: (id: string | null) => void;
 }
 
 export const useAppleMusicStore = create<AppleMusicState>((set) => ({
@@ -178,6 +182,8 @@ export const useAppleMusicStore = create<AppleMusicState>((set) => ({
     wrapperPid: null,
     wrapperLogs: ["# Swarm Proxy Environment Initialization Complete."],
     wrapperNeeds2FA: false,
+    wrapperProfiles: [],
+    selectedProfileId: null,
     setWrapperStatus: (installed, running, pid, logs) => set((state) => ({
         wrapperIsInstalled: installed,
         wrapperIsRunning: running,
@@ -189,5 +195,7 @@ export const useAppleMusicStore = create<AppleMusicState>((set) => ({
         const newLogs = [...state.wrapperLogs, log];
         if (newLogs.length > 100) newLogs.shift();
         return { wrapperLogs: newLogs };
-    })
+    }),
+    setWrapperProfiles: (profiles) => set({ wrapperProfiles: profiles }),
+    setSelectedProfileId: (id) => set({ selectedProfileId: id })
 }));

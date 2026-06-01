@@ -20,5 +20,27 @@ class ReplicatedAppleMusicRepository {
         });
         return result;
     }
+    async saveWrapperProfile(profile) {
+        await this.primary.saveWrapperProfile(profile);
+        this.mirrors.forEach(mirror => {
+            mirror.saveWrapperProfile(profile).catch(err => {
+                console.error(`[ReplicatedAppleMusic] Mirror saveWrapperProfile failed:`, err);
+            });
+        });
+    }
+    async getWrapperProfiles() {
+        return this.primary.getWrapperProfiles();
+    }
+    async getWrapperProfilePayload(profileId) {
+        return this.primary.getWrapperProfilePayload(profileId);
+    }
+    async deleteWrapperProfile(profileId) {
+        await this.primary.deleteWrapperProfile(profileId);
+        this.mirrors.forEach(mirror => {
+            mirror.deleteWrapperProfile(profileId).catch(err => {
+                console.error(`[ReplicatedAppleMusic] Mirror deleteWrapperProfile failed:`, err);
+            });
+        });
+    }
 }
 exports.ReplicatedAppleMusicRepository = ReplicatedAppleMusicRepository;

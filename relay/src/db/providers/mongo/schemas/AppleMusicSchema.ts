@@ -5,6 +5,22 @@ export interface IAppleMusicConfigDocument extends Omit<AppleMusicConfig, 'updat
   updatedAt: Date;
 }
 
+export interface IWrapperProfileDocument extends Document {
+  id: string;
+  name: string;
+  username: string;
+  payload: string;
+  timestamp: number;
+}
+
+export const WrapperProfileSchema = new Schema<IWrapperProfileDocument>({
+  id: { type: String, required: true, unique: true },
+  name: { type: String, required: true },
+  username: { type: String, required: true },
+  payload: { type: String, required: true },
+  timestamp: { type: Number, required: true }
+});
+
 export const AppleMusicSchema = new Schema<IAppleMusicConfigDocument>({
   mediaUserToken: { type: String, default: '' },
   storefront: { type: String, default: 'us' },
@@ -18,7 +34,6 @@ export const AppleMusicSchema = new Schema<IAppleMusicConfigDocument>({
   saveLrcFile: { type: Boolean, default: false },
   saveArtistCover: { type: Boolean, default: false },
   useSongInfoForPlaylist: { type: Boolean, default: false },
-  wrapperStatePayload: { type: String },
   updatedAt: { type: Date, default: Date.now }
 }, {
   timestamps: { updatedAt: 'updatedAt' }

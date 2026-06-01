@@ -333,6 +333,38 @@ export function setupSockets(io: Server) {
     socket.on(MessageType.APPLE_MUSIC_RIP_REQUEST, (msg: any) => routeToIdleWorker(MessageType.APPLE_MUSIC_RIP_REQUEST, msg));
 
     // --- Phase 9 & 10: Media Config Database Routing ---
+    socket.on(MessageType.WRAPPER_PROFILES_REQUEST, async () => {
+        try {
+            const db = dbManager.getAppleMusic();
+            const profiles = await db.getWrapperProfiles();
+            socket.emit(MessageType.WRAPPER_PROFILES_LIST, {
+                type: MessageType.WRAPPER_PROFILES_LIST,
+                timestamp: Date.now(),
+                profiles
+            });
+        } catch (e: any) {
+            console.error(`[Relay] Failed to fetch wrapper profiles:`, e.message);
+        }
+    });
+
+    socket.on(MessageType.WRAPPER_STATE_DELETE, async (msg: any) => {
+        try {
+            const db = dbManager.getAppleMusic();
+            await db.deleteWrapperProfile(msg.profileId);
+            console.log(`[Relay] Purged wrapper profile: ${msg.profileId}`);
+
+            // Broadcast updated list
+            const profiles = await db.getWrapperProfiles();
+            io.emit(MessageType.WRAPPER_PROFILES_LIST, {
+                type: MessageType.WRAPPER_PROFILES_LIST,
+                timestamp: Date.now(),
+                profiles
+            });
+        } catch (e: any) {
+            console.error(`[Relay] Failed to delete wrapper profile:`, e.message);
+        }
+    });
+
     socket.on(MessageType.APPLE_MUSIC_CONFIG_SAVE, async (msg: any) => {
         try {
             const db = dbManager.getAppleMusic();
@@ -390,11 +422,24 @@ export function setupSockets(io: Server) {
 
     socket.on(MessageType.WRAPPER_STATE_SAVE, async (msg: any) => {
         try {
+            if (!msg.profileId) throw new Error("Missing profileId for wrapper state save");
             const db = dbManager.getAppleMusic();
-            await db.saveConfig({
-                wrapperStatePayload: msg.payload
+            await db.saveWrapperProfile({
+                id: msg.profileId,
+                name: msg.profileName || 'Unknown Profile',
+                username: msg.username || 'unknown',
+                payload: msg.payload,
+                timestamp: Date.now()
             });
-            console.log(`[Relay] Ephemeral Wrapper State Saved (Length: ${msg.payload.length})`);
+            console.log(`[Relay] Ephemeral Wrapper State Saved for Profile ${msg.profileId} (Length: ${msg.payload.length})`);
+
+            // Broadcast the updated profile list
+            const profiles = await db.getWrapperProfiles();
+            io.emit(MessageType.WRAPPER_PROFILES_LIST, {
+                type: MessageType.WRAPPER_PROFILES_LIST,
+                timestamp: Date.now(),
+                profiles
+            });
         } catch (e: any) {
             console.error(`[Relay] Failed to save Wrapper State:`, e.message);
         }
@@ -402,17 +447,19 @@ export function setupSockets(io: Server) {
 
     socket.on(MessageType.WRAPPER_STATE_LOAD, async (msg: any) => {
         try {
+            if (!msg.profileId) throw new Error("Missing profileId for wrapper state load");
             const db = dbManager.getAppleMusic();
-            const config = await db.getConfig();
-            if (config && config.wrapperStatePayload) {
-                console.log(`[Relay] Sending Hydration State to Worker ${socket.id}`);
+            const payload = await db.getWrapperProfilePayload(msg.profileId);
+
+            if (payload) {
+                console.log(`[Relay] Sending Hydration State (Profile ${msg.profileId}) to Worker ${socket.id}`);
                 socket.emit(MessageType.WRAPPER_STATE_DATA, {
                     type: MessageType.WRAPPER_STATE_DATA,
-                    payload: config.wrapperStatePayload,
+                    payload: payload,
                     workerId: msg.workerId
                 });
             } else {
-                console.log(`[Relay] No state found to hydrate for Worker ${socket.id}`);
+                console.log(`[Relay] No state found to hydrate for Profile ${msg.profileId} to Worker ${socket.id}`);
                 socket.emit(MessageType.WRAPPER_STATE_DATA, {
                     type: MessageType.WRAPPER_STATE_DATA,
                     payload: null,

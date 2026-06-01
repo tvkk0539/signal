@@ -1,12 +1,14 @@
 import { Connection, Model } from 'mongoose';
 import { IAppleMusicRepository, AppleMusicConfig } from '../../interfaces/IAppleMusicRepository';
-import { IAppleMusicConfigDocument, AppleMusicSchema } from './schemas/AppleMusicSchema';
+import { IAppleMusicConfigDocument, AppleMusicSchema, IWrapperProfileDocument, WrapperProfileSchema } from './schemas/AppleMusicSchema';
 
 export class MongoAppleMusicRepository implements IAppleMusicRepository {
   private configModel: Model<IAppleMusicConfigDocument>;
+  private profileModel: Model<IWrapperProfileDocument>;
 
   constructor(connection: Connection) {
     this.configModel = connection.model<IAppleMusicConfigDocument>('AppleMusicConfig', AppleMusicSchema);
+    this.profileModel = connection.model<IWrapperProfileDocument>('WrapperProfile', WrapperProfileSchema);
   }
 
   async getConfig(): Promise<AppleMusicConfig | null> {
@@ -28,7 +30,6 @@ export class MongoAppleMusicRepository implements IAppleMusicRepository {
       saveLrcFile: doc.saveLrcFile,
       saveArtistCover: doc.saveArtistCover,
       useSongInfoForPlaylist: doc.useSongInfoForPlaylist,
-      wrapperStatePayload: doc.wrapperStatePayload,
       updatedAt: doc.updatedAt
     };
   }
@@ -59,8 +60,34 @@ export class MongoAppleMusicRepository implements IAppleMusicRepository {
       saveLrcFile: doc.saveLrcFile,
       saveArtistCover: doc.saveArtistCover,
       useSongInfoForPlaylist: doc.useSongInfoForPlaylist,
-      wrapperStatePayload: doc.wrapperStatePayload,
       updatedAt: doc.updatedAt
     };
+  }
+
+  async saveWrapperProfile(profile: any): Promise<void> {
+    await this.profileModel.findOneAndUpdate(
+      { id: profile.id },
+      { $set: profile },
+      { new: true, upsert: true }
+    ).exec();
+  }
+
+  async getWrapperProfiles(): Promise<any[]> {
+    const docs = await this.profileModel.find({}, { payload: 0 }).lean().exec();
+    return docs.map(doc => ({
+      id: doc.id,
+      name: doc.name,
+      username: doc.username,
+      timestamp: doc.timestamp
+    }));
+  }
+
+  async getWrapperProfilePayload(profileId: string): Promise<string | null> {
+    const doc = await this.profileModel.findOne({ id: profileId }, { payload: 1 }).lean().exec();
+    return doc ? doc.payload : null;
+  }
+
+  async deleteWrapperProfile(profileId: string): Promise<void> {
+    await this.profileModel.deleteOne({ id: profileId }).exec();
   }
 }

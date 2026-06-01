@@ -1,7 +1,8 @@
-import { IAppleMusicRepository, AppleMusicConfig } from '../../interfaces/IAppleMusicRepository';
+import { IAppleMusicRepository, AppleMusicConfig, WrapperProfileData } from '../../interfaces/IAppleMusicRepository';
 
 export class InMemoryAppleMusicRepository implements IAppleMusicRepository {
   private config: AppleMusicConfig | null = null;
+  private wrapperProfiles: Map<string, WrapperProfileData> = new Map();
 
   async getConfig(): Promise<AppleMusicConfig | null> {
     return this.config;
@@ -21,9 +22,34 @@ export class InMemoryAppleMusicRepository implements IAppleMusicRepository {
       saveLrcFile: config.saveLrcFile ?? false,
       saveArtistCover: config.saveArtistCover ?? false,
       useSongInfoForPlaylist: config.useSongInfoForPlaylist ?? false,
-      wrapperStatePayload: config.wrapperStatePayload !== undefined ? config.wrapperStatePayload : this.config?.wrapperStatePayload,
       updatedAt: new Date()
     };
     return this.config;
+  }
+
+  async saveWrapperProfile(profile: WrapperProfileData): Promise<void> {
+    this.wrapperProfiles.set(profile.id, profile);
+  }
+
+  async getWrapperProfiles(): Promise<Omit<WrapperProfileData, 'payload'>[]> {
+    const profiles: Omit<WrapperProfileData, 'payload'>[] = [];
+    for (const profile of this.wrapperProfiles.values()) {
+      profiles.push({
+        id: profile.id,
+        name: profile.name,
+        username: profile.username,
+        timestamp: profile.timestamp
+      });
+    }
+    return profiles;
+  }
+
+  async getWrapperProfilePayload(profileId: string): Promise<string | null> {
+    const profile = this.wrapperProfiles.get(profileId);
+    return profile ? profile.payload : null;
+  }
+
+  async deleteWrapperProfile(profileId: string): Promise<void> {
+    this.wrapperProfiles.delete(profileId);
   }
 }

@@ -212,15 +212,35 @@ export interface PublicKeyResponseMessage extends BaseMessage {
     targetId: string;
     publicKeyBase64: string | null;
 }
+export interface WrapperProfile {
+    id: string;
+    name: string;
+    username: string;
+    timestamp: number;
+}
+export interface WrapperProfilesRequestMessage extends BaseMessage {
+    type: MessageType.WRAPPER_PROFILES_REQUEST;
+}
+export interface WrapperProfilesListMessage extends BaseMessage {
+    type: MessageType.WRAPPER_PROFILES_LIST;
+    profiles: WrapperProfile[];
+}
+export interface WrapperStateDeleteMessage extends BaseMessage {
+    type: MessageType.WRAPPER_STATE_DELETE;
+    profileId: string;
+}
 export interface WrapperStartRequestMessage extends BaseMessage {
     type: MessageType.WRAPPER_START_REQUEST;
     workerId: string;
     username?: string;
     password?: string;
+    profileId?: string;
+    profileName?: string;
 }
 export interface WrapperStopRequestMessage extends BaseMessage {
     type: MessageType.WRAPPER_STOP_REQUEST;
     workerId: string;
+    profileId?: string;
 }
 export interface Wrapper2FAChallengeMessage extends BaseMessage {
     type: MessageType.WRAPPER_2FA_CHALLENGE;
@@ -344,6 +364,24 @@ export interface AppleMusicCancelRequestMessage extends BaseMessage {
     type: MessageType.APPLE_MUSIC_CANCEL_REQUEST;
     workerId: string;
     jobId: string;
+}
+export interface WrapperStateSaveMessage extends BaseMessage {
+    type: MessageType.WRAPPER_STATE_SAVE;
+    payload: string;
+    workerId: string;
+    profileId?: string;
+    profileName?: string;
+    username?: string;
+}
+export interface WrapperStateLoadMessage extends BaseMessage {
+    type: MessageType.WRAPPER_STATE_LOAD;
+    workerId: string;
+    profileId: string;
+}
+export interface WrapperStateDataMessage extends BaseMessage {
+    type: MessageType.WRAPPER_STATE_DATA;
+    payload: string | null;
+    workerId: string;
 }
 export interface AppleMusicConfigDataMessage extends BaseMessage {
     type: MessageType.APPLE_MUSIC_CONFIG_DATA;

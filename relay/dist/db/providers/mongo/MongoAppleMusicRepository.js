@@ -4,8 +4,10 @@ exports.MongoAppleMusicRepository = void 0;
 const AppleMusicSchema_1 = require("./schemas/AppleMusicSchema");
 class MongoAppleMusicRepository {
     configModel;
+    profileModel;
     constructor(connection) {
         this.configModel = connection.model('AppleMusicConfig', AppleMusicSchema_1.AppleMusicSchema);
+        this.profileModel = connection.model('WrapperProfile', AppleMusicSchema_1.WrapperProfileSchema);
     }
     async getConfig() {
         // We assume a single configuration document exists for the system/user.
@@ -26,7 +28,6 @@ class MongoAppleMusicRepository {
             saveLrcFile: doc.saveLrcFile,
             saveArtistCover: doc.saveArtistCover,
             useSongInfoForPlaylist: doc.useSongInfoForPlaylist,
-            wrapperStatePayload: doc.wrapperStatePayload,
             updatedAt: doc.updatedAt
         };
     }
@@ -51,9 +52,27 @@ class MongoAppleMusicRepository {
             saveLrcFile: doc.saveLrcFile,
             saveArtistCover: doc.saveArtistCover,
             useSongInfoForPlaylist: doc.useSongInfoForPlaylist,
-            wrapperStatePayload: doc.wrapperStatePayload,
             updatedAt: doc.updatedAt
         };
+    }
+    async saveWrapperProfile(profile) {
+        await this.profileModel.findOneAndUpdate({ id: profile.id }, { $set: profile }, { new: true, upsert: true }).exec();
+    }
+    async getWrapperProfiles() {
+        const docs = await this.profileModel.find({}, { payload: 0 }).lean().exec();
+        return docs.map(doc => ({
+            id: doc.id,
+            name: doc.name,
+            username: doc.username,
+            timestamp: doc.timestamp
+        }));
+    }
+    async getWrapperProfilePayload(profileId) {
+        const doc = await this.profileModel.findOne({ id: profileId }, { payload: 1 }).lean().exec();
+        return doc ? doc.payload : null;
+    }
+    async deleteWrapperProfile(profileId) {
+        await this.profileModel.deleteOne({ id: profileId }).exec();
     }
 }
 exports.MongoAppleMusicRepository = MongoAppleMusicRepository;

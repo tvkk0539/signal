@@ -65,4 +65,7 @@ var MessageType;
     MessageType["WRAPPER_STATE_SAVE"] = "WRAPPER_STATE_SAVE";
     MessageType["WRAPPER_STATE_LOAD"] = "WRAPPER_STATE_LOAD";
     MessageType["WRAPPER_STATE_DATA"] = "WRAPPER_STATE_DATA";
+    MessageType["WRAPPER_PROFILES_REQUEST"] = "WRAPPER_PROFILES_REQUEST";
+    MessageType["WRAPPER_PROFILES_LIST"] = "WRAPPER_PROFILES_LIST";
+    MessageType["WRAPPER_STATE_DELETE"] = "WRAPPER_STATE_DELETE";
 })(MessageType || (exports.MessageType = MessageType = {}));
