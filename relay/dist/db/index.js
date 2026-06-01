@@ -32,13 +32,14 @@ class DatabaseManager {
             await this.hotSwapDomain('AUTH', { primary: { engine: defaultEngine }, mirrors: [] });
             await this.hotSwapDomain('AUDIT', { primary: { engine: defaultEngine }, mirrors: [] });
             await this.hotSwapDomain('CHAT', { primary: { engine: defaultEngine }, mirrors: [] });
-            await this.hotSwapDomain('APPLE_MUSIC', { primary: { engine: 'MOCK' }, mirrors: [] }); // Mock default until Mongo schema is written
+            await this.hotSwapDomain('APPLE_MUSIC', { primary: { engine: defaultEngine }, mirrors: [] });
         }
         catch (e) {
             console.warn(`[DB Manager] Primary initialize failed, falling back to MOCK universally.`);
             await this.hotSwapDomain('AUTH', { primary: { engine: 'MOCK' }, mirrors: [] });
             await this.hotSwapDomain('AUDIT', { primary: { engine: 'MOCK' }, mirrors: [] });
             await this.hotSwapDomain('CHAT', { primary: { engine: 'MOCK' }, mirrors: [] });
+            await this.hotSwapDomain('APPLE_MUSIC', { primary: { engine: 'MOCK' }, mirrors: [] });
         }
     }
     // The Magic Function: Hot-Swaps a specific domain's database engine (and its mirrors) at runtime
