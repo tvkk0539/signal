@@ -258,20 +258,22 @@ class AppleMusicWrapperManager extends events_1.EventEmitter {
     }
     async exportState() {
         this.log("Exporting Wrapper Ephemeral State...");
-        const targetDir = path.join(this.WRAPPER_DIR, 'rootfs', 'data');
-        if (!fs.existsSync(targetDir)) {
+        const rootfsDir = path.join(this.WRAPPER_DIR, 'rootfs');
+        const dataDir = path.join(rootfsDir, 'data');
+        if (!fs.existsSync(dataDir)) {
             this.log("No state directory found to export.");
             return null;
         }
         // Verify the directory actually has contents (specifically the app folder)
         // A fresh/empty rootfs/data zips to ~100-115 bytes. We shouldn't save an empty shell.
-        const appDataDir = path.join(targetDir, 'data', 'com.apple.android.music');
+        const appDataDir = path.join(dataDir, 'data', 'com.apple.android.music');
         if (!fs.existsSync(appDataDir)) {
             this.log("[WARN] Apple Music data directory missing inside rootfs. State is likely empty or proxy never fully authenticated.");
             return null;
         }
         return new Promise((resolve, reject) => {
-            const child = (0, child_process_1.spawn)('tar', ['-czf', '-', '-C', targetDir, '.']);
+            // We step into rootfs and zip the "data" folder ITSELF to preserve its metadata
+            const child = (0, child_process_1.spawn)('tar', ['-czf', '-', '-C', rootfsDir, 'data']);
             const chunks = [];
             child.stdout.on('data', (chunk) => chunks.push(chunk));
             child.on('close', (code) => {
@@ -299,27 +301,19 @@ class AppleMusicWrapperManager extends events_1.EventEmitter {
     }
     async importState(base64Payload) {
         this.log("Hydrating Wrapper Ephemeral State...");
-        const targetDir = path.join(this.WRAPPER_DIR, 'rootfs', 'data');
-        if (!fs.existsSync(targetDir)) {
-            fs.mkdirSync(targetDir, { recursive: true });
+        const rootfsDir = path.join(this.WRAPPER_DIR, 'rootfs');
+        if (!fs.existsSync(rootfsDir)) {
+            fs.mkdirSync(rootfsDir, { recursive: true });
         }
         return new Promise((resolve, reject) => {
             const buffer = Buffer.from(base64Payload, 'base64');
-            const child = (0, child_process_1.spawn)('tar', ['-xzf', '-', '-C', targetDir]);
+            // Use -p to strictly preserve permissions defined inside the tarball
+            const child = (0, child_process_1.spawn)('tar', ['-xpzf', '-', '-C', rootfsDir]);
             child.stdin.write(buffer);
             child.stdin.end();
             child.on('close', (code) => {
                 if (code === 0) {
-                    this.log("State hydrated successfully.");
-                    try {
-                        // Re-apply required Android emulation permissions after extraction
-                        fs.chmodSync(targetDir, 0o777);
-                        // Recursively try to apply 777 to contents if possible natively
-                        (0, child_process_1.spawn)('bash', ['-c', `chmod -R 777 "${targetDir}"`]);
-                    }
-                    catch (e) {
-                        this.log(`[WARN] Failed to re-apply 777 permissions after hydration.`);
-                    }
+                    this.log("State hydrated successfully with preserved permissions.");
                     resolve();
                 }
                 else {
