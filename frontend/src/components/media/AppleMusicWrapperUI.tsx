@@ -27,10 +27,26 @@ export const AppleMusicWrapperUI: React.FC = () => {
 
   const socketManager = SocketManager.getInstance();
 
+  const usernameRef = useRef(username);
+  const selectedProfileIdRef = useRef(selectedProfileId);
+
+  useEffect(() => {
+      usernameRef.current = username;
+      selectedProfileIdRef.current = selectedProfileId;
+  }, [username, selectedProfileId]);
+
   useEffect(() => {
     const handleProfileList = (msg: any) => {
        if (msg.profiles) {
           setWrapperProfiles(msg.profiles);
+
+          // Auto-select the newly created profile if we are on "NEW" but a matching username appears
+          if ((!selectedProfileIdRef.current || selectedProfileIdRef.current === 'NEW') && usernameRef.current) {
+             const newProfile = msg.profiles.find((p: any) => p.username === usernameRef.current);
+             if (newProfile) {
+                 setSelectedProfileId(newProfile.id);
+             }
+          }
        }
     };
 
@@ -70,8 +86,8 @@ export const AppleMusicWrapperUI: React.FC = () => {
   };
 
   const handleStart = () => {
-    if (!selectedProfileId && (!username || !password)) {
-        appendWrapperLog("[UI-ERROR] Missing Apple ID or Password for new profile.");
+    if (!username || !password) {
+        appendWrapperLog("[UI-ERROR] Missing Apple ID or Password.");
         return;
     }
     const payload: WrapperStartRequestMessage = {
@@ -237,7 +253,7 @@ export const AppleMusicWrapperUI: React.FC = () => {
                                 value={password}
                                 onChange={(e) => setPassword(e.target.value)}
                                 disabled={isRunning}
-                                placeholder={selectedProfileId ? "•••••••• (Optional if Hydrated)" : "••••••••"}
+                                placeholder="••••••••"
                                 className="w-full bg-black/50 border border-white/10 rounded-lg px-3 py-2 text-sm text-white focus:ring-1 focus:ring-primary outline-none disabled:opacity-50"
                             />
                         </div>

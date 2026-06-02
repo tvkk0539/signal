@@ -94,7 +94,8 @@ self.onmessage = (event: MessageEvent) => {
         MessageType.WRAPPER_STATUS_UPDATE,
         MessageType.WRAPPER_2FA_CHALLENGE,
         MessageType.RIPPER_TELEMETRY,
-        MessageType.APPLE_MUSIC_CONFIG_DATA
+        MessageType.APPLE_MUSIC_CONFIG_DATA,
+        MessageType.WRAPPER_PROFILES_LIST
       ];
 
       passThroughEvents.forEach(eventType => {

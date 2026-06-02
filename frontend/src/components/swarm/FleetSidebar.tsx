@@ -1,7 +1,5 @@
-import React, { useEffect, useState } from 'react';
-import { MessageType } from '@swarm/shared';
-import type { FleetStateUpdateMessage } from '@swarm/shared';
-import { SocketManager } from '../../worker/SocketManager';
+import React, { useEffect } from 'react';
+import { useFleetStore } from '../../store/fleetStore';
 
 interface FleetSidebarProps {
   targetWorkerId: string;
@@ -9,26 +7,14 @@ interface FleetSidebarProps {
 }
 
 export const FleetSidebar: React.FC<FleetSidebarProps> = ({ targetWorkerId, setTargetWorkerId }) => {
-  const [workers, setWorkers] = useState<string[]>([]);
-  const socketManager = SocketManager.getInstance();
+  const { workers } = useFleetStore();
 
   useEffect(() => {
-    const handleFleetUpdate = (msg: FleetStateUpdateMessage) => {
-      console.log(`[UI] Fleet State Updated. Active Workers: ${msg.workers.length}`);
-      setWorkers(msg.workers);
-
       // If the currently selected worker disconnected, clear it
-      if (targetWorkerId && !msg.workers.includes(targetWorkerId)) {
+      if (targetWorkerId && !workers.includes(targetWorkerId)) {
         setTargetWorkerId('');
       }
-    };
-
-    socketManager.on(MessageType.FLEET_STATE_UPDATE, handleFleetUpdate);
-
-    return () => {
-      socketManager.off(MessageType.FLEET_STATE_UPDATE, handleFleetUpdate);
-    };
-  }, [targetWorkerId, setTargetWorkerId]);
+  }, [workers, targetWorkerId, setTargetWorkerId]);
 
   return (
     <div className="w-full h-full flex flex-col bg-card/30 text-foreground">

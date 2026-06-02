@@ -1,5 +1,5 @@
-import React from 'react';
-import { Settings2, Save } from 'lucide-react';
+import React, { useState } from 'react';
+import { Settings2, Save, Loader2, Check } from 'lucide-react';
 import { useAppleMusicStore } from '../../store/appleMusicStore';
 import { SocketManager } from '../../worker/SocketManager';
 import { MessageType } from '@swarm/shared';
@@ -47,7 +47,13 @@ export const AppleMusicConfigUI: React.FC = () => {
     convertDeleteBadAlac, setConvertDeleteBadAlac
   } = useAppleMusicStore();
 
+  const [isSaving, setIsSaving] = useState(false);
+  const [saveSuccess, setSaveSuccess] = useState(false);
+
   const handleSave = () => {
+    setIsSaving(true);
+    setSaveSuccess(false);
+
     const payload: AppleMusicConfigSaveMessage = {
       type: MessageType.APPLE_MUSIC_CONFIG_SAVE,
       timestamp: Date.now(),
@@ -92,7 +98,13 @@ export const AppleMusicConfigUI: React.FC = () => {
       convertDeleteBadAlac
     };
     SocketManager.getInstance().emit(MessageType.APPLE_MUSIC_CONFIG_SAVE, payload);
-    // Could add a toast notification here
+
+    // Simulate network delay for UX feedback
+    setTimeout(() => {
+        setIsSaving(false);
+        setSaveSuccess(true);
+        setTimeout(() => setSaveSuccess(false), 2000);
+    }, 500);
   };
 
   return (
@@ -111,9 +123,21 @@ export const AppleMusicConfigUI: React.FC = () => {
             </div>
             <button
               onClick={handleSave}
-              className="flex items-center gap-2 px-5 py-2.5 bg-primary hover:bg-[#fa5e6e] text-white font-semibold rounded-xl shadow-[0_0_15px_rgba(250,36,60,0.3)] transition-all"
+              disabled={isSaving || saveSuccess}
+              className={`flex items-center gap-2 px-5 py-2.5 font-semibold rounded-xl transition-all duration-300 disabled:cursor-not-allowed
+                ${saveSuccess
+                    ? 'bg-green-500 text-white shadow-[0_0_15px_rgba(34,197,94,0.3)]'
+                    : 'bg-primary hover:bg-[#fa5e6e] text-white shadow-[0_0_15px_rgba(250,36,60,0.3)]'
+                }
+                ${isSaving ? 'opacity-80' : 'opacity-100'}`}
             >
-                <Save size={18} /> Save Config
+                {isSaving ? (
+                    <><Loader2 size={18} className="animate-spin" /> Saving...</>
+                ) : saveSuccess ? (
+                    <><Check size={18} /> Saved!</>
+                ) : (
+                    <><Save size={18} /> Save Config</>
+                )}
             </button>
         </div>
 

@@ -254,14 +254,25 @@ export class AppleMusicWrapperManager extends EventEmitter {
 
     public async exportState(): Promise<string | null> {
         this.log("Exporting Wrapper Ephemeral State...");
-        const targetDir = path.join(this.APP_DIR, 'rootfs', 'data');
-        if (!fs.existsSync(targetDir)) {
+        const rootfsDir = path.join(this.WRAPPER_DIR, 'rootfs');
+        const dataDir = path.join(rootfsDir, 'data');
+
+        if (!fs.existsSync(dataDir)) {
             this.log("No state directory found to export.");
             return null;
         }
 
+        // Verify the directory actually has contents (specifically the app folder)
+        // A fresh/empty rootfs/data zips to ~100-115 bytes. We shouldn't save an empty shell.
+        const appDataDir = path.join(dataDir, 'data', 'com.apple.android.music');
+        if (!fs.existsSync(appDataDir)) {
+            this.log("[WARN] Apple Music data directory missing inside rootfs. State is likely empty or proxy never fully authenticated.");
+            return null;
+        }
+
         return new Promise((resolve, reject) => {
-            const child = spawn('tar', ['-czf', '-', '-C', targetDir, '.']);
+            // We step into rootfs and zip the "data" folder ITSELF to preserve its metadata
+            const child = spawn('tar', ['-czf', '-', '-C', rootfsDir, 'data']);
             const chunks: Buffer[] = [];
 
             child.stdout.on('data', (chunk) => chunks.push(chunk));
@@ -269,8 +280,13 @@ export class AppleMusicWrapperManager extends EventEmitter {
             child.on('close', (code) => {
                 if (code === 0) {
                     const buffer = Buffer.concat(chunks);
-                    this.log(`State exported successfully. (Size: ${buffer.length} bytes)`);
-                    resolve(buffer.toString('base64'));
+                    if (buffer.length < 500) {
+                        this.log(`[WARN] Exported state is too small (${buffer.length} bytes), likely empty. Aborting export.`);
+                        resolve(null);
+                    } else {
+                        this.log(`State exported successfully. (Size: ${buffer.length} bytes)`);
+                        resolve(buffer.toString('base64'));
+                    }
                 } else {
                     this.log(`[ERROR] Failed to export state. Tar exited with code ${code}`);
                     resolve(null);
@@ -286,29 +302,22 @@ export class AppleMusicWrapperManager extends EventEmitter {
 
     public async importState(base64Payload: string): Promise<void> {
         this.log("Hydrating Wrapper Ephemeral State...");
-        const targetDir = path.join(this.APP_DIR, 'rootfs', 'data');
-        if (!fs.existsSync(targetDir)) {
-            fs.mkdirSync(targetDir, { recursive: true });
+        const rootfsDir = path.join(this.WRAPPER_DIR, 'rootfs');
+        if (!fs.existsSync(rootfsDir)) {
+            fs.mkdirSync(rootfsDir, { recursive: true });
         }
 
         return new Promise((resolve, reject) => {
             const buffer = Buffer.from(base64Payload, 'base64');
-            const child = spawn('tar', ['-xzf', '-', '-C', targetDir]);
+            // Use -p to strictly preserve permissions defined inside the tarball
+            const child = spawn('tar', ['-xpzf', '-', '-C', rootfsDir]);
 
             child.stdin.write(buffer);
             child.stdin.end();
 
             child.on('close', (code) => {
                 if (code === 0) {
-                    this.log("State hydrated successfully.");
-                    try {
-                        // Re-apply required Android emulation permissions after extraction
-                        fs.chmodSync(targetDir, 0o777);
-                        // Recursively try to apply 777 to contents if possible natively
-                        spawn('bash', ['-c', `chmod -R 777 "${targetDir}"`]);
-                    } catch (e: any) {
-                        this.log(`[WARN] Failed to re-apply 777 permissions after hydration.`);
-                    }
+                    this.log("State hydrated successfully with preserved permissions.");
                     resolve();
                 } else {
                     this.log(`[ERROR] Failed to hydrate state. Tar exited with code ${code}`);
