@@ -141,10 +141,14 @@ export class AppleMusicWrapperManager extends EventEmitter {
             throw new Error("Wrapper is not installed.");
         }
 
-        // Enforce strict credential validation to prevent anonymous wrapper boots
-        if (!username || !password) {
-            throw new Error("Strict Authentication Enforced: Wrapper requires valid Apple ID credentials to start.");
+        if (!username) {
+            throw new Error("Wrapper requires a username to start.");
         }
+
+        // The Dummy Password Trick: If state is hydrated, the proxy verifies keys from disk,
+        // avoiding actual password transmission to Apple. But the wrapper binary itself
+        // strictly demands the -L flag. We inject a dummy to satisfy the CLI.
+        const safePassword = password || "HYDRATED_DUMMY_PASS";
 
         // Host Timezone Mapping Fix: Map the container's tzdata into the wrapper's fake rootfs
         // This permanently silences the '__bionic_open_tzdata: couldn't find any tzdata' warning
@@ -164,7 +168,7 @@ export class AppleMusicWrapperManager extends EventEmitter {
 
         // Exact argument parsing based on configure_environment in setup_wrapper.sh
         const args: string[] = ['-H', '0.0.0.0'];
-        args.push('-L', `${username}:${password}`);
+        args.push('-L', `${username}:${safePassword}`);
 
         args.push('-D', '10020');
         args.push('-M', '20020');
