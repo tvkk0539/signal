@@ -21,42 +21,48 @@ jobs:
       - name: 🐳 Pull Docker Image
         run: docker pull ghcr.io/your-username/distributed-swarm-monorepo-worker:latest
 
-      # Dynamically build the rclone.conf file on the host machine before booting Docker.
-      # It checks if you provided the config as raw text or as a secure URL.
-      - name: 📁 Prepare Rclone Configuration
+      # Dynamically build the dual-state rclone.conf files on the host machine before booting Docker.
+      # The worker orchestrator will automatically merge these and apply correct indexing logic.
+      - name: 📁 Prepare Dual-State Rclone Configurations
         env:
           RCLONE_CONF_TEXT: ${{ secrets.RCLONE_CONF_TEXT }}
-          RCLONE_CONF_URL: ${{ secrets.RCLONE_CONF_URL }}
+          RCLONE_PERMANENT_CONF_TEXT: ${{ secrets.RCLONE_PERMANENT_CONF_TEXT }}
         run: |
           mkdir -p ~/.config/rclone
+
+          # 1. Ephemeral Remotes (Auto-Purged on Death)
           if [ -n "$RCLONE_CONF_TEXT" ]; then
-            echo "Injecting rclone config from Text Secret..."
+            echo "Injecting Ephemeral rclone config..."
             echo "$RCLONE_CONF_TEXT" > ~/.config/rclone/rclone.conf
-          elif [ -n "$RCLONE_CONF_URL" ]; then
-            echo "Downloading rclone config from URL Secret..."
-            curl -s "$RCLONE_CONF_URL" -o ~/.config/rclone/rclone.conf
           else
-            echo "No rclone config secrets found. Worker will only browse local sandbox."
+            echo "No ephemeral rclone config secret found."
             touch ~/.config/rclone/rclone.conf
           fi
 
+          # 2. Permanent Remotes (Delta-Synced & Preserved)
+          if [ -n "$RCLONE_PERMANENT_CONF_TEXT" ]; then
+            echo "Injecting Permanent rclone config..."
+            echo "$RCLONE_PERMANENT_CONF_TEXT" > ~/.config/rclone/rclone_permanent.conf
+          else
+            echo "No permanent rclone config secret found."
+            touch ~/.config/rclone/rclone_permanent.conf
+          fi
+
       # Run the Docker container in the foreground so the GitHub Action stays alive.
-      # We inject the secure secrets and mount the rclone.conf file into the container.
+      # We inject the secure secrets and mount BOTH rclone configs into the container.
       # GRPC_PUBLIC_IP and GRPC_PORT are dynamically injected for Dual-Mode Architecture support.
-      # MONGODB_URI is required if this worker acts as a primary or mirror in the DB Switchboard.
       - name: 🦾 Execute Worker Node
         env:
           RELAY_URL: ${{ secrets.RELAY_URL }}
           WORKER_SECRET: ${{ secrets.WORKER_SECRET }}
           GRPC_PUBLIC_IP: ${{ secrets.GRPC_PUBLIC_IP }}
           GRPC_PORT: ${{ secrets.GRPC_PORT }}
-          GITHUB_EPHEMERAL_MONGODB_URI: ${{ secrets.GITHUB_EPHEMERAL_MONGODB_URI }}
         run: |
           docker run --rm \
             -e RELAY_URL=$RELAY_URL \
             -e WORKER_SECRET=$WORKER_SECRET \
             -e GRPC_PUBLIC_IP=$GRPC_PUBLIC_IP \
             -e GRPC_PORT=$GRPC_PORT \
-            -e GITHUB_EPHEMERAL_MONGODB_URI=$GITHUB_EPHEMERAL_MONGODB_URI \
             -v ~/.config/rclone/rclone.conf:/root/.config/rclone/rclone.conf:ro \
+            -v ~/.config/rclone/rclone_permanent.conf:/root/.config/rclone/rclone_permanent.conf:ro \
             ghcr.io/your-username/distributed-swarm-monorepo-worker:latest

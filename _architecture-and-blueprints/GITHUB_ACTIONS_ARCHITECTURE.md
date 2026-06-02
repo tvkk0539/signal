@@ -48,8 +48,10 @@ To utilize the Dual-State Database and the Relay architecture effectively, you m
 
 *   `RELAY_URL`: The public URL of your Node.js Relay Server (e.g., `wss://relay.yourdomain.com`).
 *   `WORKER_SECRET`: The cryptographic API key used by the Zero-Trust Gatekeeper to allow the worker to join the swarm.
-*   `RCLONE_CONF_TEXT`: (Optional) Paste your raw ephemeral `rclone.conf` here. It will be injected dynamically into the worker at boot.
-*   `GITHUB_EPHEMERAL_MONGODB_URI`: (Optional) The connection string for the `VFS_EPHEMERAL` schema. If provided, the worker will cache its `fast-list` tree searches here, and the Relay Server will instantly wipe this database the moment the GitHub Action finishes/dies to prevent state bloat.
+*   `RCLONE_CONF_TEXT`: (Optional) Paste your raw ephemeral `rclone.conf` here. These remotes will be synced to the Ephemeral DB and destroyed when the action dies.
+*   `RCLONE_PERMANENT_CONF_TEXT`: (Optional) Paste massive, permanent remotes here. The worker will execute Delta Syncs (`fast-list` filtered by `ModTime`) to avoid exhausting Cloud APIs.
+*   `GITHUB_EPHEMERAL_MONGODB_URI`: (Optional) The connection string for the `VFS_EPHEMERAL` schema. The Relay Server instantly wipes this database the moment the GitHub Action finishes/dies.
+*   `PRIMARY_MONGODB_URI`: (Optional) The connection string for the `VFS_PERMANENT` schema. Massive indexed trees are preserved here safely.
 *   `GRPC_PUBLIC_IP` / `GRPC_PORT`: (Optional) Used for Dual-Mode Swarm routing if workers need to talk to each other directly bypassing the Relay.
 
 ## 4. Summary & Viability

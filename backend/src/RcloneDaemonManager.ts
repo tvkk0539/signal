@@ -28,10 +28,28 @@ export class RcloneDaemonManager {
      }
 
      // Prevent duplicate merging if the user clicks apply multiple times
-     if (!existingConfig.includes(permanentConfig)) {
+     if (permanentConfig && !existingConfig.includes(permanentConfig)) {
          const merged = `${existingConfig}\n\n${permanentConfig}`;
          fs.writeFileSync(this.configPath, merged);
      }
+  }
+
+  public async getPermanentRemotesFromConfig(): Promise<string[]> {
+      const permanentRemotes: string[] = [];
+      const permanentConfigPath = path.join(os.homedir(), '.config', 'rclone', 'rclone_permanent.conf');
+
+      if (fs.existsSync(permanentConfigPath)) {
+          const configContent = fs.readFileSync(permanentConfigPath, 'utf8');
+          // Parse rclone config brackets like [GoogleDrive]
+          const matches = configContent.match(/\[(.*?)\]/g);
+          if (matches) {
+              matches.forEach(match => {
+                  const remoteName = match.replace(/\[|\]/g, '') + ':';
+                  permanentRemotes.push(remoteName);
+              });
+          }
+      }
+      return permanentRemotes;
   }
 
   public async start(): Promise<void> {
@@ -55,13 +73,27 @@ export class RcloneDaemonManager {
     ];
 
     try {
-       // If no config file exists yet (before hybrid merge is called), initialize it
+       // 1. Copy original ephemeral config
        if (!fs.existsSync(this.configPath) && fs.existsSync(originalConfigPath)) {
           fs.copyFileSync(originalConfigPath, this.configPath);
           console.log(`[Rclone] Copied read-only config to writable ${this.configPath}`);
        } else if (!fs.existsSync(this.configPath)) {
           fs.writeFileSync(this.configPath, "");
        }
+
+       // 2. Perform Boot-Time Merge of GitHub Secrets
+       const permanentConfigPath = path.join(os.homedir(), '.config', 'rclone', 'rclone_permanent.conf');
+       if (fs.existsSync(permanentConfigPath)) {
+           const permContent = fs.readFileSync(permanentConfigPath, 'utf8');
+           if (permContent.trim()) {
+               console.log(`[Rclone] Found GitHub Secrets Permanent Config. Merging on boot.`);
+               const existing = fs.readFileSync(this.configPath, 'utf8');
+               if (!existing.includes(permContent)) {
+                   fs.writeFileSync(this.configPath, `${existing}\n\n${permContent}`);
+               }
+           }
+       }
+
        rcloneArgs.push('--config', this.configPath);
     } catch (e: any) {
        console.warn(`[Rclone] Could not setup temp config: ${e.message}`);

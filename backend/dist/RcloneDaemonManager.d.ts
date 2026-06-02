@@ -3,6 +3,7 @@ export declare class RcloneDaemonManager {
     private isRunning;
     private configPath;
     mergeAndApplyConfig(permanentConfig: string): Promise<void>;
+    getPermanentRemotesFromConfig(): Promise<string[]>;
     start(): Promise<void>;
     stop(): void;
     ping(): Promise<boolean>;
