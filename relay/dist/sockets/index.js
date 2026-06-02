@@ -82,6 +82,16 @@ function setupSockets(io) {
             if (exports.connectedWorkers.has(socket.id)) {
                 console.log(`[Fleet Admiral] Worker Offline: ${socket.id}`);
                 exports.connectedWorkers.delete(socket.id);
+                // PHASE B: The Self-Cleaning Ephemeral Hook
+                // Instantly purge all temporary search indexes attached to this dead worker
+                try {
+                    db_1.dbManager.getVfsEphemeral().purgeEphemeralByWorker(socket.id).catch(e => {
+                        console.error(`[Gatekeeper] Failed to purge ephemeral VFS for ${socket.id}:`, e);
+                    });
+                }
+                catch (e) {
+                    // Database domain might not be initialized
+                }
                 broadcastFleetState(io); // Broadcast updated state
             }
             else if (exports.connectedUIClients.has(socket.id)) {
@@ -541,6 +551,39 @@ function setupSockets(io) {
         socket.on(shared_1.MessageType.PING, () => {
             console.log(`[Relay] Received Ping from ${socket.id}, sending Pong`);
             socket.emit(shared_1.MessageType.PONG, { timestamp: Date.now() });
+        });
+        // VFS Index Handlers
+        socket.on(shared_1.MessageType.VFS_INDEX_SYNC, async (msg) => {
+            if (!exports.connectedWorkers.has(socket.id))
+                return;
+            try {
+                const db = msg.isPermanent ? db_1.dbManager.getVfsPermanent() : db_1.dbManager.getVfsEphemeral();
+                await db.upsertTree(msg.workerId, msg.remoteName, msg.isPermanent, msg.files, msg.persistentId);
+            }
+            catch (err) {
+                console.error(`[SocketManager] Error handling VFS_INDEX_SYNC:`, err);
+            }
+        });
+        socket.on(shared_1.MessageType.VFS_SEARCH_REQUEST, async (msg) => {
+            const startTime = Date.now();
+            try {
+                // Search both Ephemeral and Permanent indexes concurrently
+                const [ephemeralResults, permanentResults] = await Promise.all([
+                    db_1.dbManager.getVfsEphemeral().search(msg.query, msg.limit || 50),
+                    db_1.dbManager.getVfsPermanent().search(msg.query, msg.limit || 50)
+                ]);
+                const results = [...ephemeralResults, ...permanentResults].slice(0, msg.limit || 50);
+                socket.emit(shared_1.MessageType.VFS_SEARCH_RESPONSE, {
+                    type: shared_1.MessageType.VFS_SEARCH_RESPONSE,
+                    timestamp: Date.now(),
+                    query: msg.query,
+                    results,
+                    executionTimeMs: Date.now() - startTime
+                });
+            }
+            catch (err) {
+                console.error(`[SocketManager] Error handling VFS_SEARCH_REQUEST:`, err);
+            }
         });
     });
 }

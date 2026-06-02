@@ -57,6 +57,18 @@ async function bootWorker() {
             log: data.log
         });
     });
+    ripperService.on('progress', (data) => {
+        socket.emit(shared_1.MessageType.RIPPER_PROGRESS_UPDATE, {
+            type: shared_1.MessageType.RIPPER_PROGRESS_UPDATE,
+            timestamp: Date.now(),
+            workerId: socket.id,
+            jobId: data.jobId,
+            phase: data.phase,
+            progressPercent: data.progressPercent,
+            dataMetrics: data.dataMetrics,
+            speed: data.speed
+        });
+    });
     ripperService.on('job_complete', async (data) => {
         socket.emit(shared_1.MessageType.RIPPER_TELEMETRY, {
             type: shared_1.MessageType.RIPPER_TELEMETRY,
@@ -72,8 +84,9 @@ async function bootWorker() {
                     timestamp: Date.now(),
                     workerId: socket.id,
                     jobId: data.jobId,
-                    log: `[SYSTEM] Cloud Handoff Disabled by User. Keeping files in ephemeral storage.`
+                    log: `[SYSTEM] Cloud Handoff Disabled by User. Files securely preserved in ephemeral storage.`
                 });
+                // We intentionally DO NOT call ripperService.cleanupWorkspace() here.
                 return;
             }
             try {
@@ -89,14 +102,18 @@ async function bootWorker() {
                 const remoteParts = data.rcloneRemote.split(':');
                 const fsStr = remoteParts[0] + ':';
                 const pathStr = remoteParts.length > 1 ? remoteParts[1] : '/';
+                // We await this. If it throws, we skip the cleanup block.
                 await rcloneManager.uploadDirectory(data.downloadDir, fsStr, pathStr);
                 socket.emit(shared_1.MessageType.RIPPER_TELEMETRY, {
                     type: shared_1.MessageType.RIPPER_TELEMETRY,
                     timestamp: Date.now(),
                     workerId: socket.id,
                     jobId: data.jobId,
-                    log: `[SUCCESS] Cloud Handoff Complete. Files preserved securely.`
+                    log: `[SUCCESS] Cloud Handoff Upload Confirmed.`
                 });
+                // SMART CONFIRMATION: The upload completed successfully without errors.
+                // ONLY NOW do we securely annihilate the ephemeral payload.
+                ripperService.cleanupWorkspace(data.jobId);
             }
             catch (e) {
                 console.error(`[Worker] Rclone Handoff Error:`, e);
@@ -105,8 +122,9 @@ async function bootWorker() {
                     timestamp: Date.now(),
                     workerId: socket.id,
                     jobId: data.jobId,
-                    log: `[ERROR] Cloud Handoff Failed: ${e.message}`
+                    log: `[ERROR] Cloud Handoff Failed: ${e.message}. Files have NOT been deleted.`
                 });
+                // SMART CONFIRMATION: Upload threw an error. We intentionally skip cleanupWorkspace().
             }
         }
     });
@@ -122,12 +140,100 @@ async function bootWorker() {
         };
         socket.emit(shared_1.MessageType.AUTH_REQUEST, authMessage);
     });
-    socket.on(shared_1.MessageType.AUTH_RESPONSE, (res) => {
+    socket.on(shared_1.MessageType.AUTH_RESPONSE, async (res) => {
         if (res.success) {
             console.log(`[Worker] Authentication Successful! Ready to accept tasks.`);
+            // PHASE C: VFS Tree Scanner Boot Sequence
+            try {
+                const remotes = await rcloneManager.getRemotes();
+                const permRemotes = await rcloneManager.getPermanentRemotesFromConfig();
+                for (const remote of remotes) {
+                    if (remote.name === '/')
+                        continue; // Skip local machine root
+                    const isPerm = permRemotes.includes(remote.name);
+                    await scanAndSyncVfsTree(remote.name, isPerm);
+                }
+            }
+            catch (err) {
+                console.error(`[Worker] Failed initial VFS scan:`, err.message);
+            }
         }
         else {
             console.error(`[Worker] Authentication Failed.`);
+        }
+    });
+    const lastSyncTimes = new Map();
+    const scanAndSyncVfsTree = async (remoteName, isPermanent) => {
+        try {
+            const lastSync = lastSyncTimes.get(remoteName);
+            let rawList = [];
+            if (isPermanent && lastSync) {
+                console.log(`[Worker] Triggering Delta Sync for ${remoteName}`);
+                rawList = await rcloneManager.buildVfsDeltaTree(remoteName, lastSync);
+            }
+            else {
+                console.log(`[Worker] Triggering Full Scan for ${remoteName}`);
+                rawList = await rcloneManager.buildVfsTree(remoteName);
+            }
+            lastSyncTimes.set(remoteName, new Date());
+            if (rawList.length === 0) {
+                console.log(`[Worker] No new/changed files to sync for ${remoteName}`);
+                return;
+            }
+            const files = rawList.map((f) => ({
+                id: Buffer.from(`${remoteName}${f.Path}`).toString('base64'),
+                remoteName: remoteName,
+                path: f.Path,
+                name: f.Name,
+                size: f.Size,
+                mimeType: f.MimeType,
+                isDir: f.IsDir,
+                workerId: socket.id
+            }));
+            socket.emit(shared_1.MessageType.VFS_INDEX_SYNC, {
+                type: shared_1.MessageType.VFS_INDEX_SYNC,
+                timestamp: Date.now(),
+                workerId: socket.id,
+                remoteName: remoteName,
+                isPermanent: isPermanent,
+                // For MVP, we use the remoteName as the persistent anchor. In full prod, this is a UUID from the UI.
+                persistentId: isPermanent ? `perm_anchor_${Buffer.from(remoteName).toString('base64')}` : undefined,
+                files: files
+            });
+            console.log(`[Worker] Emitted VFS Tree (${files.length} items) to Relay Switchboard for ${remoteName} (Permanent: ${isPermanent})`);
+        }
+        catch (err) {
+            console.error(`[Worker] Failed VFS scan for ${remoteName}:`, err.message);
+        }
+    };
+    socket.on(shared_1.MessageType.CONFIG_MERGE_SYNC, async (msg) => {
+        console.log(`[Worker] Received Permanent Rclone Config Block from UI.`);
+        // Store current remotes before rebooting to compare later
+        let oldRemotes = [];
+        try {
+            oldRemotes = await rcloneManager.getRemotes();
+        }
+        catch (e) { }
+        // Merge configs and reboot daemon silently
+        await rcloneManager.mergeAndApplyConfig(msg.permanentConfigBlock);
+        rcloneManager.stop();
+        await rcloneManager.start();
+        console.log(`[Worker] Hybrid Config Applied and Daemon Rebooted.`);
+        // Post-Reboot: Re-scan ONLY the newly added permanent remotes
+        try {
+            const newRemotes = await rcloneManager.getRemotes();
+            for (const remote of newRemotes) {
+                if (remote.name === '/')
+                    continue;
+                const isOld = oldRemotes.some(r => r.name === remote.name);
+                if (!isOld) {
+                    console.log(`[Worker] Detected new Permanent remote from merge: ${remote.name}`);
+                    await scanAndSyncVfsTree(remote.name, true);
+                }
+            }
+        }
+        catch (e) {
+            console.error(`[Worker] Failed post-merge VFS rescan:`, e.message);
         }
     });
     socket.on(shared_1.MessageType.PONG, (data) => {

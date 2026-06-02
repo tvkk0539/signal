@@ -45,6 +45,8 @@ class AppleMusicRipperService extends events_1.EventEmitter {
     // Using the JIT built binary path as defined in our architecture
     BINARY_PATH = path.join(this.APP_DIR, 'am-ripper');
     activeJobs = new Map();
+    throttleMap = new Map();
+    THROTTLE_MS = 250;
     constructor() {
         super();
         if (!fs.existsSync(this.APP_DIR)) {
@@ -254,9 +256,35 @@ convert-delete-bad-alac: ${b(config.convertDeleteBadAlac, false)} # If true, del
         // 4. The Telemetry Pipe (Routing stdout to Relay)
         childProc.stdout.on('data', (data) => {
             const output = data.toString().trim();
-            if (output) {
-                // Emit raw string for the UI Terminal
-                this.emit('telemetry', { jobId, log: output });
+            if (!output)
+                return;
+            // Split by lines and carriage returns (since the ripper uses \r for progress)
+            const lines = output.split(/[\r\n]+/);
+            for (const line of lines) {
+                if (!line)
+                    continue;
+                // Parse progress: "Downloading... 46% (15/32 MB, 296 MB/s)" or "Decrypting... 89% (28/32 MB, 17 MB/s)"
+                const progressMatch = line.match(/^(Downloading|Decrypting)\.\.\.\s+(\d+)%\s+\(([^,]+),\s*(.*?)\)/);
+                if (progressMatch) {
+                    const now = Date.now();
+                    const lastEmit = this.throttleMap.get(jobId) || 0;
+                    // Throttle progress updates to Relay
+                    if (now - lastEmit > this.THROTTLE_MS || progressMatch[2] === '100') {
+                        this.throttleMap.set(jobId, now);
+                        this.emit('progress', {
+                            jobId,
+                            phase: progressMatch[1],
+                            progressPercent: parseInt(progressMatch[2], 10),
+                            dataMetrics: progressMatch[3],
+                            speed: progressMatch[4]
+                        });
+                    }
+                    // DO NOT emit these noisy lines to the terminal log
+                }
+                else {
+                    // Standard log line
+                    this.emit('telemetry', { jobId, log: line });
+                }
             }
         });
         childProc.stderr.on('data', (data) => {
@@ -269,6 +297,7 @@ convert-delete-bad-alac: ${b(config.convertDeleteBadAlac, false)} # If true, del
         childProc.on('close', (code) => {
             this.log(jobId, `Go Ripper Core exited with code ${code}`);
             this.activeJobs.delete(jobId);
+            this.throttleMap.delete(jobId);
             if (code === 0) {
                 // Success! Next step in Swarm Architecture: Trigger Rclone Handoff
                 this.log(jobId, `Initiating Zero-Disk Cloud Handoff sequence...`);
@@ -286,18 +315,27 @@ convert-delete-bad-alac: ${b(config.convertDeleteBadAlac, false)} # If true, del
                     status: 'FAILED',
                     error: `Process exited with code ${code}`
                 });
+                // If it failed, we don't auto-cleanup. We leave the logs and workspace for debugging.
             }
-            // Cleanup Ephemeral Workspace (Wait slightly so cloud handoff can read it first)
-            // In a real flow, RcloneDaemonManager would delete the folder after moving.
-            // For now, we mock the cleanup.
-            setTimeout(() => {
-                if (fs.existsSync(workspaceDir)) {
-                    fs.rmSync(workspaceDir, { recursive: true, force: true });
-                    this.log(jobId, `Workspace annihilated. Ephemeral disk restored.`);
-                }
-            }, 5000);
         });
         return { jobId };
+    }
+    /**
+     * Highly Engineered Smart Cleanup
+     * This is only explicitly called by the Orchestrator after a successful Rclone handoff
+     * to guarantee zero-data-loss.
+     */
+    cleanupWorkspace(jobId) {
+        const workspaceDir = path.join(this.APP_DIR, `job_${jobId}`);
+        if (fs.existsSync(workspaceDir)) {
+            try {
+                fs.rmSync(workspaceDir, { recursive: true, force: true });
+                this.log(jobId, `[SMART CONFIRMATION] Workspace completely annihilated. Ephemeral disk zeroed.`);
+            }
+            catch (e) {
+                this.log(jobId, `[WARN] Failed to annihilate workspace: ${e.message}`);
+            }
+        }
     }
     cancelJob(jobId) {
         const process = this.activeJobs.get(jobId);

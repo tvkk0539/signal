@@ -1,7 +1,7 @@
 import React from 'react';
 import { useLayoutStore } from '../../store/layoutStore';
 import { useAuthStore } from '../../store/authStore';
-import { Folder, MessageSquare, Database, Settings, LogOut, Music } from 'lucide-react';
+import { Folder, MessageSquare, Database, Settings, LogOut, Music, Server } from 'lucide-react';
 
 export const GlobalSidebar: React.FC = () => {
   const { activeView, setActiveView } = useLayoutStore();
@@ -10,6 +10,7 @@ export const GlobalSidebar: React.FC = () => {
   const navItems = [
     { id: 'EXPLORER', icon: Folder, label: 'File Explorer' },
     { id: 'MUSIC_RIPS', icon: Music, label: 'Media Ingestion Hub' },
+    { id: 'RCLONE_CONFIG', icon: Server, label: 'Hybrid VFS Config' },
     { id: 'CHAT', icon: MessageSquare, label: 'Encrypted Chat' },
     { id: 'DB_OPS', icon: Database, label: 'Database Ops' },
     { id: 'SETTINGS', icon: Settings, label: 'Settings' }
