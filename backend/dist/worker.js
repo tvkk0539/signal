@@ -184,14 +184,79 @@ async function bootWorker() {
             console.error(`[Worker] Authentication Failed.`);
         }
     });
+    const lastSyncTimes = new Map();
+    const scanAndSyncVfsTree = async (remoteName, isPermanent) => {
+        try {
+            const lastSync = lastSyncTimes.get(remoteName);
+            let rawList = [];
+            if (isPermanent && lastSync) {
+                console.log(`[Worker] Triggering Delta Sync for ${remoteName}`);
+                rawList = await rcloneManager.buildVfsDeltaTree(remoteName, lastSync);
+            }
+            else {
+                console.log(`[Worker] Triggering Full Scan for ${remoteName}`);
+                rawList = await rcloneManager.buildVfsTree(remoteName);
+            }
+            lastSyncTimes.set(remoteName, new Date());
+            if (rawList.length === 0) {
+                console.log(`[Worker] No new/changed files to sync for ${remoteName}`);
+                return;
+            }
+            const files = rawList.map((f) => ({
+                id: Buffer.from(`${remoteName}${f.Path}`).toString('base64'),
+                remoteName: remoteName,
+                path: f.Path,
+                name: f.Name,
+                size: f.Size,
+                mimeType: f.MimeType,
+                isDir: f.IsDir,
+                workerId: socket.id
+            }));
+            socket.emit(shared_1.MessageType.VFS_INDEX_SYNC, {
+                type: shared_1.MessageType.VFS_INDEX_SYNC,
+                timestamp: Date.now(),
+                workerId: socket.id,
+                remoteName: remoteName,
+                isPermanent: isPermanent,
+                // For MVP, we use the remoteName as the persistent anchor. In full prod, this is a UUID from the UI.
+                persistentId: isPermanent ? `perm_anchor_${Buffer.from(remoteName).toString('base64')}` : undefined,
+                files: files
+            });
+            console.log(`[Worker] Emitted VFS Tree (${files.length} items) to Relay Switchboard for ${remoteName} (Permanent: ${isPermanent})`);
+        }
+        catch (err) {
+            console.error(`[Worker] Failed VFS scan for ${remoteName}:`, err.message);
+        }
+    };
     socket.on(shared_1.MessageType.CONFIG_MERGE_SYNC, async (msg) => {
         console.log(`[Worker] Received Permanent Rclone Config Block from UI.`);
-        // In a real flow, the UI would also send the ephemeral blocks as part of the job dispatch.
-        // We will merge them and restart the daemon silently.
-        await rcloneManager.mergeAndApplyConfig("", msg.permanentConfigBlock);
+        // Store current remotes before rebooting to compare later
+        let oldRemotes = [];
+        try {
+            oldRemotes = await rcloneManager.getRemotes();
+        }
+        catch (e) { }
+        // Merge configs and reboot daemon silently
+        await rcloneManager.mergeAndApplyConfig(msg.permanentConfigBlock);
         rcloneManager.stop();
         await rcloneManager.start();
         console.log(`[Worker] Hybrid Config Applied and Daemon Rebooted.`);
+        // Post-Reboot: Re-scan ONLY the newly added permanent remotes
+        try {
+            const newRemotes = await rcloneManager.getRemotes();
+            for (const remote of newRemotes) {
+                if (remote.name === '/')
+                    continue;
+                const isOld = oldRemotes.some(r => r.name === remote.name);
+                if (!isOld) {
+                    console.log(`[Worker] Detected new Permanent remote from merge: ${remote.name}`);
+                    await scanAndSyncVfsTree(remote.name, true);
+                }
+            }
+        }
+        catch (e) {
+            console.error(`[Worker] Failed post-merge VFS rescan:`, e.message);
+        }
     });
     socket.on(shared_1.MessageType.PONG, (data) => {
         console.log(`[Worker] Received PONG from Relay Server (Ping: ${Date.now() - data.timestamp}ms)`);
