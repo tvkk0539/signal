@@ -1,38 +1,19 @@
-import React, { useEffect, useState } from 'react';
+import React, { useState } from 'react';
 import { Server, Activity, ChevronUp, ChevronDown } from 'lucide-react';
-import { SocketManager } from '../../worker/SocketManager';
-import { MessageType } from '@swarm/shared';
+import { useFleetStore } from '../../store/fleetStore';
 
 interface HorizontalFleetBarProps {
   targetWorkerId: string;
   setTargetWorkerId: (id: string) => void;
-  isConnected: boolean;
+  isConnected?: boolean; // Making this optional since we no longer strictly need it for the socket hook
 }
 
 export const HorizontalFleetBar: React.FC<HorizontalFleetBarProps> = ({
   targetWorkerId,
-  setTargetWorkerId,
-  isConnected
+  setTargetWorkerId
 }) => {
-  const [workers, setWorkers] = useState<string[]>([]);
+  const { workers } = useFleetStore();
   const [isCollapsed, setIsCollapsed] = useState(false);
-
-  useEffect(() => {
-    if (!isConnected) return;
-
-    const socketManager = SocketManager.getInstance();
-
-    // Subscribe to fleet updates
-    const handleFleetUpdate = (data: { workers: string[] }) => {
-      setWorkers(data.workers);
-    };
-
-    socketManager.on(MessageType.FLEET_STATE_UPDATE, handleFleetUpdate);
-
-    return () => {
-      socketManager.off(MessageType.FLEET_STATE_UPDATE, handleFleetUpdate);
-    };
-  }, [isConnected]);
 
   // If there are no workers, don't auto-collapse, but if one is selected, we might want to keep it open until they choose to collapse
   return (

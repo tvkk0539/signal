@@ -2,6 +2,7 @@ import React, { useEffect, useState } from 'react';
 import { useAuthStore } from '../../store/authStore';
 import { useLayoutStore } from '../../store/layoutStore';
 import { AuthScreen } from '../auth/AuthScreen';
+import { useFleetStore } from '../../store/fleetStore';
 import { GlobalSidebar } from './GlobalSidebar';
 import { TelemetryDrawer } from './TelemetryDrawer';
 import { FileExplorer } from '../explorer/FileExplorer';
@@ -22,6 +23,7 @@ const RELAY_SERVER_URL = import.meta.env.VITE_RELAY_URL && import.meta.env.VITE_
 export const IDELayout: React.FC = () => {
   const { token, isAuthenticated } = useAuthStore();
   const { activeView } = useLayoutStore();
+  const { setWorkers } = useFleetStore();
 
   const [isConnected, setIsConnected] = useState(false);
   const [targetWorkerId, setTargetWorkerId] = useState<string>('');
@@ -41,22 +43,29 @@ export const IDELayout: React.FC = () => {
     const handleAuthFailed = () => console.error(`[UI] Authentication Failed.`);
     const handleDisconnected = () => {
        setIsConnected(false);
+       setWorkers([]); // Clear fleet on disconnect
        console.log(`[UI] Disconnected from Relay Server.`);
+    };
+
+    const handleFleetUpdate = (data: { workers: string[] }) => {
+       setWorkers(data.workers);
     };
 
     socketManager.on('SOCKET_CONNECTED', handleConnected);
     socketManager.on('AUTH_SUCCESS', handleAuthSuccess);
     socketManager.on('AUTH_FAILED', handleAuthFailed);
     socketManager.on('SOCKET_DISCONNECTED', handleDisconnected);
+    socketManager.on('FLEET_STATE_UPDATE', handleFleetUpdate);
 
     return () => {
       socketManager.off('SOCKET_CONNECTED', handleConnected);
       socketManager.off('AUTH_SUCCESS', handleAuthSuccess);
       socketManager.off('AUTH_FAILED', handleAuthFailed);
       socketManager.off('SOCKET_DISCONNECTED', handleDisconnected);
+      socketManager.off('FLEET_STATE_UPDATE', handleFleetUpdate);
       socketManager.disconnect();
     };
-  }, [isAuthenticated, token]);
+  }, [isAuthenticated, token, setWorkers]);
 
   if (!isAuthenticated) {
     return <AuthScreen />;
