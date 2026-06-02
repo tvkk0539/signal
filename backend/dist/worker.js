@@ -84,8 +84,9 @@ async function bootWorker() {
                     timestamp: Date.now(),
                     workerId: socket.id,
                     jobId: data.jobId,
-                    log: `[SYSTEM] Cloud Handoff Disabled by User. Keeping files in ephemeral storage.`
+                    log: `[SYSTEM] Cloud Handoff Disabled by User. Files securely preserved in ephemeral storage.`
                 });
+                // We intentionally DO NOT call ripperService.cleanupWorkspace() here.
                 return;
             }
             try {
@@ -101,14 +102,18 @@ async function bootWorker() {
                 const remoteParts = data.rcloneRemote.split(':');
                 const fsStr = remoteParts[0] + ':';
                 const pathStr = remoteParts.length > 1 ? remoteParts[1] : '/';
+                // We await this. If it throws, we skip the cleanup block.
                 await rcloneManager.uploadDirectory(data.downloadDir, fsStr, pathStr);
                 socket.emit(shared_1.MessageType.RIPPER_TELEMETRY, {
                     type: shared_1.MessageType.RIPPER_TELEMETRY,
                     timestamp: Date.now(),
                     workerId: socket.id,
                     jobId: data.jobId,
-                    log: `[SUCCESS] Cloud Handoff Complete. Files preserved securely.`
+                    log: `[SUCCESS] Cloud Handoff Upload Confirmed.`
                 });
+                // SMART CONFIRMATION: The upload completed successfully without errors.
+                // ONLY NOW do we securely annihilate the ephemeral payload.
+                ripperService.cleanupWorkspace(data.jobId);
             }
             catch (e) {
                 console.error(`[Worker] Rclone Handoff Error:`, e);
@@ -117,8 +122,9 @@ async function bootWorker() {
                     timestamp: Date.now(),
                     workerId: socket.id,
                     jobId: data.jobId,
-                    log: `[ERROR] Cloud Handoff Failed: ${e.message}`
+                    log: `[ERROR] Cloud Handoff Failed: ${e.message}. Files have NOT been deleted.`
                 });
+                // SMART CONFIRMATION: Upload threw an error. We intentionally skip cleanupWorkspace().
             }
         }
     });

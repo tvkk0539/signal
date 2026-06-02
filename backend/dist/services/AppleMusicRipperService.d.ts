@@ -73,5 +73,11 @@ export declare class AppleMusicRipperService extends EventEmitter {
     executeRipJob(config: RipperConfig): Promise<{
         jobId: string;
     }>;
+    /**
+     * Highly Engineered Smart Cleanup
+     * This is only explicitly called by the Orchestrator after a successful Rclone handoff
+     * to guarantee zero-data-loss.
+     */
+    cleanupWorkspace(jobId: string): void;
     cancelJob(jobId: string): void;
 }

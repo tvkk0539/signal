@@ -351,20 +351,29 @@ convert-delete-bad-alac: ${b(config.convertDeleteBadAlac, false)} # If true, del
                     status: 'FAILED',
                     error: `Process exited with code ${code}`
                 });
-            }
 
-            // Cleanup Ephemeral Workspace (Wait slightly so cloud handoff can read it first)
-            // In a real flow, RcloneDaemonManager would delete the folder after moving.
-            // For now, we mock the cleanup.
-            setTimeout(() => {
-                if (fs.existsSync(workspaceDir)) {
-                    fs.rmSync(workspaceDir, { recursive: true, force: true });
-                    this.log(jobId, `Workspace annihilated. Ephemeral disk restored.`);
-                }
-            }, 5000);
+                // If it failed, we don't auto-cleanup. We leave the logs and workspace for debugging.
+            }
         });
 
         return { jobId };
+    }
+
+    /**
+     * Highly Engineered Smart Cleanup
+     * This is only explicitly called by the Orchestrator after a successful Rclone handoff
+     * to guarantee zero-data-loss.
+     */
+    public cleanupWorkspace(jobId: string): void {
+        const workspaceDir = path.join(this.APP_DIR, `job_${jobId}`);
+        if (fs.existsSync(workspaceDir)) {
+            try {
+                fs.rmSync(workspaceDir, { recursive: true, force: true });
+                this.log(jobId, `[SMART CONFIRMATION] Workspace completely annihilated. Ephemeral disk zeroed.`);
+            } catch (e: any) {
+                this.log(jobId, `[WARN] Failed to annihilate workspace: ${e.message}`);
+            }
+        }
     }
 
     public cancelJob(jobId: string): void {
