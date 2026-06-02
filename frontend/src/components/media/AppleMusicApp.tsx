@@ -7,7 +7,7 @@ import { AppleMusicSettingsUI } from './AppleMusicSettingsUI';
 import { AppleMusicQueueUI } from './AppleMusicQueueUI';
 import { SocketManager } from '../../worker/SocketManager';
 import { MessageType } from '@swarm/shared';
-import type { AppleMusicRipRequestMessage, RipperTelemetryMessage, WrapperStatusUpdateMessage, Wrapper2FAChallengeMessage } from '@swarm/shared';
+import type { AppleMusicRipRequestMessage, RipperTelemetryMessage, RipperProgressUpdateMessage, WrapperStatusUpdateMessage, Wrapper2FAChallengeMessage } from '@swarm/shared';
 import { useAppleMusicStore } from '../../store/appleMusicStore';
 import { useAppleMusicQueueStore } from '../../store/appleMusicQueueStore';
 import { v4 as uuidv4 } from 'uuid';
@@ -27,7 +27,7 @@ export const AppleMusicApp: React.FC = () => {
   const [printJson, setPrintJson] = useState(false);
   const [debugMode, setDebugMode] = useState(false);
 
-  const { addJob, appendLog, updateJobStatus } = useAppleMusicQueueStore();
+  const { addJob, appendLog, updateJobStatus, updateJobProgress } = useAppleMusicQueueStore();
 
   const {
     mediaUserToken, storefront, setMediaUserToken, setStorefront, setAutoUpload, setRcloneRemote,
@@ -106,6 +106,14 @@ export const AppleMusicApp: React.FC = () => {
        }
     };
 
+    const handleProgress = (msg: RipperProgressUpdateMessage) => {
+        if (msg.jobId) {
+            updateJobProgress(msg.jobId, msg.phase, msg.progressPercent, msg.dataMetrics, msg.speed);
+            // Ensure status is RUNNING when progress arrives
+            updateJobStatus(msg.jobId, 'RUNNING');
+        }
+    };
+
     const handleWrapperStatusUpdate = (msg: WrapperStatusUpdateMessage) => {
        setWrapperStatus(msg.installed, msg.running, msg.pid, msg.logs || []);
     };
@@ -115,12 +123,14 @@ export const AppleMusicApp: React.FC = () => {
     };
 
     socketManager.on(MessageType.RIPPER_TELEMETRY, handleTelemetry);
+    socketManager.on(MessageType.RIPPER_PROGRESS_UPDATE, handleProgress);
     socketManager.on(MessageType.APPLE_MUSIC_CONFIG_DATA, handleConfigData);
     socketManager.on(MessageType.WRAPPER_STATUS_UPDATE, handleWrapperStatusUpdate);
     socketManager.on(MessageType.WRAPPER_2FA_CHALLENGE, handleWrapper2FAChallenge);
 
     return () => {
        socketManager.off(MessageType.RIPPER_TELEMETRY, handleTelemetry);
+       socketManager.off(MessageType.RIPPER_PROGRESS_UPDATE, handleProgress);
        socketManager.off(MessageType.APPLE_MUSIC_CONFIG_DATA, handleConfigData);
         socketManager.off(MessageType.WRAPPER_STATUS_UPDATE, handleWrapperStatusUpdate);
         socketManager.off(MessageType.WRAPPER_2FA_CHALLENGE, handleWrapper2FAChallenge);

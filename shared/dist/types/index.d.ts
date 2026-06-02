@@ -318,6 +318,15 @@ export interface RipperTelemetryMessage extends BaseMessage {
     jobId: string;
     log: string;
 }
+export interface RipperProgressUpdateMessage extends BaseMessage {
+    type: MessageType.RIPPER_PROGRESS_UPDATE;
+    workerId: string;
+    jobId: string;
+    phase: string;
+    progressPercent: number;
+    speed: string;
+    dataMetrics: string;
+}
 export interface AppleMusicConfigSaveMessage extends BaseMessage {
     type: MessageType.APPLE_MUSIC_CONFIG_SAVE;
     mediaUserToken: string;

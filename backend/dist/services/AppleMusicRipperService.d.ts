@@ -56,6 +56,8 @@ export declare class AppleMusicRipperService extends EventEmitter {
     private readonly APP_DIR;
     private readonly BINARY_PATH;
     private activeJobs;
+    private throttleMap;
+    private readonly THROTTLE_MS;
     constructor();
     private log;
     /**

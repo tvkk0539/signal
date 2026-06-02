@@ -8,6 +8,10 @@ export interface Job {
   status: JobStatus;
   configSnapshot: any;
   logs: string[];
+  progressPhase?: string;
+  progressPercent?: number;
+  progressDataMetrics?: string;
+  progressSpeed?: string;
 }
 
 interface AppleMusicQueueState {
@@ -15,6 +19,7 @@ interface AppleMusicQueueState {
   addJob: (job: Job) => void;
   updateJobStatus: (jobId: string, status: JobStatus) => void;
   appendLog: (jobId: string, log: string) => void;
+  updateJobProgress: (jobId: string, phase: string, percent: number, dataMetrics: string, speed: string) => void;
   removeJobs: (jobIds: string[]) => void;
 }
 
@@ -26,6 +31,9 @@ export const useAppleMusicQueueStore = create<AppleMusicQueueState>((set) => ({
   })),
   appendLog: (jobId, log) => set((state) => ({
     jobs: state.jobs.map((j) => (j.jobId === jobId ? { ...j, logs: [...j.logs, log] } : j)),
+  })),
+  updateJobProgress: (jobId, phase, percent, dataMetrics, speed) => set((state) => ({
+    jobs: state.jobs.map((j) => (j.jobId === jobId ? { ...j, progressPhase: phase, progressPercent: percent, progressDataMetrics: dataMetrics, progressSpeed: speed } : j)),
   })),
   removeJobs: (jobIds) => set((state) => ({
     jobs: state.jobs.filter((j) => !jobIds.includes(j.jobId)),

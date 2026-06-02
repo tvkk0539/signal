@@ -57,6 +57,18 @@ async function bootWorker() {
             log: data.log
         });
     });
+    ripperService.on('progress', (data) => {
+        socket.emit(shared_1.MessageType.RIPPER_PROGRESS_UPDATE, {
+            type: shared_1.MessageType.RIPPER_PROGRESS_UPDATE,
+            timestamp: Date.now(),
+            workerId: socket.id,
+            jobId: data.jobId,
+            phase: data.phase,
+            progressPercent: data.progressPercent,
+            dataMetrics: data.dataMetrics,
+            speed: data.speed
+        });
+    });
     ripperService.on('job_complete', async (data) => {
         socket.emit(shared_1.MessageType.RIPPER_TELEMETRY, {
             type: shared_1.MessageType.RIPPER_TELEMETRY,

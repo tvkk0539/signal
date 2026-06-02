@@ -96,32 +96,56 @@ export const AppleMusicQueueUI: React.FC = () => {
                 <div
                     key={job.jobId}
                     onClick={() => setViewedJobId(job.jobId)}
-                    className={`flex items-center gap-3 p-3 rounded-lg border cursor-pointer transition-colors ${
+                    className={`flex flex-col gap-2 p-3 rounded-lg border cursor-pointer transition-colors ${
                         viewedJobId === job.jobId ? 'bg-white/10 border-white/20' : 'bg-black/40 border-white/5 hover:bg-white/5'
                     }`}
                 >
-                    <input
-                        type="checkbox"
-                        checked={selectedJobIds.has(job.jobId)}
-                        onChange={(e) => { e.stopPropagation(); toggleSelect(job.jobId); }}
-                        className="accent-[#FA243C]"
-                    />
-                    <div className="flex-1 min-w-0">
-                        <div className="text-white text-sm font-medium truncate">{job.url}</div>
-                        <div className="text-muted-foreground text-xs flex items-center gap-2 mt-1">
-                            <span className="px-1.5 py-0.5 bg-white/5 rounded text-[10px] uppercase">{job.configSnapshot.mode}</span>
-                            <span className="px-1.5 py-0.5 bg-white/5 rounded text-[10px] uppercase">{job.configSnapshot.format}</span>
+                    <div className="flex items-center gap-3">
+                        <input
+                            type="checkbox"
+                            checked={selectedJobIds.has(job.jobId)}
+                            onChange={(e) => { e.stopPropagation(); toggleSelect(job.jobId); }}
+                            className="accent-[#FA243C]"
+                        />
+                        <div className="flex-1 min-w-0">
+                            <div className="text-white text-sm font-medium truncate">{job.url}</div>
+                            <div className="text-muted-foreground text-xs flex items-center gap-2 mt-1">
+                                <span className="px-1.5 py-0.5 bg-white/5 rounded text-[10px] uppercase">{job.configSnapshot.ripMode}</span>
+                                <span className="px-1.5 py-0.5 bg-white/5 rounded text-[10px] uppercase">{job.configSnapshot.format}</span>
+                            </div>
+                        </div>
+                        <div className="w-24 flex flex-col items-end gap-1 text-xs">
+                            <div className="flex items-center gap-2">
+                                {getStatusIcon(job.status)}
+                                <span className={
+                                    job.status === 'RUNNING' ? 'text-blue-400 font-bold' :
+                                    job.status === 'COMPLETED' ? 'text-green-400 font-bold' :
+                                    job.status === 'FAILED' ? 'text-red-400 font-bold' :
+                                    'text-yellow-400 font-bold'
+                                }>{job.status}</span>
+                            </div>
                         </div>
                     </div>
-                    <div className="w-24 flex items-center gap-2 text-xs">
-                        {getStatusIcon(job.status)}
-                        <span className={
-                            job.status === 'RUNNING' ? 'text-blue-400' :
-                            job.status === 'COMPLETED' ? 'text-green-400' :
-                            job.status === 'FAILED' ? 'text-red-400' :
-                            'text-yellow-400'
-                        }>{job.status}</span>
-                    </div>
+
+                    {/* Highly Engineered Sleek Progress Bar UI */}
+                    {job.status === 'RUNNING' && job.progressPhase && (
+                        <div className="mt-2 ml-7 pl-1">
+                            <div className="flex justify-between text-[10px] uppercase tracking-wider mb-1">
+                                <span className="text-[#FA243C] font-semibold animate-pulse">{job.progressPhase}...</span>
+                                <span className="text-white/80 font-mono">{job.progressSpeed}</span>
+                            </div>
+                            <div className="w-full bg-black/60 rounded-full h-1.5 overflow-hidden border border-white/5 relative">
+                                <div
+                                    className="bg-gradient-to-r from-[#FA243C] to-[#fa5e6e] h-1.5 rounded-full transition-all duration-300 ease-out shadow-[0_0_10px_rgba(250,36,60,0.5)]"
+                                    style={{ width: `${job.progressPercent || 0}%` }}
+                                ></div>
+                            </div>
+                            <div className="flex justify-between mt-1 text-[10px] text-muted-foreground font-mono">
+                                <span>{job.progressDataMetrics}</span>
+                                <span>{job.progressPercent || 0}%</span>
+                            </div>
+                        </div>
+                    )}
                 </div>
             ))}
         </div>
