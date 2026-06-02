@@ -86,8 +86,8 @@ export const AppleMusicWrapperUI: React.FC = () => {
   };
 
   const handleStart = () => {
-    if (!selectedProfileId && (!username || !password)) {
-        appendWrapperLog("[UI-ERROR] Missing Apple ID or Password for new profile.");
+    if (!username || !password) {
+        appendWrapperLog("[UI-ERROR] Missing Apple ID or Password.");
         return;
     }
     const payload: WrapperStartRequestMessage = {
@@ -178,9 +178,9 @@ export const AppleMusicWrapperUI: React.FC = () => {
                 {!isInstalled ? (
                     <button
                       onClick={handleInstall}
-                      disabled={isInstalling || !username || (!password && (!selectedProfileId || selectedProfileId === 'NEW'))}
+                      disabled={isInstalling || !username || !password}
                       className="flex items-center gap-2 px-5 py-2.5 bg-white/10 hover:bg-white/20 text-white rounded-xl transition-all disabled:opacity-50 disabled:cursor-not-allowed"
-                      title={!username || (!password && (!selectedProfileId || selectedProfileId === 'NEW')) ? "Please enter credentials first" : ""}
+                      title={!username || !password ? "Please enter credentials first" : ""}
                     >
                         {isInstalling ? <Loader2 size={18} className="animate-spin" /> : <DownloadCloud size={18} />}
                         {isInstalling ? 'Installing...' : 'Install Wrapper'}
@@ -188,9 +188,9 @@ export const AppleMusicWrapperUI: React.FC = () => {
                 ) : !isRunning ? (
                     <button
                       onClick={handleStart}
-                      disabled={!username || (!password && (!selectedProfileId || selectedProfileId === 'NEW'))}
+                      disabled={!username || !password}
                       className="flex items-center gap-2 px-5 py-2.5 bg-green-500 hover:bg-green-600 text-white font-semibold rounded-xl shadow-[0_0_15px_rgba(34,197,94,0.3)] transition-all disabled:opacity-50 disabled:shadow-none disabled:cursor-not-allowed"
-                      title={!username || (!password && (!selectedProfileId || selectedProfileId === 'NEW')) ? "Please enter credentials first" : ""}
+                      title={!username || !password ? "Please enter credentials first" : ""}
                     >
                         <Play size={18} /> Start Proxy
                     </button>
@@ -253,7 +253,7 @@ export const AppleMusicWrapperUI: React.FC = () => {
                                 value={password}
                                 onChange={(e) => setPassword(e.target.value)}
                                 disabled={isRunning}
-                                placeholder={selectedProfileId ? "•••••••• (Optional if Hydrated)" : "••••••••"}
+                                placeholder="••••••••"
                                 className="w-full bg-black/50 border border-white/10 rounded-lg px-3 py-2 text-sm text-white focus:ring-1 focus:ring-primary outline-none disabled:opacity-50"
                             />
                         </div>
