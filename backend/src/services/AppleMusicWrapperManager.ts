@@ -258,7 +258,7 @@ export class AppleMusicWrapperManager extends EventEmitter {
 
     public async exportState(): Promise<string | null> {
         this.log("Exporting Wrapper Ephemeral State...");
-        const targetDir = path.join(this.APP_DIR, 'rootfs', 'data');
+        const targetDir = path.join(this.WRAPPER_DIR, 'rootfs', 'data');
         if (!fs.existsSync(targetDir)) {
             this.log("No state directory found to export.");
             return null;
@@ -303,7 +303,7 @@ export class AppleMusicWrapperManager extends EventEmitter {
 
     public async importState(base64Payload: string): Promise<void> {
         this.log("Hydrating Wrapper Ephemeral State...");
-        const targetDir = path.join(this.APP_DIR, 'rootfs', 'data');
+        const targetDir = path.join(this.WRAPPER_DIR, 'rootfs', 'data');
         if (!fs.existsSync(targetDir)) {
             fs.mkdirSync(targetDir, { recursive: true });
         }
