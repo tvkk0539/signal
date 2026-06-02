@@ -99,6 +99,17 @@ export function setupSockets(io: Server) {
       if (connectedWorkers.has(socket.id)) {
         console.log(`[Fleet Admiral] Worker Offline: ${socket.id}`);
         connectedWorkers.delete(socket.id);
+
+        // PHASE B: The Self-Cleaning Ephemeral Hook
+        // Instantly purge all temporary search indexes attached to this dead worker
+        try {
+           dbManager.getVfsEphemeral().purgeEphemeralByWorker(socket.id).catch(e => {
+              console.error(`[Gatekeeper] Failed to purge ephemeral VFS for ${socket.id}:`, e);
+           });
+        } catch (e) {
+           // Database domain might not be initialized
+        }
+
         broadcastFleetState(io); // Broadcast updated state
       } else if (connectedUIClients.has(socket.id)) {
         console.log(`[Gatekeeper] UI Client disconnected: ${socket.id}`);
@@ -585,6 +596,40 @@ export function setupSockets(io: Server) {
     socket.on(MessageType.PING, () => {
        console.log(`[Relay] Received Ping from ${socket.id}, sending Pong`);
        socket.emit(MessageType.PONG, { timestamp: Date.now() });
+    });
+
+    // VFS Index Handlers
+    socket.on(MessageType.VFS_INDEX_SYNC, async (msg: any) => {
+       if (!connectedWorkers.has(socket.id)) return;
+       try {
+           const db = msg.isPermanent ? dbManager.getVfsPermanent() : dbManager.getVfsEphemeral();
+           await db.upsertTree(msg.workerId, msg.remoteName, msg.isPermanent, msg.files, msg.persistentId);
+       } catch (err: any) {
+           console.error(`[SocketManager] Error handling VFS_INDEX_SYNC:`, err);
+       }
+    });
+
+    socket.on(MessageType.VFS_SEARCH_REQUEST, async (msg: any) => {
+        const startTime = Date.now();
+        try {
+           // Search both Ephemeral and Permanent indexes concurrently
+           const [ephemeralResults, permanentResults] = await Promise.all([
+               dbManager.getVfsEphemeral().search(msg.query, msg.limit || 50),
+               dbManager.getVfsPermanent().search(msg.query, msg.limit || 50)
+           ]);
+
+           const results = [...ephemeralResults, ...permanentResults].slice(0, msg.limit || 50);
+
+           socket.emit(MessageType.VFS_SEARCH_RESPONSE, {
+               type: MessageType.VFS_SEARCH_RESPONSE,
+               timestamp: Date.now(),
+               query: msg.query,
+               results,
+               executionTimeMs: Date.now() - startTime
+           });
+        } catch (err: any) {
+            console.error(`[SocketManager] Error handling VFS_SEARCH_REQUEST:`, err);
+        }
     });
   });
 }

@@ -140,13 +140,58 @@ async function bootWorker() {
         };
         socket.emit(shared_1.MessageType.AUTH_REQUEST, authMessage);
     });
-    socket.on(shared_1.MessageType.AUTH_RESPONSE, (res) => {
+    socket.on(shared_1.MessageType.AUTH_RESPONSE, async (res) => {
         if (res.success) {
             console.log(`[Worker] Authentication Successful! Ready to accept tasks.`);
+            // PHASE C: VFS Tree Scanner Boot Sequence
+            try {
+                const remotes = await rcloneManager.getRemotes();
+                for (const remote of remotes) {
+                    if (remote.name === '/')
+                        continue; // Skip local machine root
+                    // In a real environment, we'd determine isPermanent from the UI payload.
+                    // For MVP, we treat all as Ephemeral to demonstrate the self-cleaning hook.
+                    const isPermanent = false;
+                    const rawList = await rcloneManager.buildVfsTree(remote.name);
+                    const files = rawList.map((f) => ({
+                        id: Buffer.from(`${remote.name}${f.Path}`).toString('base64'),
+                        remoteName: remote.name,
+                        path: f.Path,
+                        name: f.Name,
+                        size: f.Size,
+                        mimeType: f.MimeType,
+                        isDir: f.IsDir,
+                        workerId: socket.id
+                    }));
+                    if (files.length > 0) {
+                        socket.emit(shared_1.MessageType.VFS_INDEX_SYNC, {
+                            type: shared_1.MessageType.VFS_INDEX_SYNC,
+                            timestamp: Date.now(),
+                            workerId: socket.id,
+                            remoteName: remote.name,
+                            isPermanent: isPermanent,
+                            files: files
+                        });
+                        console.log(`[Worker] Emitted VFS Tree (${files.length} items) to Relay Switchboard for ${remote.name}`);
+                    }
+                }
+            }
+            catch (err) {
+                console.error(`[Worker] Failed initial VFS scan:`, err.message);
+            }
         }
         else {
             console.error(`[Worker] Authentication Failed.`);
         }
+    });
+    socket.on(shared_1.MessageType.CONFIG_MERGE_SYNC, async (msg) => {
+        console.log(`[Worker] Received Permanent Rclone Config Block from UI.`);
+        // In a real flow, the UI would also send the ephemeral blocks as part of the job dispatch.
+        // We will merge them and restart the daemon silently.
+        await rcloneManager.mergeAndApplyConfig("", msg.permanentConfigBlock);
+        rcloneManager.stop();
+        await rcloneManager.start();
+        console.log(`[Worker] Hybrid Config Applied and Daemon Rebooted.`);
     });
     socket.on(shared_1.MessageType.PONG, (data) => {
         console.log(`[Worker] Received PONG from Relay Server (Ping: ${Date.now() - data.timestamp}ms)`);

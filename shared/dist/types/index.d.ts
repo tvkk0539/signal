@@ -173,7 +173,7 @@ export interface DbStateRequestMessage extends BaseMessage {
 }
 export interface DbRouteSwitchRequestMessage extends BaseMessage {
     type: MessageType.DB_ROUTE_SWITCH_REQUEST;
-    domain: 'AUTH' | 'AUDIT' | 'CHAT';
+    domain: 'AUTH' | 'AUDIT' | 'CHAT' | 'APPLE_MUSIC' | 'VFS_EPHEMERAL' | 'VFS_PERMANENT';
     engine: 'MONGODB' | 'POSTGRES' | 'SUPABASE' | 'FIREBASE' | 'SQLITE' | 'MOCK';
     connectionString?: string;
     apiKey?: string;
@@ -182,6 +182,41 @@ export interface DbRouteSwitchRequestMessage extends BaseMessage {
         connectionString?: string;
         apiKey?: string;
     }>;
+}
+export interface VfsIndexItem {
+    id: string;
+    remoteName: string;
+    path: string;
+    name: string;
+    size: number;
+    mimeType: string;
+    isDir: boolean;
+    workerId: string;
+    persistentId?: string;
+}
+export interface VfsIndexSyncMessage extends BaseMessage {
+    type: MessageType.VFS_INDEX_SYNC;
+    workerId: string;
+    remoteName: string;
+    isPermanent: boolean;
+    persistentId?: string;
+    files: VfsIndexItem[];
+}
+export interface VfsSearchRequestMessage extends BaseMessage {
+    type: MessageType.VFS_SEARCH_REQUEST;
+    query: string;
+    limit?: number;
+}
+export interface VfsSearchResponseMessage extends BaseMessage {
+    type: MessageType.VFS_SEARCH_RESPONSE;
+    query: string;
+    results: VfsIndexItem[];
+    executionTimeMs: number;
+}
+export interface ConfigMergeSyncMessage extends BaseMessage {
+    type: MessageType.CONFIG_MERGE_SYNC;
+    workerId: string;
+    permanentConfigBlock: string;
 }
 export interface DbStateUpdateMessage extends BaseMessage {
     type: MessageType.DB_STATE_UPDATE;

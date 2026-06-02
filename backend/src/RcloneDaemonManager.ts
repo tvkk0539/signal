@@ -12,6 +12,13 @@ const RCLONE_RC_BASE_URL = `http://${RCLONE_RC_ADDR}`;
 export class RcloneDaemonManager {
   private rcloneProcess: ChildProcess | null = null;
   private isRunning: boolean = false;
+  private configPath = '/tmp/rclone.conf';
+
+  public async mergeAndApplyConfig(ephemeralConfig: string, permanentConfig: string): Promise<void> {
+     console.log(`[Rclone] Merging Ephemeral and Permanent configurations...`);
+     const merged = `${permanentConfig}\n\n${ephemeralConfig}`;
+     fs.writeFileSync(this.configPath, merged);
+  }
 
   public async start(): Promise<void> {
     if (this.isRunning) {
@@ -25,7 +32,6 @@ export class RcloneDaemonManager {
     // or GitHub Actions where the config file is mapped as a read-only secret mount,
     // we copy the original config to a writable temporary file before booting rclone.
     const originalConfigPath = path.join(os.homedir(), '.config', 'rclone', 'rclone.conf');
-    const tempConfigPath = '/tmp/rclone.conf';
     let rcloneArgs = [
       'rcd',
       '--rc-web-gui',
@@ -35,13 +41,16 @@ export class RcloneDaemonManager {
     ];
 
     try {
-       if (fs.existsSync(originalConfigPath)) {
-          fs.copyFileSync(originalConfigPath, tempConfigPath);
-          console.log(`[Rclone] Copied read-only config to writable ${tempConfigPath}`);
-          rcloneArgs.push('--config', tempConfigPath);
+       // If no config file exists yet (before hybrid merge is called), initialize it
+       if (!fs.existsSync(this.configPath) && fs.existsSync(originalConfigPath)) {
+          fs.copyFileSync(originalConfigPath, this.configPath);
+          console.log(`[Rclone] Copied read-only config to writable ${this.configPath}`);
+       } else if (!fs.existsSync(this.configPath)) {
+          fs.writeFileSync(this.configPath, "");
        }
+       rcloneArgs.push('--config', this.configPath);
     } catch (e: any) {
-       console.warn(`[Rclone] Could not copy config to temp path: ${e.message}`);
+       console.warn(`[Rclone] Could not setup temp config: ${e.message}`);
     }
 
     // Using --rc-web-gui for local testing if requested, but mainly enabling rc
@@ -135,6 +144,33 @@ export class RcloneDaemonManager {
       console.error(`[Rclone] listFiles Error: ${error.response?.data?.error || error.message}`);
       throw new Error(error.response?.data?.error || error.message);
     }
+  }
+
+  /**
+   * Generates a massive mathematical tree of the entire remote using fast-list.
+   * This operates purely in Rclone's memory and is heavily paginated.
+   */
+  public async buildVfsTree(fsName: string): Promise<any[]> {
+      if (!this.isRunning) throw new Error('Rclone daemon is not running');
+
+      console.log(`[Rclone] Building High-Speed VFS Tree for ${fsName}...`);
+      try {
+          const auth = Buffer.from(`${RCLONE_RC_USER}:${RCLONE_RC_PASS}`).toString('base64');
+          const response = await axios.post(`${RCLONE_RC_BASE_URL}/operations/list`, {
+              fs: fsName,
+              remote: "",
+              opt: { recurse: true, fastList: true }
+          }, {
+              headers: {
+                'Authorization': `Basic ${auth}`,
+                'Content-Type': 'application/json'
+              }
+          });
+          return response.data.list || [];
+      } catch (error: any) {
+          console.error(`[Rclone] Failed to build VFS tree for ${fsName}:`, error.message);
+          return [];
+      }
   }
 
   public async getRemotes(): Promise<any[]> {

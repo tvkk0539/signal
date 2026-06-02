@@ -5,7 +5,7 @@ import { MediaPlayerModal } from '../media/MediaPlayerModal';
 import { useAuthStore } from '../../store/authStore';
 import { SocketManager } from '../../worker/SocketManager';
 import { useVirtualizer } from '@tanstack/react-virtual';
-import { Folder, File, HardDrive, RefreshCw, ArrowUp, LayoutGrid, List as ListIcon, MoreVertical } from 'lucide-react';
+import { Folder, File, HardDrive, RefreshCw, ArrowUp, LayoutGrid, List as ListIcon, MoreVertical, Search } from 'lucide-react';
 
 interface FileExplorerProps {
   isConnected: boolean;
@@ -16,6 +16,10 @@ export const FileExplorer: React.FC<FileExplorerProps> = ({ isConnected, workerI
   const [currentPath, setCurrentPath] = useState<string>('');
   const [viewMode, setViewMode] = useState<'LIST' | 'GRID'>('LIST');
   const [files, setFiles] = useState<FileItem[]>([]);
+  const [searchQuery, setSearchQuery] = useState('');
+  const [isSearching, setIsSearching] = useState(false);
+  const [searchResults, setSearchResults] = useState<any[]>([]);
+  const searchTimeoutRef = useRef<any>(null);
   const [remotes, setRemotes] = useState<RemoteItem[]>([]);
   const [selectedFs, setSelectedFs] = useState<string>('/');
   const [loading, setLoading] = useState<boolean>(false);
@@ -91,12 +95,19 @@ export const FileExplorer: React.FC<FileExplorerProps> = ({ isConnected, workerI
       }
     };
 
+    const handleSearchResponse = (msg: any) => {
+        setIsSearching(false);
+        setSearchResults(msg.results || []);
+    };
+
     socketManager.on(MessageType.FILE_LIST_RESPONSE, handleFileListResponse);
     socketManager.on(MessageType.REMOTE_LIST_RESPONSE, handleRemoteListResponse);
+    socketManager.on(MessageType.VFS_SEARCH_RESPONSE as any, handleSearchResponse);
 
     return () => {
       socketManager.off(MessageType.FILE_LIST_RESPONSE, handleFileListResponse);
       socketManager.off(MessageType.REMOTE_LIST_RESPONSE, handleRemoteListResponse);
+      socketManager.off(MessageType.VFS_SEARCH_RESPONSE as any, handleSearchResponse);
     };
   }, [workerId, currentPath, selectedFs]);
 
@@ -115,6 +126,27 @@ export const FileExplorer: React.FC<FileExplorerProps> = ({ isConnected, workerI
   const handleFsChange = (e: React.ChangeEvent<HTMLSelectElement>) => {
     setSelectedFs(e.target.value);
     setCurrentPath(''); // Reset path to root when changing file systems
+  };
+
+  const handleSearchChange = (e: React.ChangeEvent<HTMLInputElement>) => {
+      const query = e.target.value;
+      setSearchQuery(query);
+
+      if (searchTimeoutRef.current) clearTimeout(searchTimeoutRef.current);
+
+      if (query.trim().length > 1) {
+          setIsSearching(true);
+          searchTimeoutRef.current = setTimeout(() => {
+              SocketManager.getInstance().emit(MessageType.VFS_SEARCH_REQUEST as any, {
+                  type: MessageType.VFS_SEARCH_REQUEST,
+                  timestamp: Date.now(),
+                  query: query
+              });
+          }, 300);
+      } else {
+          setSearchResults([]);
+          setIsSearching(false);
+      }
   };
 
   const [playingMedia, setPlayingMedia] = useState<{ fs: string; path: string; action: 'PLAY' | 'DOWNLOAD' } | null>(null);
@@ -156,8 +188,10 @@ export const FileExplorer: React.FC<FileExplorerProps> = ({ isConnected, workerI
 
   const parentRef = useRef<HTMLDivElement>(null);
 
+  const displayFiles = searchQuery.trim().length > 1 ? searchResults : files;
+
   const rowVirtualizer = useVirtualizer({
-    count: files.length,
+    count: displayFiles.length,
     getScrollElement: () => parentRef.current,
     estimateSize: () => 50, // Height of list row
     overscan: 5,
@@ -223,6 +257,19 @@ export const FileExplorer: React.FC<FileExplorerProps> = ({ isConnected, workerI
             <span className="text-foreground truncate">{currentPath || '/'}</span>
           </div>
 
+          <div className="relative w-64">
+              <div className="absolute inset-y-0 left-0 pl-3 flex items-center pointer-events-none text-muted-foreground">
+                  {isSearching ? <RefreshCw size={14} className="animate-spin text-primary" /> : <Search size={14} />}
+              </div>
+              <input
+                  type="text"
+                  placeholder="Lightning Search DB..."
+                  value={searchQuery}
+                  onChange={handleSearchChange}
+                  className="w-full pl-9 pr-4 py-2 bg-secondary/50 border border-border/50 rounded-lg text-sm text-foreground placeholder:text-muted-foreground focus:outline-none focus:ring-1 focus:ring-primary focus:border-primary transition-all font-mono"
+              />
+          </div>
+
           <div className="flex gap-1 bg-secondary/50 p-1 rounded-lg border border-border/50">
              <button
                 onClick={() => setViewMode('LIST')}
@@ -258,13 +305,13 @@ export const FileExplorer: React.FC<FileExplorerProps> = ({ isConnected, workerI
 
         <div ref={parentRef} className="h-full w-full overflow-auto p-4 custom-scrollbar">
 
-          {files.length === 0 && !loading && !error && (
+          {displayFiles.length === 0 && !loading && !error && (
              <div className="h-full flex items-center justify-center text-muted-foreground italic border-2 border-dashed border-border/30 rounded-xl p-8">
-                This directory is empty.
+                {searchQuery ? 'No matching files in cache.' : 'This directory is empty.'}
              </div>
           )}
 
-          {viewMode === 'LIST' && files.length > 0 && (
+          {viewMode === 'LIST' && displayFiles.length > 0 && (
             <div style={{ height: `${rowVirtualizer.getTotalSize()}px`, width: '100%', position: 'relative' }}>
                {/* List Header (Sticky logic can be complex with virtualizers, we'll keep it simple for now) */}
                <div className="flex items-center text-xs font-semibold text-muted-foreground uppercase tracking-wider mb-2 px-4 border-b border-border/50 pb-2">
@@ -276,11 +323,11 @@ export const FileExplorer: React.FC<FileExplorerProps> = ({ isConnected, workerI
                </div>
 
                {rowVirtualizer.getVirtualItems().map((virtualItem) => {
-                 const file = files[virtualItem.index];
+                 const file = displayFiles[virtualItem.index] as any;
                  return (
                    <div
                      key={virtualItem.key}
-                     onClick={() => handleRowClick(file)}
+                     onClick={() => handleRowClick({ ...file, fs: file.remoteName || selectedFs })}
                      className="absolute top-0 left-0 w-full flex items-center px-4 py-2 border-b border-border/30 hover:bg-white/5 cursor-pointer transition-colors group"
                      style={{
                        height: `${virtualItem.size}px`,
@@ -288,16 +335,19 @@ export const FileExplorer: React.FC<FileExplorerProps> = ({ isConnected, workerI
                      }}
                    >
                      <div className="w-10 text-muted-foreground flex justify-center group-hover:text-primary transition-colors">
-                        {file.IsDir ? <Folder size={18} /> : <File size={18} />}
+                        {file.IsDir || file.isDir ? <Folder size={18} /> : <File size={18} />}
                      </div>
                      <div className="flex-1 truncate text-sm text-foreground pr-4">
-                        {file.Name}
+                        {file.Name || file.name}
+                        {searchQuery && file.path && <div className="text-[10px] text-muted-foreground truncate font-mono">{file.remoteName}:{file.path}</div>}
                      </div>
                      <div className="w-24 text-right text-xs text-muted-foreground font-mono">
-                        {file.IsDir ? '--' : formatBytes(file.Size)}
+                        {file.IsDir || file.isDir ? '--' : formatBytes(file.Size || file.size)}
                      </div>
                      <div className="w-40 text-right text-xs text-muted-foreground">
-                        {new Date(file.ModTime).toLocaleDateString()} {new Date(file.ModTime).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}
+                        {file.ModTime ? (
+                            <>{new Date(file.ModTime).toLocaleDateString()} {new Date(file.ModTime).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}</>
+                        ) : '--'}
                      </div>
                      <div className="w-10 flex justify-end">
                         <button className="text-muted-foreground opacity-0 group-hover:opacity-100 hover:text-foreground transition-all">
@@ -310,23 +360,23 @@ export const FileExplorer: React.FC<FileExplorerProps> = ({ isConnected, workerI
             </div>
           )}
 
-          {viewMode === 'GRID' && files.length > 0 && (
+          {viewMode === 'GRID' && displayFiles.length > 0 && (
              <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 lg:grid-cols-5 xl:grid-cols-6 gap-4">
-                {files.map(file => (
+                {displayFiles.map((file: any) => (
                    <div
-                     key={file.ID || file.Name}
-                     onClick={() => handleRowClick(file)}
+                     key={file.ID || file.Name || file.id}
+                     onClick={() => handleRowClick({ ...file, fs: file.remoteName || selectedFs })}
                      className="bg-card border border-border hover:border-primary/50 hover:bg-secondary/30 rounded-xl p-4 flex flex-col items-center justify-center gap-3 cursor-pointer transition-all hover:shadow-[0_4px_20px_rgba(170,59,255,0.15)] group"
                    >
                      <div className="w-16 h-16 rounded-2xl bg-secondary flex items-center justify-center text-muted-foreground group-hover:text-primary group-hover:scale-110 transition-all duration-300">
-                        {file.IsDir ? <Folder size={32} /> : <File size={32} />}
+                        {file.IsDir || file.isDir ? <Folder size={32} /> : <File size={32} />}
                      </div>
                      <div className="text-center w-full">
-                        <div className="text-sm text-foreground truncate w-full font-medium" title={file.Name}>
-                           {file.Name}
+                        <div className="text-sm text-foreground truncate w-full font-medium" title={file.Name || file.name}>
+                           {file.Name || file.name}
                         </div>
                         <div className="text-[10px] text-muted-foreground mt-1">
-                           {file.IsDir ? 'Directory' : formatBytes(file.Size)}
+                           {file.IsDir || file.isDir ? 'Directory' : formatBytes(file.Size || file.size)}
                         </div>
                      </div>
                    </div>

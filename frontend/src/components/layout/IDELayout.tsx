@@ -11,6 +11,7 @@ import { ChatBox } from '../chat/ChatBox';
 import { DatabaseOperationsCenter } from '../db/DatabaseOperationsCenter';
 import { MusicRipsHub } from '../media/MusicRipsHub';
 import { AppleMusicApp } from '../media/AppleMusicApp';
+import { RcloneConfigManagerUI } from '../explorer/RcloneConfigManagerUI';
 import { SocketManager } from '../../worker/SocketManager';
 
 // Use an array join for the placeholder so global search-and-replace in the Docker entrypoint
@@ -140,8 +141,30 @@ export const IDELayout: React.FC = () => {
 
           {activeView === 'DB_OPS' && (
             <div className="h-full w-full max-w-5xl mx-auto overflow-y-auto">
-               {/* We will embed the full DatabaseOperationsCenter here instead of a floating modal */}
                <DatabaseOperationsCenter />
+            </div>
+          )}
+
+          {activeView === 'RCLONE_CONFIG' && (
+            <div className="flex-1 flex flex-col h-full">
+              <HorizontalFleetBar
+                targetWorkerId={targetWorkerId}
+                setTargetWorkerId={setTargetWorkerId}
+                isConnected={isConnected}
+              />
+              <div className="flex-1 overflow-hidden p-6 pt-0">
+                {targetWorkerId ? (
+                  <RcloneConfigManagerUI workerId={targetWorkerId} />
+                ) : (
+                  <div className="h-full w-full flex items-center justify-center border-2 border-dashed border-border/50 rounded-2xl bg-card/20">
+                    <div className="text-center text-muted-foreground">
+                      <div className="text-4xl mb-4">⚙️</div>
+                      <h2 className="text-lg font-medium text-foreground">No Target Selected</h2>
+                      <p className="text-sm mt-2">Select an active node from the top fleet bar to push configs.</p>
+                    </div>
+                  </div>
+                )}
+              </div>
             </div>
           )}
 
