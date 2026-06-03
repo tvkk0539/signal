@@ -15,9 +15,13 @@ import { ReplicatedAuditLogRepository } from './core/ReplicatedAuditLogRepositor
 import { ReplicatedChatRepository } from './core/ReplicatedChatRepository';
 import { ReplicatedAppleMusicRepository } from './core/ReplicatedAppleMusicRepository';
 import { IAppleMusicRepository } from './interfaces/IAppleMusicRepository';
+import { IVfsIndexRepository } from './interfaces/IVfsIndexRepository';
+import { ReplicatedVfsIndexRepository } from './core/ReplicatedVfsIndexRepository';
+import { MongoVfsIndexRepository } from './providers/mongo/MongoVfsIndexRepository';
+import { InMemoryVfsIndexRepository } from './providers/mock/InMemoryVfsIndexRepository';
 
 export type DatabaseEngine = 'MONGODB' | 'POSTGRES' | 'SUPABASE' | 'FIREBASE' | 'SQLITE' | 'MOCK';
-export type DomainService = 'AUTH' | 'AUDIT' | 'CHAT' | 'APPLE_MUSIC';
+export type DomainService = 'AUTH' | 'AUDIT' | 'CHAT' | 'APPLE_MUSIC' | 'VFS_PERMANENT' | 'VFS_EPHEMERAL';
 
 export interface DatabaseConfig {
   engine: DatabaseEngine;
@@ -36,13 +40,17 @@ class DatabaseManager {
   private auditLogRepository!: IAuditLogRepository;
   private chatRepository!: IChatRepository;
   private appleMusicRepository!: IAppleMusicRepository;
+  private vfsPermanentRepository!: IVfsIndexRepository;
+  private vfsEphemeralRepository!: IVfsIndexRepository;
 
   // The state map to track which engines are running which domain (Primary + Mirrors)
   private currentRouting: Record<DomainService, DomainRoutingConfig> = {
     AUTH: { primary: { engine: 'MOCK' }, mirrors: [] },
     AUDIT: { primary: { engine: 'MOCK' }, mirrors: [] },
     CHAT: { primary: { engine: 'MOCK' }, mirrors: [] },
-    APPLE_MUSIC: { primary: { engine: 'MOCK' }, mirrors: [] }
+    APPLE_MUSIC: { primary: { engine: 'MOCK' }, mirrors: [] },
+    VFS_PERMANENT: { primary: { engine: 'MOCK' }, mirrors: [] },
+    VFS_EPHEMERAL: { primary: { engine: 'MOCK' }, mirrors: [] }
   };
 
   async initialize() {
@@ -55,12 +63,18 @@ class DatabaseManager {
        await this.hotSwapDomain('AUDIT', { primary: { engine: defaultEngine }, mirrors: [] });
        await this.hotSwapDomain('CHAT', { primary: { engine: defaultEngine }, mirrors: [] });
        await this.hotSwapDomain('APPLE_MUSIC', { primary: { engine: defaultEngine }, mirrors: [] });
+
+       // Note: In production, Ephemeral might explicitly use a distinct URI.
+       await this.hotSwapDomain('VFS_PERMANENT', { primary: { engine: defaultEngine }, mirrors: [] });
+       await this.hotSwapDomain('VFS_EPHEMERAL', { primary: { engine: defaultEngine }, mirrors: [] });
     } catch (e) {
        console.warn(`[DB Manager] Primary initialize failed, falling back to MOCK universally.`);
        await this.hotSwapDomain('AUTH', { primary: { engine: 'MOCK' }, mirrors: [] });
        await this.hotSwapDomain('AUDIT', { primary: { engine: 'MOCK' }, mirrors: [] });
        await this.hotSwapDomain('CHAT', { primary: { engine: 'MOCK' }, mirrors: [] });
        await this.hotSwapDomain('APPLE_MUSIC', { primary: { engine: 'MOCK' }, mirrors: [] });
+       await this.hotSwapDomain('VFS_PERMANENT', { primary: { engine: 'MOCK' }, mirrors: [] });
+       await this.hotSwapDomain('VFS_EPHEMERAL', { primary: { engine: 'MOCK' }, mirrors: [] });
     }
   }
 
@@ -97,6 +111,12 @@ class DatabaseManager {
         case 'APPLE_MUSIC':
           this.appleMusicRepository = new ReplicatedAppleMusicRepository(primaryRepo as IAppleMusicRepository, mirrorRepos as IAppleMusicRepository[]);
           break;
+        case 'VFS_PERMANENT':
+          this.vfsPermanentRepository = new ReplicatedVfsIndexRepository(primaryRepo as IVfsIndexRepository, mirrorRepos as IVfsIndexRepository[]);
+          break;
+        case 'VFS_EPHEMERAL':
+          this.vfsEphemeralRepository = new ReplicatedVfsIndexRepository(primaryRepo as IVfsIndexRepository, mirrorRepos as IVfsIndexRepository[]);
+          break;
       }
 
       this.currentRouting[domain] = config;
@@ -132,6 +152,8 @@ class DatabaseManager {
       case 'AUDIT': return this.instantiateAuditRepository(config);
       case 'CHAT': return this.instantiateChatRepository(config);
       case 'APPLE_MUSIC': return this.instantiateAppleMusicRepository(config);
+      case 'VFS_PERMANENT':
+      case 'VFS_EPHEMERAL': return this.instantiateVfsIndexRepository(config);
     }
   }
 
@@ -191,6 +213,17 @@ class DatabaseManager {
     throw new Error(`${config.engine} Apple Music Adapter not fully implemented yet.`);
   }
 
+  private async instantiateVfsIndexRepository(config: DatabaseConfig): Promise<IVfsIndexRepository> {
+    if (config.engine === 'MONGODB') {
+       const { createMongoConnection } = await import('./providers/mongo/connection.js');
+       const conn = await createMongoConnection(config.connectionString);
+       return new MongoVfsIndexRepository(conn);
+    }
+    if (config.engine === 'MOCK') return new InMemoryVfsIndexRepository();
+
+    throw new Error(`${config.engine} VFS Index Adapter not fully implemented yet.`);
+  }
+
   // --- Accessors ---
 
   getUsers(): IUserRepository {
@@ -211,6 +244,16 @@ class DatabaseManager {
   public getAppleMusic() {
     if (!this.appleMusicRepository) throw new Error("DatabaseManager Apple Music not initialized.");
     return this.appleMusicRepository;
+  }
+
+  public getVfsPermanent(): IVfsIndexRepository {
+    if (!this.vfsPermanentRepository) throw new Error("DatabaseManager VFS Permanent not initialized.");
+    return this.vfsPermanentRepository;
+  }
+
+  public getVfsEphemeral(): IVfsIndexRepository {
+    if (!this.vfsEphemeralRepository) throw new Error("DatabaseManager VFS Ephemeral not initialized.");
+    return this.vfsEphemeralRepository;
   }
 }
 

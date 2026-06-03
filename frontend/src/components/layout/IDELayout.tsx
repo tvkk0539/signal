@@ -11,6 +11,8 @@ import { ChatBox } from '../chat/ChatBox';
 import { DatabaseOperationsCenter } from '../db/DatabaseOperationsCenter';
 import { MusicRipsHub } from '../media/MusicRipsHub';
 import { AppleMusicApp } from '../media/AppleMusicApp';
+import { VfsConfigManagerUI } from '../vfs/VfsConfigManagerUI';
+import { LightningSearchUI } from '../vfs/LightningSearchUI';
 import { SocketManager } from '../../worker/SocketManager';
 
 // Use an array join for the placeholder so global search-and-replace in the Docker entrypoint
@@ -142,6 +144,15 @@ export const IDELayout: React.FC = () => {
             <div className="h-full w-full max-w-5xl mx-auto overflow-y-auto">
                {/* We will embed the full DatabaseOperationsCenter here instead of a floating modal */}
                <DatabaseOperationsCenter />
+            </div>
+          )}
+
+          {activeView === 'VFS_CONFIG' && (
+            <div className="flex h-full w-full overflow-hidden">
+               <div className="flex-1 overflow-y-auto p-4">
+                 <VfsConfigManagerUI />
+               </div>
+               <LightningSearchUI />
             </div>
           )}
 

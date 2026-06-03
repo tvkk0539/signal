@@ -1,59 +1,35 @@
 name: Swarm Backend Worker (Docker Runner)
 
-# This triggers the worker to start manually via the GitHub Actions tab.
-# You can also configure 'schedule' to run it automatically.
 on:
   workflow_dispatch:
 
 jobs:
   run-swarm-worker:
     runs-on: ubuntu-latest
-
-    # We set a max timeout (GitHub Actions maximum is 360 minutes / 6 hours)
     timeout-minutes: 360
 
     steps:
       - name: 🚀 Booting Distributed Swarm Worker
         run: echo "Starting Swarm Worker..."
 
-      # We pull the pre-built Docker image from the main repository's registry.
-      # Replace "your-username" with the GitHub username where the Docker image is hosted!
       - name: 🐳 Pull Docker Image
         run: docker pull ghcr.io/your-username/distributed-swarm-monorepo-worker:latest
 
-      # Dynamically build the rclone.conf file on the host machine before booting Docker.
-      # It checks if you provided the config as raw text or as a secure URL.
-      - name: 📁 Prepare Rclone Configuration
-        env:
-          RCLONE_CONF_TEXT: ${{ secrets.RCLONE_CONF_TEXT }}
-          RCLONE_CONF_URL: ${{ secrets.RCLONE_CONF_URL }}
-        run: |
-          mkdir -p ~/.config/rclone
-          if [ -n "$RCLONE_CONF_TEXT" ]; then
-            echo "Injecting rclone config from Text Secret..."
-            echo "$RCLONE_CONF_TEXT" > ~/.config/rclone/rclone.conf
-          elif [ -n "$RCLONE_CONF_URL" ]; then
-            echo "Downloading rclone config from URL Secret..."
-            curl -s "$RCLONE_CONF_URL" -o ~/.config/rclone/rclone.conf
-          else
-            echo "No rclone config secrets found. Worker will only browse local sandbox."
-            touch ~/.config/rclone/rclone.conf
-          fi
-
-      # Run the Docker container in the foreground so the GitHub Action stays alive.
-      # We inject the secure secrets and mount the rclone.conf file into the container.
-      # GRPC_PUBLIC_IP and GRPC_PORT are dynamically injected for Dual-Mode Architecture support.
+      # The Hybrid Configuration Engine dynamically fetches rclone configs from the 
+      # Relay Database. We no longer need to mount local config files!
       - name: 🦾 Execute Worker Node
         env:
           RELAY_URL: ${{ secrets.RELAY_URL }}
           WORKER_SECRET: ${{ secrets.WORKER_SECRET }}
           GRPC_PUBLIC_IP: ${{ secrets.GRPC_PUBLIC_IP }}
           GRPC_PORT: ${{ secrets.GRPC_PORT }}
+          # Required for Phase 11: Worker-Direct Database Streaming Bypass
+          GITHUB_EPHEMERAL_MONGODB_URI: ${{ secrets.GITHUB_EPHEMERAL_MONGODB_URI }}
         run: |
           docker run --rm \
             -e RELAY_URL=$RELAY_URL \
             -e WORKER_SECRET=$WORKER_SECRET \
             -e GRPC_PUBLIC_IP=$GRPC_PUBLIC_IP \
             -e GRPC_PORT=$GRPC_PORT \
-            -v ~/.config/rclone/rclone.conf:/root/.config/rclone/rclone.conf:ro \
+            -e GITHUB_EPHEMERAL_MONGODB_URI=$GITHUB_EPHEMERAL_MONGODB_URI \
             ghcr.io/your-username/distributed-swarm-monorepo-worker:latest

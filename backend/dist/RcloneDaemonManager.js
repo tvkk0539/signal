@@ -16,34 +16,47 @@ const RCLONE_RC_BASE_URL = `http://${RCLONE_RC_ADDR}`;
 class RcloneDaemonManager {
     rcloneProcess = null;
     isRunning = false;
-    async start() {
+    configPath = '/tmp/rclone.conf';
+    /**
+     * Phase 11: Hybrid Configuration Engine
+     * Generates the dynamic isolated /tmp/rclone.conf by merging Permanent and Ephemeral blocks.
+     */
+    generateHybridConfig(permanentBlocks, ephemeralBlocks) {
+        console.log(`[RcloneDaemon] Building Hybrid Configuration Engine (${permanentBlocks.length} permanent, ${ephemeralBlocks.length} ephemeral)`);
+        let combinedConfigText = '';
+        // Always copy the host's physical config if it exists so we don't break local dev environments
+        const originalConfigPath = path_1.default.join(os_1.default.homedir(), '.config', 'rclone', 'rclone.conf');
+        if (fs_1.default.existsSync(originalConfigPath)) {
+            combinedConfigText += fs_1.default.readFileSync(originalConfigPath, 'utf8') + '\n';
+        }
+        for (const block of permanentBlocks) {
+            combinedConfigText += `\n# --- PERMANENT: ${block.alias} ---\n`;
+            combinedConfigText += block.configText;
+            combinedConfigText += `\n`;
+        }
+        for (const block of ephemeralBlocks) {
+            combinedConfigText += `\n# --- EPHEMERAL: ${block.alias} ---\n`;
+            combinedConfigText += block.configText;
+            combinedConfigText += `\n`;
+        }
+        fs_1.default.writeFileSync(this.configPath, combinedConfigText.trim(), { mode: 0o600 });
+        console.log(`[RcloneDaemon] Wrote isolated hybrid config to ${this.configPath}`);
+    }
+    async start(permanentBlocks = [], ephemeralBlocks = []) {
         if (this.isRunning) {
             console.log('[Rclone] Daemon is already running.');
             return;
         }
         console.log('[Rclone] Booting Rclone Daemon in the background...');
-        // To prevent "device or resource busy" config lock errors when deploying in Docker
-        // or GitHub Actions where the config file is mapped as a read-only secret mount,
-        // we copy the original config to a writable temporary file before booting rclone.
-        const originalConfigPath = path_1.default.join(os_1.default.homedir(), '.config', 'rclone', 'rclone.conf');
-        const tempConfigPath = '/tmp/rclone.conf';
+        this.generateHybridConfig(permanentBlocks, ephemeralBlocks);
         let rcloneArgs = [
             'rcd',
             '--rc-web-gui',
             `--rc-addr`, RCLONE_RC_ADDR,
             `--rc-user`, RCLONE_RC_USER,
-            `--rc-pass`, RCLONE_RC_PASS
+            `--rc-pass`, RCLONE_RC_PASS,
+            '--config', this.configPath
         ];
-        try {
-            if (fs_1.default.existsSync(originalConfigPath)) {
-                fs_1.default.copyFileSync(originalConfigPath, tempConfigPath);
-                console.log(`[Rclone] Copied read-only config to writable ${tempConfigPath}`);
-                rcloneArgs.push('--config', tempConfigPath);
-            }
-        }
-        catch (e) {
-            console.warn(`[Rclone] Could not copy config to temp path: ${e.message}`);
-        }
         // Using --rc-web-gui for local testing if requested, but mainly enabling rc
         this.rcloneProcess = (0, child_process_1.spawn)('rclone', rcloneArgs, {
             stdio: ['ignore', 'pipe', 'pipe'] // Listen to stdout and stderr
@@ -205,6 +218,22 @@ class RcloneDaemonManager {
                 }
             });
         });
+    }
+    /**
+     * Phase 11: Massive Index Stream
+     * Runs the `fast-list` command as a child process and returns the stream
+     * to prevent loading a multi-gigabyte JSON tree into RAM.
+     */
+    streamFastList(remoteName) {
+        console.log(`[RcloneDaemon] Initiating massive fast-list stream for ${remoteName}...`);
+        const args = [
+            'lsjson',
+            remoteName,
+            '--fast-list',
+            '-R',
+            '--config', this.configPath
+        ];
+        return (0, child_process_1.spawn)('rclone', args);
     }
     async streamFile(fs, path, startByte = 0, endByte) {
         if (!this.isRunning) {

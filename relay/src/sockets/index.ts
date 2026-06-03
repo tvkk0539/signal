@@ -332,6 +332,84 @@ export function setupSockets(io: Server) {
     socket.on(MessageType.WRAPPER_2FA_SUBMIT, (msg: any) => routeToIdleWorker(MessageType.WRAPPER_2FA_SUBMIT, msg));
     socket.on(MessageType.APPLE_MUSIC_RIP_REQUEST, (msg: any) => routeToIdleWorker(MessageType.APPLE_MUSIC_RIP_REQUEST, msg));
 
+    // --- Phase 11: Dual-State VFS & Hybrid Config Routing ---
+
+    socket.on(MessageType.VFS_CONFIG_SAVE, async (msg: any) => {
+      console.log(`[Relay] Received VFS_CONFIG_SAVE for ${msg.alias}`);
+      try {
+        const repo = msg.isEphemeral ? dbManager.getVfsEphemeral() : dbManager.getVfsPermanent();
+        await repo.saveConfigBlock({
+          alias: msg.alias,
+          rcloneName: msg.rcloneName,
+          configText: msg.configText,
+          isEphemeral: msg.isEphemeral,
+          workerId: msg.isEphemeral ? socket.id : undefined
+        });
+        socket.emit(MessageType.TASK_PROGRESS, { type: MessageType.TASK_PROGRESS, taskId: `save_${msg.alias}`, status: 'SUCCESS', progress: 100 });
+      } catch (e: any) {
+        socket.emit(MessageType.TASK_PROGRESS, { type: MessageType.TASK_PROGRESS, taskId: `save_${msg.alias}`, status: `FAILED: ${e.message}`, progress: 0 });
+      }
+    });
+
+    socket.on(MessageType.VFS_CONFIG_DELETE, async (msg: any) => {
+      console.log(`[Relay] Received VFS_CONFIG_DELETE for ${msg.alias}`);
+      try {
+        const repo = msg.isEphemeral ? dbManager.getVfsEphemeral() : dbManager.getVfsPermanent();
+        await repo.deleteConfigBlock(msg.alias);
+        await repo.purgeRemoteIndex(msg.alias); // Clean up associated index
+        socket.emit(MessageType.TASK_PROGRESS, { type: MessageType.TASK_PROGRESS, taskId: `delete_${msg.alias}`, status: 'SUCCESS', progress: 100 });
+      } catch (e: any) {
+        socket.emit(MessageType.TASK_PROGRESS, { type: MessageType.TASK_PROGRESS, taskId: `delete_${msg.alias}`, status: `FAILED: ${e.message}`, progress: 0 });
+      }
+    });
+
+    socket.on(MessageType.VFS_INDEX_REQUEST, async (msg: any) => {
+      console.log(`[Relay] Routing VFS_INDEX_REQUEST to Worker ${msg.workerId}`);
+      const targetSocket = Array.from(io.sockets.sockets.values()).find(s => s.id === msg.workerId);
+      if (targetSocket) {
+        targetSocket.emit('VFS_INDEX_REQUEST', msg);
+      } else {
+         socket.emit(MessageType.TASK_PROGRESS, { type: MessageType.TASK_PROGRESS, taskId: msg.taskId || 'index', status: `FAILED: Worker not found`, progress: 0 });
+      }
+    });
+
+    socket.on(MessageType.VFS_SEARCH_REQUEST, async (msg: any) => {
+      try {
+        // Parallel Query against both Ephemeral and Permanent Switchboard Domains
+        const [ephemeralResults, permanentResults] = await Promise.all([
+           dbManager.getVfsEphemeral().searchFiles(msg.query, msg.limit, msg.remoteAlias),
+           dbManager.getVfsPermanent().searchFiles(msg.query, msg.limit, msg.remoteAlias)
+        ]);
+
+        // Merge and truncate
+        const combined = [...ephemeralResults, ...permanentResults].slice(0, msg.limit);
+
+        socket.emit(MessageType.VFS_SEARCH_RESPONSE, {
+           type: MessageType.VFS_SEARCH_RESPONSE,
+           timestamp: Date.now(),
+           query: msg.query,
+           results: combined
+        });
+      } catch (e: any) {
+         console.error(`[Relay] VFS Search Error: ${e.message}`);
+      }
+    });
+
+    socket.on('REQUEST_VFS_CONFIG_REBOOT', async (msg: any) => {
+       console.log(`[Relay] Fetching Hybrid Configs for Worker Reboot...`);
+       try {
+         const permanentBlocks = await dbManager.getVfsPermanent().getConfigBlocks(false);
+         const ephemeralBlocks = await dbManager.getVfsEphemeral().getConfigBlocks(true, msg.workerId);
+
+         const targetSocket = Array.from(io.sockets.sockets.values()).find(s => s.id === msg.workerId);
+         if (targetSocket) {
+            targetSocket.emit('VFS_CONFIG_REBOOT', { permanentBlocks, ephemeralBlocks });
+         }
+       } catch (e: any) {
+          console.error(`[Relay] Failed to reboot VFS config: ${e.message}`);
+       }
+    });
+
     // --- Phase 9 & 10: Media Config Database Routing ---
     socket.on(MessageType.WRAPPER_PROFILES_REQUEST, async () => {
         try {

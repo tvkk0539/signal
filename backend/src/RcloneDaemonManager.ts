@@ -9,11 +9,48 @@ const RCLONE_RC_USER = 'swarm';
 const RCLONE_RC_PASS = 'swarm-local-secret';
 const RCLONE_RC_BASE_URL = `http://${RCLONE_RC_ADDR}`;
 
+export interface RcloneConfigBlock {
+  alias: string;
+  configText: string;
+}
+
 export class RcloneDaemonManager {
   private rcloneProcess: ChildProcess | null = null;
   private isRunning: boolean = false;
+  private configPath: string = '/tmp/rclone.conf';
 
-  public async start(): Promise<void> {
+  /**
+   * Phase 11: Hybrid Configuration Engine
+   * Generates the dynamic isolated /tmp/rclone.conf by merging Permanent and Ephemeral blocks.
+   */
+  public generateHybridConfig(permanentBlocks: RcloneConfigBlock[], ephemeralBlocks: RcloneConfigBlock[]) {
+    console.log(`[RcloneDaemon] Building Hybrid Configuration Engine (${permanentBlocks.length} permanent, ${ephemeralBlocks.length} ephemeral)`);
+
+    let combinedConfigText = '';
+
+    // Always copy the host's physical config if it exists so we don't break local dev environments
+    const originalConfigPath = path.join(os.homedir(), '.config', 'rclone', 'rclone.conf');
+    if (fs.existsSync(originalConfigPath)) {
+        combinedConfigText += fs.readFileSync(originalConfigPath, 'utf8') + '\n';
+    }
+
+    for (const block of permanentBlocks) {
+      combinedConfigText += `\n# --- PERMANENT: ${block.alias} ---\n`;
+      combinedConfigText += block.configText;
+      combinedConfigText += `\n`;
+    }
+
+    for (const block of ephemeralBlocks) {
+      combinedConfigText += `\n# --- EPHEMERAL: ${block.alias} ---\n`;
+      combinedConfigText += block.configText;
+      combinedConfigText += `\n`;
+    }
+
+    fs.writeFileSync(this.configPath, combinedConfigText.trim(), { mode: 0o600 });
+    console.log(`[RcloneDaemon] Wrote isolated hybrid config to ${this.configPath}`);
+  }
+
+  public async start(permanentBlocks: RcloneConfigBlock[] = [], ephemeralBlocks: RcloneConfigBlock[] = []): Promise<void> {
     if (this.isRunning) {
       console.log('[Rclone] Daemon is already running.');
       return;
@@ -21,28 +58,16 @@ export class RcloneDaemonManager {
 
     console.log('[Rclone] Booting Rclone Daemon in the background...');
 
-    // To prevent "device or resource busy" config lock errors when deploying in Docker
-    // or GitHub Actions where the config file is mapped as a read-only secret mount,
-    // we copy the original config to a writable temporary file before booting rclone.
-    const originalConfigPath = path.join(os.homedir(), '.config', 'rclone', 'rclone.conf');
-    const tempConfigPath = '/tmp/rclone.conf';
+    this.generateHybridConfig(permanentBlocks, ephemeralBlocks);
+
     let rcloneArgs = [
       'rcd',
       '--rc-web-gui',
       `--rc-addr`, RCLONE_RC_ADDR,
       `--rc-user`, RCLONE_RC_USER,
-      `--rc-pass`, RCLONE_RC_PASS
+      `--rc-pass`, RCLONE_RC_PASS,
+      '--config', this.configPath
     ];
-
-    try {
-       if (fs.existsSync(originalConfigPath)) {
-          fs.copyFileSync(originalConfigPath, tempConfigPath);
-          console.log(`[Rclone] Copied read-only config to writable ${tempConfigPath}`);
-          rcloneArgs.push('--config', tempConfigPath);
-       }
-    } catch (e: any) {
-       console.warn(`[Rclone] Could not copy config to temp path: ${e.message}`);
-    }
 
     // Using --rc-web-gui for local testing if requested, but mainly enabling rc
     this.rcloneProcess = spawn('rclone', rcloneArgs, {
@@ -221,6 +246,24 @@ export class RcloneDaemonManager {
             }
         });
     });
+  }
+
+  /**
+   * Phase 11: Massive Index Stream
+   * Runs the `fast-list` command as a child process and returns the stream
+   * to prevent loading a multi-gigabyte JSON tree into RAM.
+   */
+  public streamFastList(remoteName: string): ChildProcess {
+    console.log(`[RcloneDaemon] Initiating massive fast-list stream for ${remoteName}...`);
+    const args = [
+      'lsjson',
+      remoteName,
+      '--fast-list',
+      '-R',
+      '--config', this.configPath
+    ];
+
+    return spawn('rclone', args);
   }
 
   public async streamFile(fs: string, path: string, startByte: number = 0, endByte?: number): Promise<NodeJS.ReadableStream> {
