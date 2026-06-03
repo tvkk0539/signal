@@ -36,6 +36,9 @@ export const DatabaseOperationsCenter: React.FC = () => {
             <p className="text-xs text-muted-foreground mt-1">
               Warning: Hot-swapping a domain routes all live swarm traffic to the new database engine instantly without rebooting the Relay.
             </p>
+            <p className="text-xs text-emerald-500/80 mt-1 font-medium">
+              ✓ Master Control Plane Active: Routing configurations are permanently saved to the Core DB and automatically restored on reboot.
+            </p>
           </div>
         </div>
 

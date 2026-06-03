@@ -88,7 +88,11 @@ class DatabaseManager {
     } catch (e) {
        console.warn(`[DB Manager] Primary initialize failed, falling back to MOCK universally.`);
        for (const domain of domains) {
-          await this.hotSwapDomain(domain, { primary: { engine: 'MOCK' }, mirrors: [] }, false);
+          try {
+             await this.hotSwapDomain(domain, { primary: { engine: 'MOCK' }, mirrors: [] }, false);
+          } catch (mockErr) {
+             console.error(`[DB Manager] FATAL: Failed to even initialize MOCK fallback for ${domain}`);
+          }
        }
     }
   }
