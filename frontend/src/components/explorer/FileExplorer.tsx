@@ -1,11 +1,11 @@
 import React, { useState, useEffect, useRef } from 'react';
 import { MessageType } from '@swarm/shared';
-import type { FileItem, FileListRequestMessage, FileListResponseMessage, RemoteItem, RemoteListRequestMessage, RemoteListResponseMessage } from '@swarm/shared';
+import type { FileItem, FileListRequestMessage, FileListResponseMessage, RemoteItem, RemoteListRequestMessage, RemoteListResponseMessage, FileDeleteRequestMessage, FileRenameRequestMessage, FileActionResponseMessage } from '@swarm/shared';
 import { MediaPlayerModal } from '../media/MediaPlayerModal';
 import { useAuthStore } from '../../store/authStore';
 import { SocketManager } from '../../worker/SocketManager';
 import { useVirtualizer } from '@tanstack/react-virtual';
-import { Folder, File, HardDrive, RefreshCw, ArrowUp, LayoutGrid, List as ListIcon, MoreVertical } from 'lucide-react';
+import { Folder, File, HardDrive, RefreshCw, ArrowUp, LayoutGrid, List as ListIcon, MoreVertical, Trash2, Copy, ArrowRight, Edit2, Play, Download, X } from 'lucide-react';
 
 interface FileExplorerProps {
   isConnected: boolean;
@@ -20,6 +20,15 @@ export const FileExplorer: React.FC<FileExplorerProps> = ({ isConnected, workerI
   const [selectedFs, setSelectedFs] = useState<string>('/');
   const [loading, setLoading] = useState<boolean>(false);
   const [error, setError] = useState<string | null>(null);
+
+  // VFS Operations State
+  const [selectedFiles, setSelectedFiles] = useState<Set<string>>(new Set());
+  const [mediaPrompt, setMediaPrompt] = useState<FileItem | null>(null);
+  const [renamePrompt, setRenamePrompt] = useState<FileItem | null>(null);
+  const [renameValue, setRenameValue] = useState('');
+  const [targetPrompt, setTargetPrompt] = useState<{ type: 'MOVE' | 'COPY', paths: string[] } | null>(null);
+  const [targetFs, setTargetFs] = useState<string>('/');
+  const [targetPath, setTargetPath] = useState<string>('');
 
   const socketManager = SocketManager.getInstance();
 
@@ -42,6 +51,7 @@ export const FileExplorer: React.FC<FileExplorerProps> = ({ isConnected, workerI
     setLoading(true);
     setError(null);
     setFiles([]); // clear current files
+    setSelectedFiles(new Set()); // clear selection on navigate
 
     const payload: FileListRequestMessage = {
       type: MessageType.FILE_LIST_REQUEST,
@@ -91,12 +101,22 @@ export const FileExplorer: React.FC<FileExplorerProps> = ({ isConnected, workerI
       }
     };
 
+    const handleFileActionResponse = (msg: FileActionResponseMessage) => {
+       if (msg.success) {
+          fetchDirectory(selectedFs, currentPath); // Auto refresh
+       } else {
+          setError(`Action Failed: ${msg.error || msg.message}`);
+       }
+    };
+
     socketManager.on(MessageType.FILE_LIST_RESPONSE, handleFileListResponse);
     socketManager.on(MessageType.REMOTE_LIST_RESPONSE, handleRemoteListResponse);
+    socketManager.on(MessageType.FILE_ACTION_RESPONSE, handleFileActionResponse);
 
     return () => {
       socketManager.off(MessageType.FILE_LIST_RESPONSE, handleFileListResponse);
       socketManager.off(MessageType.REMOTE_LIST_RESPONSE, handleRemoteListResponse);
+      socketManager.off(MessageType.FILE_ACTION_RESPONSE, handleFileActionResponse);
     };
   }, [workerId, currentPath, selectedFs]);
 
@@ -119,21 +139,31 @@ export const FileExplorer: React.FC<FileExplorerProps> = ({ isConnected, workerI
 
   const [playingMedia, setPlayingMedia] = useState<{ fs: string; path: string; action: 'PLAY' | 'DOWNLOAD' } | null>(null);
 
+  const handleSelectToggle = (e: React.MouseEvent | React.ChangeEvent<HTMLInputElement>, path: string) => {
+     e.stopPropagation();
+     const next = new Set(selectedFiles);
+     if (next.has(path)) next.delete(path);
+     else next.add(path);
+     setSelectedFiles(next);
+  };
+
+  const handleSelectAll = () => {
+     if (selectedFiles.size === files.length) {
+        setSelectedFiles(new Set());
+     } else {
+        setSelectedFiles(new Set(files.map(f => currentPath ? `${currentPath}/${f.Name}` : f.Name)));
+     }
+  };
+
   const handleRowClick = (item: FileItem) => {
     if (item.IsDir) {
       const newPath = currentPath === '' ? item.Name : `${currentPath}/${item.Name}`;
       setCurrentPath(newPath);
     } else {
-      // If it's a media file (basic check for MVP), open the Phase 4 Media Player
       const isMedia = item.Name.endsWith('.mp4') || item.Name.endsWith('.webm') || item.Name.endsWith('.mkv');
       if (isMedia) {
-         setPlayingMedia({
-           fs: selectedFs,
-           path: currentPath === '' ? item.Name : `${currentPath}/${item.Name}`,
-           action: 'PLAY'
-         });
+         setMediaPrompt(item);
       } else {
-         // Initiate a P2P download instead of just showing an alert
          if (window.confirm(`Do you want to download ${item.Name} (${formatBytes(item.Size)}) via P2P Relay Bypass?`)) {
             setPlayingMedia({
                fs: selectedFs,
@@ -143,6 +173,56 @@ export const FileExplorer: React.FC<FileExplorerProps> = ({ isConnected, workerI
          }
       }
     }
+  };
+
+  const handleBulkDelete = () => {
+     if (!window.confirm(`Are you sure you want to permanently delete ${selectedFiles.size} items?`)) return;
+     const payload: FileDeleteRequestMessage = {
+        type: MessageType.FILE_DELETE_REQUEST,
+        timestamp: Date.now(),
+        workerId,
+        fs: selectedFs,
+        paths: Array.from(selectedFiles)
+     };
+     socketManager.emit(MessageType.FILE_DELETE_REQUEST, payload);
+     setSelectedFiles(new Set());
+  };
+
+  const submitRename = () => {
+     if (!renamePrompt || !renameValue) return;
+     const oldPath = currentPath ? `${currentPath}/${renamePrompt.Name}` : renamePrompt.Name;
+     const newPath = currentPath ? `${currentPath}/${renameValue}` : renameValue;
+
+     const payload: FileRenameRequestMessage = {
+        type: MessageType.FILE_RENAME_REQUEST,
+        timestamp: Date.now(),
+        workerId,
+        fs: selectedFs,
+        srcPath: oldPath,
+        dstPath: newPath
+     };
+     socketManager.emit(MessageType.FILE_RENAME_REQUEST, payload);
+     setRenamePrompt(null);
+     setRenameValue('');
+     setSelectedFiles(new Set());
+  };
+
+  const submitTargetAction = () => {
+     if (!targetPrompt) return;
+     const payload = {
+        type: targetPrompt.type === 'MOVE' ? MessageType.FILE_MOVE_REQUEST : MessageType.FILE_COPY_REQUEST,
+        timestamp: Date.now(),
+        workerId,
+        srcFs: selectedFs,
+        dstFs: targetFs,
+        paths: targetPrompt.paths.map(p => ({
+           src: p,
+           dst: targetPath ? `${targetPath}/${p.split('/').pop()}` : (p.split('/').pop() || '')
+        }))
+     };
+     socketManager.emit(payload.type, payload);
+     setTargetPrompt(null);
+     setSelectedFiles(new Set());
   };
 
   const formatBytes = (bytes: number): string => {
@@ -223,6 +303,42 @@ export const FileExplorer: React.FC<FileExplorerProps> = ({ isConnected, workerI
             <span className="text-foreground truncate">{currentPath || '/'}</span>
           </div>
 
+          {/* Action Toolbar */}
+          <div className={`flex items-center gap-2 overflow-hidden transition-all duration-300 ${selectedFiles.size > 0 ? 'opacity-100 max-w-[500px]' : 'opacity-0 max-w-0'}`}>
+            <div className="px-3 py-1.5 bg-primary/20 text-primary border border-primary/30 rounded-lg text-sm font-bold flex items-center gap-2 whitespace-nowrap">
+               {selectedFiles.size} Selected
+               <button onClick={() => setSelectedFiles(new Set())} className="hover:text-white transition-colors ml-1"><X size={14} /></button>
+            </div>
+
+            <div className="flex gap-1 bg-secondary/80 p-1 rounded-lg border border-border/50 backdrop-blur-md">
+               <button onClick={handleBulkDelete} className="p-1.5 rounded-md hover:bg-destructive/20 text-destructive transition-colors" title="Delete">
+                 <Trash2 size={16} />
+               </button>
+               <button onClick={() => setTargetPrompt({ type: 'MOVE', paths: Array.from(selectedFiles) })} className="p-1.5 rounded-md hover:bg-background/80 text-blue-400 transition-colors" title="Move">
+                 <ArrowRight size={16} />
+               </button>
+               <button onClick={() => setTargetPrompt({ type: 'COPY', paths: Array.from(selectedFiles) })} className="p-1.5 rounded-md hover:bg-background/80 text-green-400 transition-colors" title="Copy">
+                 <Copy size={16} />
+               </button>
+               {selectedFiles.size === 1 && (
+                  <button
+                     onClick={() => {
+                        const filePath = Array.from(selectedFiles)[0];
+                        const fileName = filePath.split('/').pop() || '';
+                        const item = files.find(f => f.Name === fileName);
+                        if (item) {
+                           setRenamePrompt(item);
+                           setRenameValue(item.Name);
+                        }
+                     }}
+                     className="p-1.5 rounded-md hover:bg-background/80 text-yellow-400 transition-colors" title="Rename"
+                  >
+                    <Edit2 size={16} />
+                  </button>
+               )}
+            </div>
+          </div>
+
           <div className="flex gap-1 bg-secondary/50 p-1 rounded-lg border border-border/50">
              <button
                 onClick={() => setViewMode('LIST')}
@@ -268,6 +384,14 @@ export const FileExplorer: React.FC<FileExplorerProps> = ({ isConnected, workerI
             <div style={{ height: `${rowVirtualizer.getTotalSize()}px`, width: '100%', position: 'relative' }}>
                {/* List Header (Sticky logic can be complex with virtualizers, we'll keep it simple for now) */}
                <div className="flex items-center text-xs font-semibold text-muted-foreground uppercase tracking-wider mb-2 px-4 border-b border-border/50 pb-2">
+                 <div className="w-10 flex items-center justify-center">
+                    <input
+                       type="checkbox"
+                       checked={selectedFiles.size === files.length && files.length > 0}
+                       onChange={handleSelectAll}
+                       className="cursor-pointer accent-primary"
+                    />
+                 </div>
                  <div className="w-10"></div>
                  <div className="flex-1">Name</div>
                  <div className="w-24 text-right">Size</div>
@@ -277,20 +401,32 @@ export const FileExplorer: React.FC<FileExplorerProps> = ({ isConnected, workerI
 
                {rowVirtualizer.getVirtualItems().map((virtualItem) => {
                  const file = files[virtualItem.index];
+                 const filePath = currentPath ? `${currentPath}/${file.Name}` : file.Name;
+                 const isSelected = selectedFiles.has(filePath);
+
                  return (
                    <div
                      key={virtualItem.key}
                      onClick={() => handleRowClick(file)}
-                     className="absolute top-0 left-0 w-full flex items-center px-4 py-2 border-b border-border/30 hover:bg-white/5 cursor-pointer transition-colors group"
+                     className={`absolute top-0 left-0 w-full flex items-center px-4 py-2 border-b border-border/30 cursor-pointer transition-colors group ${isSelected ? 'bg-primary/10' : 'hover:bg-white/5'}`}
                      style={{
                        height: `${virtualItem.size}px`,
                        transform: `translateY(${virtualItem.start}px)`,
                      }}
                    >
+                     <div className="w-10 flex items-center justify-center">
+                        <input
+                           type="checkbox"
+                           checked={isSelected}
+                           onChange={(e) => handleSelectToggle(e, filePath)}
+                           onClick={(e) => e.stopPropagation()}
+                           className="cursor-pointer accent-primary w-4 h-4"
+                        />
+                     </div>
                      <div className="w-10 text-muted-foreground flex justify-center group-hover:text-primary transition-colors">
                         {file.IsDir ? <Folder size={18} /> : <File size={18} />}
                      </div>
-                     <div className="flex-1 truncate text-sm text-foreground pr-4">
+                     <div className={`flex-1 truncate text-sm pr-4 ${isSelected ? 'text-primary font-medium' : 'text-foreground'}`}>
                         {file.Name}
                      </div>
                      <div className="w-24 text-right text-xs text-muted-foreground font-mono">
@@ -312,30 +448,152 @@ export const FileExplorer: React.FC<FileExplorerProps> = ({ isConnected, workerI
 
           {viewMode === 'GRID' && files.length > 0 && (
              <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 lg:grid-cols-5 xl:grid-cols-6 gap-4">
-                {files.map(file => (
-                   <div
-                     key={file.ID || file.Name}
-                     onClick={() => handleRowClick(file)}
-                     className="bg-card border border-border hover:border-primary/50 hover:bg-secondary/30 rounded-xl p-4 flex flex-col items-center justify-center gap-3 cursor-pointer transition-all hover:shadow-[0_4px_20px_rgba(170,59,255,0.15)] group"
-                   >
-                     <div className="w-16 h-16 rounded-2xl bg-secondary flex items-center justify-center text-muted-foreground group-hover:text-primary group-hover:scale-110 transition-all duration-300">
-                        {file.IsDir ? <Folder size={32} /> : <File size={32} />}
+                {files.map(file => {
+                   const filePath = currentPath ? `${currentPath}/${file.Name}` : file.Name;
+                   const isSelected = selectedFiles.has(filePath);
+
+                   return (
+                     <div
+                       key={file.ID || file.Name}
+                       onClick={() => handleRowClick(file)}
+                       className={`relative bg-card border hover:border-primary/50 hover:bg-secondary/30 rounded-xl p-4 flex flex-col items-center justify-center gap-3 cursor-pointer transition-all hover:shadow-[0_4px_20px_rgba(170,59,255,0.15)] group ${isSelected ? 'border-primary ring-1 ring-primary shadow-[0_0_15px_rgba(170,59,255,0.2)]' : 'border-border'}`}
+                     >
+                       <div className="absolute top-2 left-2 z-10">
+                          <input
+                             type="checkbox"
+                             checked={isSelected}
+                             onChange={(e) => handleSelectToggle(e, filePath)}
+                             onClick={(e) => e.stopPropagation()}
+                             className="cursor-pointer accent-primary w-4 h-4 opacity-0 group-hover:opacity-100 transition-opacity"
+                             style={{ opacity: isSelected ? 1 : undefined }}
+                          />
+                       </div>
+                       <div className="w-16 h-16 rounded-2xl bg-secondary flex items-center justify-center text-muted-foreground group-hover:text-primary group-hover:scale-110 transition-all duration-300">
+                          {file.IsDir ? <Folder size={32} /> : <File size={32} />}
+                       </div>
+                       <div className="text-center w-full">
+                          <div className={`text-sm truncate w-full font-medium ${isSelected ? 'text-primary' : 'text-foreground'}`} title={file.Name}>
+                             {file.Name}
+                          </div>
+                          <div className="text-[10px] text-muted-foreground mt-1">
+                             {file.IsDir ? 'Directory' : formatBytes(file.Size)}
+                          </div>
+                       </div>
                      </div>
-                     <div className="text-center w-full">
-                        <div className="text-sm text-foreground truncate w-full font-medium" title={file.Name}>
-                           {file.Name}
-                        </div>
-                        <div className="text-[10px] text-muted-foreground mt-1">
-                           {file.IsDir ? 'Directory' : formatBytes(file.Size)}
-                        </div>
-                     </div>
-                   </div>
-                ))}
+                   );
+                })}
              </div>
           )}
 
         </div>
       </div>
+
+      {/* Target Directory Prompt (Move/Copy) */}
+      {targetPrompt && (
+        <div className="fixed inset-0 bg-background/80 backdrop-blur-sm z-[60] flex items-center justify-center p-4">
+           <div className="bg-card border border-border/50 rounded-2xl shadow-2xl p-6 max-w-md w-full">
+              <h3 className="text-lg font-bold text-foreground mb-4">
+                 {targetPrompt.type === 'MOVE' ? 'Move' : 'Copy'} {targetPrompt.paths.length} item(s)
+              </h3>
+              <div className="space-y-4">
+                 <div>
+                    <label className="text-xs text-muted-foreground mb-1 block">Target Remote</label>
+                    <select
+                      value={targetFs}
+                      onChange={e => setTargetFs(e.target.value)}
+                      className="w-full bg-secondary text-sm text-foreground border border-border/50 rounded-lg p-2 outline-none"
+                    >
+                      {remotes.map(remote => (
+                        <option key={remote.name} value={remote.name}>
+                          {remote.name === '/' ? 'Local Machine (/)' : `${remote.name} (${remote.type})`}
+                        </option>
+                      ))}
+                      {remotes.length === 0 && <option value="/">Local Machine (/)</option>}
+                    </select>
+                 </div>
+                 <div>
+                    <label className="text-xs text-muted-foreground mb-1 block">Target Path (leave empty for root)</label>
+                    <input
+                       type="text"
+                       value={targetPath}
+                       onChange={e => setTargetPath(e.target.value)}
+                       placeholder="e.g. Backups/Media"
+                       className="w-full bg-secondary text-sm text-foreground border border-border/50 rounded-lg p-2 outline-none"
+                    />
+                 </div>
+              </div>
+              <div className="flex justify-end gap-3 mt-6">
+                 <button onClick={() => setTargetPrompt(null)} className="px-4 py-2 text-sm text-muted-foreground hover:text-foreground">Cancel</button>
+                 <button onClick={submitTargetAction} className="px-4 py-2 bg-primary hover:bg-primary/90 text-primary-foreground text-sm font-bold rounded-lg transition-colors">Confirm</button>
+              </div>
+           </div>
+        </div>
+      )}
+
+      {/* Rename Prompt */}
+      {renamePrompt && (
+        <div className="fixed inset-0 bg-background/80 backdrop-blur-sm z-[60] flex items-center justify-center p-4">
+           <div className="bg-card border border-border/50 rounded-2xl shadow-2xl p-6 max-w-md w-full">
+              <h3 className="text-lg font-bold text-foreground mb-4">Rename Item</h3>
+              <div>
+                 <input
+                    type="text"
+                    value={renameValue}
+                    onChange={e => setRenameValue(e.target.value)}
+                    autoFocus
+                    className="w-full bg-secondary text-sm text-foreground border border-border/50 rounded-lg p-2 outline-none"
+                 />
+              </div>
+              <div className="flex justify-end gap-3 mt-6">
+                 <button onClick={() => setRenamePrompt(null)} className="px-4 py-2 text-sm text-muted-foreground hover:text-foreground">Cancel</button>
+                 <button onClick={submitRename} disabled={!renameValue || renameValue === renamePrompt.Name} className="px-4 py-2 bg-yellow-500 hover:bg-yellow-400 text-black text-sm font-bold rounded-lg transition-colors disabled:opacity-50">Rename</button>
+              </div>
+           </div>
+        </div>
+      )}
+
+      {/* Media Action Prompt */}
+      {mediaPrompt && (
+        <div className="fixed inset-0 bg-background/80 backdrop-blur-sm z-[60] flex items-center justify-center p-4">
+           <div className="bg-card border border-border/50 rounded-2xl shadow-2xl p-6 max-w-sm w-full">
+              <div className="flex justify-between items-center mb-4">
+                 <h3 className="text-lg font-bold text-foreground truncate pr-4">{mediaPrompt.Name}</h3>
+                 <button onClick={() => setMediaPrompt(null)} className="text-muted-foreground hover:text-destructive"><X size={20}/></button>
+              </div>
+              <p className="text-sm text-muted-foreground mb-6">How would you like to handle this media file?</p>
+
+              <div className="flex flex-col gap-3">
+                 <button
+                    onClick={() => {
+                       setPlayingMedia({
+                         fs: selectedFs,
+                         path: currentPath === '' ? mediaPrompt.Name : `${currentPath}/${mediaPrompt.Name}`,
+                         action: 'PLAY'
+                       });
+                       setMediaPrompt(null);
+                    }}
+                    className="w-full flex items-center justify-center gap-2 p-3 bg-primary hover:bg-primary/90 text-primary-foreground rounded-xl font-bold transition-all shadow-[0_0_15px_rgba(170,59,255,0.2)]"
+                 >
+                    <Play size={18} fill="currentColor" /> Stream Now (Zero-Disk)
+                 </button>
+
+                 <button
+                    onClick={() => {
+                       setPlayingMedia({
+                         fs: selectedFs,
+                         path: currentPath === '' ? mediaPrompt.Name : `${currentPath}/${mediaPrompt.Name}`,
+                         action: 'DOWNLOAD'
+                       });
+                       setMediaPrompt(null);
+                    }}
+                    className="w-full flex items-center justify-center gap-2 p-3 bg-secondary hover:bg-secondary/80 text-foreground border border-border/50 rounded-xl font-bold transition-all"
+                 >
+                    <Download size={18} /> Download P2P Bypass
+                 </button>
+              </div>
+           </div>
+        </div>
+      )}
 
       {/* Phase 4: MediaPlayer/Downloader Modal */}
       {playingMedia && (

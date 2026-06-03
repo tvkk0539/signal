@@ -521,3 +521,42 @@ export interface AppleMusicConfigDataMessage extends BaseMessage {
   convertCheckBadAlac?: boolean;
   convertDeleteBadAlac?: boolean;
 }
+
+export interface FileDeleteRequestMessage extends BaseMessage {
+  type: MessageType.FILE_DELETE_REQUEST;
+  workerId: string;
+  fs: string;
+  paths: string[];
+}
+
+export interface FileMoveRequestMessage extends BaseMessage {
+  type: MessageType.FILE_MOVE_REQUEST;
+  workerId: string;
+  srcFs: string;
+  dstFs: string;
+  paths: { src: string, dst: string }[];
+}
+
+export interface FileCopyRequestMessage extends BaseMessage {
+  type: MessageType.FILE_COPY_REQUEST;
+  workerId: string;
+  srcFs: string;
+  dstFs: string;
+  paths: { src: string, dst: string }[];
+}
+
+export interface FileRenameRequestMessage extends BaseMessage {
+  type: MessageType.FILE_RENAME_REQUEST;
+  workerId: string;
+  fs: string;
+  srcPath: string;
+  dstPath: string;
+}
+
+export interface FileActionResponseMessage extends BaseMessage {
+  type: MessageType.FILE_ACTION_RESPONSE;
+  success: boolean;
+  action: 'DELETE' | 'MOVE' | 'COPY' | 'RENAME';
+  message: string;
+  error?: string;
+}

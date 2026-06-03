@@ -203,6 +203,111 @@ async function bootWorker() {
     }
   });
 
+  // --- Universal VFS Operations (Phase 13) ---
+
+  socket.on(MessageType.FILE_DELETE_REQUEST, async (msg: any) => {
+    console.log(`[Worker] Received FILE_DELETE_REQUEST for ${msg.paths.length} items on fs: ${msg.fs}`);
+    try {
+      for (const path of msg.paths) {
+        await rcloneManager.deleteFile(msg.fs, path);
+      }
+      socket.emit(MessageType.FILE_ACTION_RESPONSE, {
+        type: MessageType.FILE_ACTION_RESPONSE,
+        timestamp: Date.now(),
+        success: true,
+        action: 'DELETE',
+        message: `Successfully deleted ${msg.paths.length} items.`
+      });
+    } catch (e: any) {
+      console.error(`[Worker] FILE_DELETE_REQUEST failed:`, e.message);
+      socket.emit(MessageType.FILE_ACTION_RESPONSE, {
+        type: MessageType.FILE_ACTION_RESPONSE,
+        timestamp: Date.now(),
+        success: false,
+        action: 'DELETE',
+        message: `Failed to delete items.`,
+        error: e.message
+      });
+    }
+  });
+
+  socket.on(MessageType.FILE_MOVE_REQUEST, async (msg: any) => {
+    console.log(`[Worker] Received FILE_MOVE_REQUEST for ${msg.paths.length} items from ${msg.srcFs} to ${msg.dstFs}`);
+    try {
+      for (const p of msg.paths) {
+        await rcloneManager.moveFile(msg.srcFs, p.src, msg.dstFs, p.dst);
+      }
+      socket.emit(MessageType.FILE_ACTION_RESPONSE, {
+        type: MessageType.FILE_ACTION_RESPONSE,
+        timestamp: Date.now(),
+        success: true,
+        action: 'MOVE',
+        message: `Successfully moved ${msg.paths.length} items.`
+      });
+    } catch (e: any) {
+      console.error(`[Worker] FILE_MOVE_REQUEST failed:`, e.message);
+      socket.emit(MessageType.FILE_ACTION_RESPONSE, {
+        type: MessageType.FILE_ACTION_RESPONSE,
+        timestamp: Date.now(),
+        success: false,
+        action: 'MOVE',
+        message: `Failed to move items.`,
+        error: e.message
+      });
+    }
+  });
+
+  socket.on(MessageType.FILE_COPY_REQUEST, async (msg: any) => {
+    console.log(`[Worker] Received FILE_COPY_REQUEST for ${msg.paths.length} items from ${msg.srcFs} to ${msg.dstFs}`);
+    try {
+      for (const p of msg.paths) {
+        await rcloneManager.copyFile(msg.srcFs, p.src, msg.dstFs, p.dst);
+      }
+      socket.emit(MessageType.FILE_ACTION_RESPONSE, {
+        type: MessageType.FILE_ACTION_RESPONSE,
+        timestamp: Date.now(),
+        success: true,
+        action: 'COPY',
+        message: `Successfully copied ${msg.paths.length} items.`
+      });
+    } catch (e: any) {
+      console.error(`[Worker] FILE_COPY_REQUEST failed:`, e.message);
+      socket.emit(MessageType.FILE_ACTION_RESPONSE, {
+        type: MessageType.FILE_ACTION_RESPONSE,
+        timestamp: Date.now(),
+        success: false,
+        action: 'COPY',
+        message: `Failed to copy items.`,
+        error: e.message
+      });
+    }
+  });
+
+  socket.on(MessageType.FILE_RENAME_REQUEST, async (msg: any) => {
+    console.log(`[Worker] Received FILE_RENAME_REQUEST for ${msg.srcPath} to ${msg.dstPath} on fs: ${msg.fs}`);
+    // Renaming is essentially moving within the same filesystem
+    try {
+      await rcloneManager.moveFile(msg.fs, msg.srcPath, msg.fs, msg.dstPath);
+      socket.emit(MessageType.FILE_ACTION_RESPONSE, {
+        type: MessageType.FILE_ACTION_RESPONSE,
+        timestamp: Date.now(),
+        success: true,
+        action: 'RENAME',
+        message: `Successfully renamed item.`
+      });
+    } catch (e: any) {
+      console.error(`[Worker] FILE_RENAME_REQUEST failed:`, e.message);
+      socket.emit(MessageType.FILE_ACTION_RESPONSE, {
+        type: MessageType.FILE_ACTION_RESPONSE,
+        timestamp: Date.now(),
+        success: false,
+        action: 'RENAME',
+        message: `Failed to rename item.`,
+        error: e.message
+      });
+    }
+  });
+
   socket.on(MessageType.REMOTE_LIST_REQUEST, async (msg: RemoteListRequestMessage) => {
     console.log(`[Worker] Received REMOTE_LIST_REQUEST`);
     try {

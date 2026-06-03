@@ -162,6 +162,75 @@ export class RcloneDaemonManager {
     }
   }
 
+  public async deleteFile(fs: string, path: string): Promise<void> {
+    if (!this.isRunning) throw new Error('Rclone daemon is not running');
+    const targetFs = fs || '/';
+    try {
+      console.log(`[Rclone] Executing deleteFile on fs: "${targetFs}", path: "${path}"`);
+      const auth = Buffer.from(`${RCLONE_RC_USER}:${RCLONE_RC_PASS}`).toString('base64');
+      await axios.post(`${RCLONE_RC_BASE_URL}/operations/deletefile`, {
+        fs: targetFs,
+        remote: path
+      }, {
+        headers: {
+          'Authorization': `Basic ${auth}`,
+          'Content-Type': 'application/json'
+        }
+      });
+    } catch (error: any) {
+      console.error(`[Rclone] deleteFile Error: ${error.response?.data?.error || error.message}`);
+      throw new Error(error.response?.data?.error || error.message);
+    }
+  }
+
+  public async moveFile(srcFs: string, srcPath: string, dstFs: string, dstPath: string): Promise<void> {
+    if (!this.isRunning) throw new Error('Rclone daemon is not running');
+    const targetSrcFs = srcFs || '/';
+    const targetDstFs = dstFs || '/';
+    try {
+      console.log(`[Rclone] Executing moveFile from "${targetSrcFs}${srcPath}" to "${targetDstFs}${dstPath}"`);
+      const auth = Buffer.from(`${RCLONE_RC_USER}:${RCLONE_RC_PASS}`).toString('base64');
+      await axios.post(`${RCLONE_RC_BASE_URL}/operations/movefile`, {
+        srcFs: targetSrcFs,
+        srcRemote: srcPath,
+        dstFs: targetDstFs,
+        dstRemote: dstPath
+      }, {
+        headers: {
+          'Authorization': `Basic ${auth}`,
+          'Content-Type': 'application/json'
+        }
+      });
+    } catch (error: any) {
+      console.error(`[Rclone] moveFile Error: ${error.response?.data?.error || error.message}`);
+      throw new Error(error.response?.data?.error || error.message);
+    }
+  }
+
+  public async copyFile(srcFs: string, srcPath: string, dstFs: string, dstPath: string): Promise<void> {
+    if (!this.isRunning) throw new Error('Rclone daemon is not running');
+    const targetSrcFs = srcFs || '/';
+    const targetDstFs = dstFs || '/';
+    try {
+      console.log(`[Rclone] Executing copyFile from "${targetSrcFs}${srcPath}" to "${targetDstFs}${dstPath}"`);
+      const auth = Buffer.from(`${RCLONE_RC_USER}:${RCLONE_RC_PASS}`).toString('base64');
+      await axios.post(`${RCLONE_RC_BASE_URL}/operations/copyfile`, {
+        srcFs: targetSrcFs,
+        srcRemote: srcPath,
+        dstFs: targetDstFs,
+        dstRemote: dstPath
+      }, {
+        headers: {
+          'Authorization': `Basic ${auth}`,
+          'Content-Type': 'application/json'
+        }
+      });
+    } catch (error: any) {
+      console.error(`[Rclone] copyFile Error: ${error.response?.data?.error || error.message}`);
+      throw new Error(error.response?.data?.error || error.message);
+    }
+  }
+
   public async getRemotes(): Promise<any[]> {
     if (!this.isRunning) {
       throw new Error('Rclone daemon is not running');

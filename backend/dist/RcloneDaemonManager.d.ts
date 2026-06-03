@@ -16,6 +16,9 @@ export declare class RcloneDaemonManager {
     stop(): void;
     ping(): Promise<boolean>;
     listFiles(fs?: string, path?: string): Promise<any[]>;
+    deleteFile(fs: string, path: string): Promise<void>;
+    moveFile(srcFs: string, srcPath: string, dstFs: string, dstPath: string): Promise<void>;
+    copyFile(srcFs: string, srcPath: string, dstFs: string, dstPath: string): Promise<void>;
     getRemotes(): Promise<any[]>;
     statFile(fs: string, path: string): Promise<any>;
     uploadDirectory(localPath: string, remoteFs: string, remotePath: string): Promise<void>;
