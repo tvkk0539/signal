@@ -13,6 +13,10 @@ export const VfsConfigManagerUI: React.FC = () => {
     const socketManager = SocketManager.getInstance();
 
     const handleSave = () => {
+        if (!alias) {
+            alert('Please enter a Remote Alias before saving.');
+            return;
+        }
         socketManager.emit(MessageType.VFS_CONFIG_SAVE, {
             type: MessageType.VFS_CONFIG_SAVE,
             timestamp: Date.now(),
@@ -24,6 +28,24 @@ export const VfsConfigManagerUI: React.FC = () => {
         setAlias('');
         setConfigText('');
         alert('Config Saved to Database!');
+    };
+
+    const handleDelete = () => {
+        if (!alias) {
+            alert('Please enter the Remote Alias to delete.');
+            return;
+        }
+        if (window.confirm(`Are you sure you want to permanently delete the config and index for alias: ${alias}?`)) {
+            socketManager.emit(MessageType.VFS_CONFIG_DELETE, {
+                type: MessageType.VFS_CONFIG_DELETE,
+                timestamp: Date.now(),
+                alias,
+                isEphemeral
+            });
+            setAlias('');
+            setConfigText('');
+            alert('Delete command dispatched to Relay Server.');
+        }
     };
 
     const handleIndexDrive = () => {
@@ -85,9 +107,14 @@ export const VfsConfigManagerUI: React.FC = () => {
                 </div>
             </div>
 
-            <button onClick={handleSave} className="w-full bg-blue-600 hover:bg-blue-500 text-white font-bold py-2 rounded mb-8 transition-colors">
-                Save to Database Switchboard
-            </button>
+            <div className="flex space-x-4 mb-8">
+                <button onClick={handleSave} className="flex-1 bg-blue-600 hover:bg-blue-500 text-white font-bold py-2 rounded transition-colors">
+                    Save to Database Switchboard
+                </button>
+                <button onClick={handleDelete} className="px-6 bg-transparent border border-red-900/50 hover:bg-red-950/30 text-red-500 hover:text-red-400 font-bold py-2 rounded transition-all">
+                    Delete
+                </button>
+            </div>
 
             <div className="border-t border-gray-800 pt-6">
                 <h3 className="text-lg font-bold mb-4 text-gray-300">Swarm Dispatch</h3>
