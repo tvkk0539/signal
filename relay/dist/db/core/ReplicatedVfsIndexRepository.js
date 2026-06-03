@@ -36,5 +36,8 @@ class ReplicatedVfsIndexRepository {
         await this.primary.purgeRemoteIndex(remoteAlias);
         this.mirrors.forEach(mirror => mirror.purgeRemoteIndex(remoteAlias).catch(e => { }));
     }
+    async getDistinctAliases() {
+        return this.primary.getDistinctAliases();
+    }
 }
 exports.ReplicatedVfsIndexRepository = ReplicatedVfsIndexRepository;

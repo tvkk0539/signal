@@ -60,4 +60,8 @@ export class InMemoryVfsIndexRepository implements IVfsIndexRepository {
       }
     }
   }
+
+  async getDistinctAliases(): Promise<string[]> {
+    return Array.from(this.configs.keys());
+  }
 }

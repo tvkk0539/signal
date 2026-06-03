@@ -337,6 +337,24 @@ function setupSockets(io) {
                 socket.emit(shared_1.MessageType.TASK_PROGRESS, { type: shared_1.MessageType.TASK_PROGRESS, taskId: msg.taskId || 'index', status: `FAILED: Worker not found`, progress: 0 });
             }
         });
+        socket.on(shared_1.MessageType.VFS_ALIAS_LIST_REQUEST, async (msg) => {
+            try {
+                const [ephemeralAliases, permanentAliases] = await Promise.all([
+                    db_1.dbManager.getVfsEphemeral().getDistinctAliases(),
+                    db_1.dbManager.getVfsPermanent().getDistinctAliases()
+                ]);
+                // Merge and deduplicate
+                const uniqueAliases = Array.from(new Set([...ephemeralAliases, ...permanentAliases]));
+                socket.emit(shared_1.MessageType.VFS_ALIAS_LIST_RESPONSE, {
+                    type: shared_1.MessageType.VFS_ALIAS_LIST_RESPONSE,
+                    timestamp: Date.now(),
+                    aliases: uniqueAliases
+                });
+            }
+            catch (e) {
+                console.error(`[Relay] VFS Alias List Error: ${e.message}`);
+            }
+        });
         socket.on(shared_1.MessageType.VFS_SEARCH_REQUEST, async (msg) => {
             try {
                 // Parallel Query against both Ephemeral and Permanent Switchboard Domains

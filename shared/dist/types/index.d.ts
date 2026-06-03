@@ -428,6 +428,13 @@ export interface VfsConfigRebootMessage extends BaseMessage {
     permanentBlocks: any[];
     ephemeralBlocks: any[];
 }
+export interface VfsAliasListRequestMessage extends BaseMessage {
+    type: MessageType.VFS_ALIAS_LIST_REQUEST;
+}
+export interface VfsAliasListResponseMessage extends BaseMessage {
+    type: MessageType.VFS_ALIAS_LIST_RESPONSE;
+    aliases: string[];
+}
 export interface AppleMusicConfigDataMessage extends BaseMessage {
     type: MessageType.APPLE_MUSIC_CONFIG_DATA;
     mediaUserToken: string;
