@@ -173,7 +173,7 @@ export interface DbStateRequestMessage extends BaseMessage {
 }
 export interface DbRouteSwitchRequestMessage extends BaseMessage {
     type: MessageType.DB_ROUTE_SWITCH_REQUEST;
-    domain: 'AUTH' | 'AUDIT' | 'CHAT';
+    domain: 'AUTH' | 'AUDIT' | 'CHAT' | 'APPLE_MUSIC' | 'VFS_PERMANENT' | 'VFS_EPHEMERAL';
     engine: 'MONGODB' | 'POSTGRES' | 'SUPABASE' | 'FIREBASE' | 'SQLITE' | 'MOCK';
     connectionString?: string;
     apiKey?: string;
