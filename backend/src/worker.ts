@@ -6,10 +6,12 @@ import { GrpcSwarmServer } from './grpc/server';
 import { GrpcSwarmClient } from './grpc/client';
 import { AppleMusicWrapperManager } from './services/AppleMusicWrapperManager';
 import { AppleMusicRipperService } from './services/AppleMusicRipperService';
+import { VfsIndexerService } from './services/vfs/VfsIndexerService';
 
 const RELAY_SERVER_URL = process.env.RELAY_URL || 'http://localhost:3001';
 const WORKER_SECRET = process.env.WORKER_SECRET || 'fallback_for_dev_only';
 const GRPC_MODE = (process.env.GRPC_MODE as 'DIRECT' | 'RELAY') || 'DIRECT';
+const GITHUB_EPHEMERAL_MONGODB_URI = process.env.GITHUB_EPHEMERAL_MONGODB_URI || 'mongodb://localhost:27017/swarm_ephemeral';
 
 const rcloneManager = new RcloneDaemonManager();
 const grpcServer = new GrpcSwarmServer();
@@ -24,6 +26,7 @@ async function bootWorker() {
     grpcPort = await grpcServer.start();
 
     console.log(`[Worker] Starting Rclone Daemon...`);
+    // Wait for Hybrid Config to be requested by UI to actually boot it, or boot empty for local dev
     await rcloneManager.start();
   } catch (error) {
     console.error(`[Worker] CRITICAL ERROR: Could not start Rclone Daemon. Worker aborting.`);
@@ -252,6 +255,62 @@ async function bootWorker() {
     } catch (e) {
       console.error(`[Worker] Failed offline file upload:`, e);
     }
+  });
+
+  // Phase 11: Worker-Direct Database Streaming
+  const vfsIndexer = new VfsIndexerService(socket.id || 'unknown');
+  // Auto-pulse heartbeat for any ephemeral indexing currently assigned to this worker
+  setInterval(() => vfsIndexer.pulseHeartbeat(), 60000);
+
+  socket.on('VFS_INDEX_REQUEST', async (msg: any) => {
+    console.log(`[Worker] Received VFS_INDEX_REQUEST for Remote: ${msg.remoteAlias}`);
+
+    try {
+      // Direct Bypass Connection
+      await vfsIndexer.connect(msg.isEphemeral ? GITHUB_EPHEMERAL_MONGODB_URI : (process.env.MONGODB_URI || GITHUB_EPHEMERAL_MONGODB_URI));
+
+      const rcloneProc = rcloneManager.streamFastList(msg.rcloneName);
+
+      // Tell UI we started
+      socket.emit(MessageType.TASK_PROGRESS, {
+          type: MessageType.TASK_PROGRESS,
+          timestamp: Date.now(),
+          taskId: msg.taskId || `index_${Date.now()}`,
+          workerId: socket.id,
+          progress: 50,
+          status: 'INDEXING_VIA_BYPASS'
+      });
+
+      await vfsIndexer.streamAndIndexFastList(rcloneProc, msg.remoteAlias, msg.isEphemeral);
+
+      socket.emit(MessageType.TASK_PROGRESS, {
+          type: MessageType.TASK_PROGRESS,
+          timestamp: Date.now(),
+          taskId: msg.taskId || `index_${Date.now()}`,
+          workerId: socket.id,
+          progress: 100,
+          status: 'INDEX_COMPLETE'
+      });
+
+    } catch (e: any) {
+      console.error(`[Worker] VFS Indexing Failed:`, e);
+      socket.emit(MessageType.TASK_PROGRESS, {
+          type: MessageType.TASK_PROGRESS,
+          timestamp: Date.now(),
+          taskId: msg.taskId || `index_${Date.now()}`,
+          workerId: socket.id,
+          progress: 0,
+          status: `FAILED: ${e.message}`
+      });
+    }
+  });
+
+  socket.on('VFS_CONFIG_REBOOT', async (msg: any) => {
+    console.log(`[Worker] Received VFS_CONFIG_REBOOT Request. Rebuilding Hybrid Config...`);
+    rcloneManager.stop();
+    await new Promise(resolve => setTimeout(resolve, 1000));
+    await rcloneManager.start(msg.permanentBlocks || [], msg.ephemeralBlocks || []);
+    console.log(`[Worker] Rclone daemon restarted with new Hybrid Config.`);
   });
 
   // Phase 4: WebRTC Signaling for Streaming
@@ -721,10 +780,11 @@ async function bootWorker() {
   });
 
   // Handle graceful shutdown
-  process.on('SIGINT', () => {
+  process.on('SIGINT', async () => {
     console.log(`[Worker] Shutting down...`);
     rcloneManager.stop();
     grpcServer.stop();
+    await vfsIndexer.disconnect();
     socket.disconnect();
     process.exit(0);
   });

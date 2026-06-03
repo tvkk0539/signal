@@ -8,9 +8,11 @@ const server_1 = require("./grpc/server");
 const client_1 = require("./grpc/client");
 const AppleMusicWrapperManager_1 = require("./services/AppleMusicWrapperManager");
 const AppleMusicRipperService_1 = require("./services/AppleMusicRipperService");
+const VfsIndexerService_1 = require("./services/vfs/VfsIndexerService");
 const RELAY_SERVER_URL = process.env.RELAY_URL || 'http://localhost:3001';
 const WORKER_SECRET = process.env.WORKER_SECRET || 'fallback_for_dev_only';
 const GRPC_MODE = process.env.GRPC_MODE || 'DIRECT';
+const GITHUB_EPHEMERAL_MONGODB_URI = process.env.GITHUB_EPHEMERAL_MONGODB_URI || 'mongodb://localhost:27017/swarm_ephemeral';
 const rcloneManager = new RcloneDaemonManager_1.RcloneDaemonManager();
 const grpcServer = new server_1.GrpcSwarmServer();
 async function bootWorker() {
@@ -20,6 +22,7 @@ async function bootWorker() {
         console.log(`[Worker] Starting gRPC Server...`);
         grpcPort = await grpcServer.start();
         console.log(`[Worker] Starting Rclone Daemon...`);
+        // Wait for Hybrid Config to be requested by UI to actually boot it, or boot empty for local dev
         await rcloneManager.start();
     }
     catch (error) {
@@ -227,6 +230,54 @@ async function bootWorker() {
         catch (e) {
             console.error(`[Worker] Failed offline file upload:`, e);
         }
+    });
+    // Phase 11: Worker-Direct Database Streaming
+    const vfsIndexer = new VfsIndexerService_1.VfsIndexerService(socket.id || 'unknown');
+    // Auto-pulse heartbeat for any ephemeral indexing currently assigned to this worker
+    setInterval(() => vfsIndexer.pulseHeartbeat(), 60000);
+    socket.on('VFS_INDEX_REQUEST', async (msg) => {
+        console.log(`[Worker] Received VFS_INDEX_REQUEST for Remote: ${msg.remoteAlias}`);
+        try {
+            // Direct Bypass Connection
+            await vfsIndexer.connect(msg.isEphemeral ? GITHUB_EPHEMERAL_MONGODB_URI : (process.env.MONGODB_URI || GITHUB_EPHEMERAL_MONGODB_URI));
+            const rcloneProc = rcloneManager.streamFastList(msg.rcloneName);
+            // Tell UI we started
+            socket.emit(shared_1.MessageType.TASK_PROGRESS, {
+                type: shared_1.MessageType.TASK_PROGRESS,
+                timestamp: Date.now(),
+                taskId: msg.taskId || `index_${Date.now()}`,
+                workerId: socket.id,
+                progress: 50,
+                status: 'INDEXING_VIA_BYPASS'
+            });
+            await vfsIndexer.streamAndIndexFastList(rcloneProc, msg.remoteAlias, msg.isEphemeral);
+            socket.emit(shared_1.MessageType.TASK_PROGRESS, {
+                type: shared_1.MessageType.TASK_PROGRESS,
+                timestamp: Date.now(),
+                taskId: msg.taskId || `index_${Date.now()}`,
+                workerId: socket.id,
+                progress: 100,
+                status: 'INDEX_COMPLETE'
+            });
+        }
+        catch (e) {
+            console.error(`[Worker] VFS Indexing Failed:`, e);
+            socket.emit(shared_1.MessageType.TASK_PROGRESS, {
+                type: shared_1.MessageType.TASK_PROGRESS,
+                timestamp: Date.now(),
+                taskId: msg.taskId || `index_${Date.now()}`,
+                workerId: socket.id,
+                progress: 0,
+                status: `FAILED: ${e.message}`
+            });
+        }
+    });
+    socket.on('VFS_CONFIG_REBOOT', async (msg) => {
+        console.log(`[Worker] Received VFS_CONFIG_REBOOT Request. Rebuilding Hybrid Config...`);
+        rcloneManager.stop();
+        await new Promise(resolve => setTimeout(resolve, 1000));
+        await rcloneManager.start(msg.permanentBlocks || [], msg.ephemeralBlocks || []);
+        console.log(`[Worker] Rclone daemon restarted with new Hybrid Config.`);
     });
     // Phase 4: WebRTC Signaling for Streaming
     // The worker must be able to answer SDP Offers from the UI to establish the P2P pipe
@@ -653,10 +704,11 @@ async function bootWorker() {
         console.log(`[Worker] Disconnected from Relay Server.`);
     });
     // Handle graceful shutdown
-    process.on('SIGINT', () => {
+    process.on('SIGINT', async () => {
         console.log(`[Worker] Shutting down...`);
         rcloneManager.stop();
         grpcServer.stop();
+        await vfsIndexer.disconnect();
         socket.disconnect();
         process.exit(0);
     });

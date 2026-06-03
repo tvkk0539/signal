@@ -69,4 +69,11 @@ var MessageType;
     MessageType["WRAPPER_PROFILES_REQUEST"] = "WRAPPER_PROFILES_REQUEST";
     MessageType["WRAPPER_PROFILES_LIST"] = "WRAPPER_PROFILES_LIST";
     MessageType["WRAPPER_STATE_DELETE"] = "WRAPPER_STATE_DELETE";
+    // Phase 11: VFS Index & Hybrid Config
+    MessageType["VFS_SEARCH_REQUEST"] = "VFS_SEARCH_REQUEST";
+    MessageType["VFS_SEARCH_RESPONSE"] = "VFS_SEARCH_RESPONSE";
+    MessageType["VFS_CONFIG_SAVE"] = "VFS_CONFIG_SAVE";
+    MessageType["VFS_CONFIG_DELETE"] = "VFS_CONFIG_DELETE";
+    MessageType["VFS_INDEX_REQUEST"] = "VFS_INDEX_REQUEST";
+    MessageType["VFS_CONFIG_REBOOT"] = "VFS_CONFIG_REBOOT";
 })(MessageType || (exports.MessageType = MessageType = {}));

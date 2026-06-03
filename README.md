@@ -82,6 +82,10 @@ The Monorepo is being developed in strict, highly-engineered phases. The current
     *   **Global Fleet State Persistence:** The Command Center UI utilizes an elevated Zustand global store (`fleetStore.ts`) tied directly to the persistent IDE layout. This ensures that the Active Worker Fleet list is preserved seamlessly across rapid tab navigation (e.g., swapping between the Explorer and DB Ops) without dropping the WebSocket state or requiring page reloads.
     *   **Web Worker Telemetry Whitelisting:** Real-time wrapper logs (`WRAPPER_STATUS_UPDATE`), 2FA triggers (`WRAPPER_2FA_CHALLENGE`), and Profile Lists (`WRAPPER_PROFILES_LIST`) are explicitly whitelisted through the `swarm.worker.ts` background thread, ensuring massive terminal log streams and database arrays never freeze the main React UI thread.
     *   **Stabilized CSS Transitions & UX:** The 2FA prompt UI utilizes `max-h` Tailwind classes rather than buggy `h-auto` to ensure stable, hardware-accelerated slide-in animations. The Configuration Matrix features simulated-network loading states and visual success feedback for optimal user interaction.
+*   **Phase 11: Dual-State VFS & Hybrid Configuration Engine (✅ Active):**
+    *   **Lightning Search:** Ephemeral workers execute bulk `rclone fast-list` APIs and stream the JSON results directly to the Polyglot DB. The UI queries the DB using virtualized lists (`react-window`) to search millions of cloud files in milliseconds without exhausting cloud API rate limits.
+    *   **Hybrid Rclone Configs:** Workers dynamically merge `VFS_PERMANENT` configs (stored in the central database) with `VFS_EPHEMERAL` configs on the fly, creating an isolated `/tmp/rclone.conf` at runtime.
+    *   **The Dead Man's Switch:** Ephemeral cloud indexes are protected by a MongoDB TTL index. If a GitHub Action crashes abruptly, the database heartbeat fails, and millions of temporary file records are automatically purged natively by the DB.
 
 ---
 

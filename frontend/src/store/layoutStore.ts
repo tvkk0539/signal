@@ -1,6 +1,6 @@
 import { create } from 'zustand';
 
-type AppView = 'EXPLORER' | 'CHAT' | 'DB_OPS' | 'MUSIC_RIPS' | 'APPLE_MUSIC' | 'SETTINGS';
+type AppView = 'EXPLORER' | 'CHAT' | 'DB_OPS' | 'MUSIC_RIPS' | 'APPLE_MUSIC' | 'VFS_CONFIG' | 'SETTINGS';
 
 interface LayoutState {
   activeView: AppView;

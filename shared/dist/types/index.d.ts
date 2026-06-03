@@ -392,6 +392,42 @@ export interface WrapperStateDataMessage extends BaseMessage {
     payload: string | null;
     workerId: string;
 }
+export interface VfsSearchRequestMessage extends BaseMessage {
+    type: MessageType.VFS_SEARCH_REQUEST;
+    query: string;
+    limit: number;
+    remoteAlias?: string;
+}
+export interface VfsSearchResponseMessage extends BaseMessage {
+    type: MessageType.VFS_SEARCH_RESPONSE;
+    query: string;
+    results: any[];
+}
+export interface VfsConfigSaveMessage extends BaseMessage {
+    type: MessageType.VFS_CONFIG_SAVE;
+    alias: string;
+    rcloneName: string;
+    configText: string;
+    isEphemeral: boolean;
+}
+export interface VfsConfigDeleteMessage extends BaseMessage {
+    type: MessageType.VFS_CONFIG_DELETE;
+    alias: string;
+    isEphemeral: boolean;
+}
+export interface VfsIndexRequestMessage extends BaseMessage {
+    type: MessageType.VFS_INDEX_REQUEST;
+    workerId: string;
+    remoteAlias: string;
+    rcloneName: string;
+    isEphemeral: boolean;
+}
+export interface VfsConfigRebootMessage extends BaseMessage {
+    type: MessageType.VFS_CONFIG_REBOOT;
+    workerId: string;
+    permanentBlocks: any[];
+    ephemeralBlocks: any[];
+}
 export interface AppleMusicConfigDataMessage extends BaseMessage {
     type: MessageType.APPLE_MUSIC_CONFIG_DATA;
     mediaUserToken: string;
