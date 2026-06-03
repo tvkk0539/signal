@@ -373,6 +373,26 @@ export function setupSockets(io: Server) {
       }
     });
 
+    socket.on(MessageType.VFS_ALIAS_LIST_REQUEST, async (msg: any) => {
+      try {
+        const [ephemeralAliases, permanentAliases] = await Promise.all([
+           dbManager.getVfsEphemeral().getDistinctAliases(),
+           dbManager.getVfsPermanent().getDistinctAliases()
+        ]);
+
+        // Merge and deduplicate
+        const uniqueAliases = Array.from(new Set([...ephemeralAliases, ...permanentAliases]));
+
+        socket.emit(MessageType.VFS_ALIAS_LIST_RESPONSE, {
+           type: MessageType.VFS_ALIAS_LIST_RESPONSE,
+           timestamp: Date.now(),
+           aliases: uniqueAliases
+        });
+      } catch (e: any) {
+         console.error(`[Relay] VFS Alias List Error: ${e.message}`);
+      }
+    });
+
     socket.on(MessageType.VFS_SEARCH_REQUEST, async (msg: any) => {
       try {
         // Parallel Query against both Ephemeral and Permanent Switchboard Domains

@@ -8,6 +8,8 @@ export const LightningSearchUI: React.FC = () => {
     const [query, setQuery] = useState('');
     const [results, setResults] = useState<any[]>([]);
     const [isSearching, setIsSearching] = useState(false);
+    const [aliases, setAliases] = useState<string[]>([]);
+    const [selectedAlias, setSelectedAlias] = useState<string>('');
     const searchTimeout = useRef<any>(null);
     const socketManager = SocketManager.getInstance();
 
@@ -19,8 +21,20 @@ export const LightningSearchUI: React.FC = () => {
             }
         };
 
+        const handleAliasList = (msg: any) => {
+            setAliases(msg.aliases || []);
+        };
+
         socketManager.on(MessageType.VFS_SEARCH_RESPONSE, handleSearchResponse);
-        return () => { socketManager.off(MessageType.VFS_SEARCH_RESPONSE, handleSearchResponse); };
+        socketManager.on(MessageType.VFS_ALIAS_LIST_RESPONSE, handleAliasList);
+
+        // Fetch aliases on mount
+        socketManager.emit(MessageType.VFS_ALIAS_LIST_REQUEST, { timestamp: Date.now() });
+
+        return () => {
+            socketManager.off(MessageType.VFS_SEARCH_RESPONSE, handleSearchResponse);
+            socketManager.off(MessageType.VFS_ALIAS_LIST_RESPONSE, handleAliasList);
+        };
     }, [query]);
 
     const handleSearchChange = (e: React.ChangeEvent<HTMLInputElement>) => {
@@ -42,9 +56,25 @@ export const LightningSearchUI: React.FC = () => {
                 type: MessageType.VFS_SEARCH_REQUEST,
                 timestamp: Date.now(),
                 query: val,
-                limit: 1000 // Safely fetch up to 1000 results because react-window will virtualize them
+                limit: 1000, // Safely fetch up to 1000 results because react-window will virtualize them
+                remoteAlias: selectedAlias || undefined
             });
         }, 300);
+    };
+
+    const handleAliasChange = (e: React.ChangeEvent<HTMLSelectElement>) => {
+        setSelectedAlias(e.target.value);
+        // Re-trigger search if query is not empty
+        if (query.trim() !== '') {
+            setIsSearching(true);
+            socketManager.emit(MessageType.VFS_SEARCH_REQUEST, {
+                type: MessageType.VFS_SEARCH_REQUEST,
+                timestamp: Date.now(),
+                query: query,
+                limit: 1000,
+                remoteAlias: e.target.value || undefined
+            });
+        }
     };
 
     const Row = ({ index, style }: { index: number, style: React.CSSProperties }) => {
@@ -69,6 +99,20 @@ export const LightningSearchUI: React.FC = () => {
     return (
         <div className="flex flex-col h-full bg-gray-900 border-l border-gray-800 w-96 p-4">
             <h2 className="text-xl font-bold text-white mb-4">Lightning Search</h2>
+
+            <div className="mb-3">
+                <select
+                    value={selectedAlias}
+                    onChange={handleAliasChange}
+                    className="w-full bg-gray-800 text-gray-300 border border-gray-700 rounded p-2 text-sm focus:outline-none focus:border-blue-500"
+                >
+                    <option value="">Search All Drives</option>
+                    {aliases.map(alias => (
+                        <option key={alias} value={alias}>Search [{alias}] only</option>
+                    ))}
+                </select>
+            </div>
+
             <div className="relative mb-4">
                 <input
                     type="text"

@@ -58,5 +58,8 @@ class InMemoryVfsIndexRepository {
             }
         }
     }
+    async getDistinctAliases() {
+        return Array.from(this.configs.keys());
+    }
 }
 exports.InMemoryVfsIndexRepository = InMemoryVfsIndexRepository;

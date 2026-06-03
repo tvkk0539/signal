@@ -35,4 +35,7 @@ export interface IVfsIndexRepository {
 
   // Manual Cleanup for Permanent/Orphaned indexes
   purgeRemoteIndex(remoteAlias: string): Promise<void>;
+
+  // Discovery
+  getDistinctAliases(): Promise<string[]>;
 }

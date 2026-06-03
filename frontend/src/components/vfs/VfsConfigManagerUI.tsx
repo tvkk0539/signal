@@ -1,4 +1,4 @@
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import { SocketManager } from '../../worker/SocketManager';
 import { MessageType } from '@swarm/shared';
 import { useFleetStore } from '../../store/fleetStore';
@@ -10,9 +10,27 @@ export const VfsConfigManagerUI: React.FC = () => {
     const [configText, setConfigText] = useState('');
     const [isEphemeral, setIsEphemeral] = useState(false);
     const [targetWorkerId, setTargetWorkerId] = useState('');
+    const [savedAliases, setSavedAliases] = useState<string[]>([]);
     const socketManager = SocketManager.getInstance();
 
+    useEffect(() => {
+        const handleAliasList = (msg: any) => {
+            setSavedAliases(msg.aliases || []);
+        };
+
+        socketManager.on(MessageType.VFS_ALIAS_LIST_RESPONSE, handleAliasList);
+        socketManager.emit(MessageType.VFS_ALIAS_LIST_REQUEST, { timestamp: Date.now() });
+
+        return () => {
+            socketManager.off(MessageType.VFS_ALIAS_LIST_RESPONSE, handleAliasList);
+        };
+    }, []);
+
     const handleSave = () => {
+        if (!alias) {
+            alert('Please enter a Remote Alias before saving.');
+            return;
+        }
         socketManager.emit(MessageType.VFS_CONFIG_SAVE, {
             type: MessageType.VFS_CONFIG_SAVE,
             timestamp: Date.now(),
@@ -24,6 +42,24 @@ export const VfsConfigManagerUI: React.FC = () => {
         setAlias('');
         setConfigText('');
         alert('Config Saved to Database!');
+    };
+
+    const handleDelete = () => {
+        if (!alias) {
+            alert('Please enter the Remote Alias to delete.');
+            return;
+        }
+        if (window.confirm(`Are you sure you want to permanently delete the config and index for alias: ${alias}?`)) {
+            socketManager.emit(MessageType.VFS_CONFIG_DELETE, {
+                type: MessageType.VFS_CONFIG_DELETE,
+                timestamp: Date.now(),
+                alias,
+                isEphemeral
+            });
+            setAlias('');
+            setConfigText('');
+            alert('Delete command dispatched to Relay Server.');
+        }
     };
 
     const handleIndexDrive = () => {
@@ -58,7 +94,18 @@ export const VfsConfigManagerUI: React.FC = () => {
             <div className="grid grid-cols-2 gap-4 mb-4">
                 <div>
                     <label className="block text-xs text-gray-400 uppercase tracking-wider mb-1">Remote Alias (DB Identity)</label>
-                    <input value={alias} onChange={e => setAlias(e.target.value)} placeholder="e.g. storage_movies_1" className="w-full bg-gray-800 border border-gray-700 rounded p-2 focus:border-blue-500" />
+                    <input
+                        list="saved-aliases"
+                        value={alias}
+                        onChange={e => setAlias(e.target.value)}
+                        placeholder="e.g. storage_movies_1"
+                        className="w-full bg-gray-800 border border-gray-700 rounded p-2 focus:border-blue-500"
+                    />
+                    <datalist id="saved-aliases">
+                        {savedAliases.map(sa => (
+                            <option key={sa} value={sa} />
+                        ))}
+                    </datalist>
                 </div>
                 <div>
                     <label className="block text-xs text-gray-400 uppercase tracking-wider mb-1">Physical Rclone Name</label>
@@ -85,9 +132,14 @@ export const VfsConfigManagerUI: React.FC = () => {
                 </div>
             </div>
 
-            <button onClick={handleSave} className="w-full bg-blue-600 hover:bg-blue-500 text-white font-bold py-2 rounded mb-8 transition-colors">
-                Save to Database Switchboard
-            </button>
+            <div className="flex space-x-4 mb-8">
+                <button onClick={handleSave} className="flex-1 bg-blue-600 hover:bg-blue-500 text-white font-bold py-2 rounded transition-colors">
+                    Save to Database Switchboard
+                </button>
+                <button onClick={handleDelete} className="px-6 bg-transparent border border-red-900/50 hover:bg-red-950/30 text-red-500 hover:text-red-400 font-bold py-2 rounded transition-all">
+                    Delete
+                </button>
+            </div>
 
             <div className="border-t border-gray-800 pt-6">
                 <h3 className="text-lg font-bold mb-4 text-gray-300">Swarm Dispatch</h3>

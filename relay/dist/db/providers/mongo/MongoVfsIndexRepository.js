@@ -75,5 +75,8 @@ class MongoVfsIndexRepository {
     async purgeRemoteIndex(remoteAlias) {
         await this.fileModel.deleteMany({ remoteAlias }).exec();
     }
+    async getDistinctAliases() {
+        return this.configModel.distinct('alias').exec();
+    }
 }
 exports.MongoVfsIndexRepository = MongoVfsIndexRepository;

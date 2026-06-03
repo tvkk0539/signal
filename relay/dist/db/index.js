@@ -15,6 +15,7 @@ const ReplicatedAppleMusicRepository_1 = require("./core/ReplicatedAppleMusicRep
 const ReplicatedVfsIndexRepository_1 = require("./core/ReplicatedVfsIndexRepository");
 const MongoVfsIndexRepository_1 = require("./providers/mongo/MongoVfsIndexRepository");
 const InMemoryVfsIndexRepository_1 = require("./providers/mock/InMemoryVfsIndexRepository");
+const MongoSystemRoutingRepository_1 = require("./providers/mongo/MongoSystemRoutingRepository");
 class DatabaseManager {
     userRepository;
     auditLogRepository;
@@ -22,6 +23,7 @@ class DatabaseManager {
     appleMusicRepository;
     vfsPermanentRepository;
     vfsEphemeralRepository;
+    systemRoutingRepository;
     // The state map to track which engines are running which domain (Primary + Mirrors)
     currentRouting = {
         AUTH: { primary: { engine: 'MOCK' }, mirrors: [] },
@@ -35,27 +37,44 @@ class DatabaseManager {
         console.log(`[DB Manager] Initializing Polyglot Switchboard...`);
         // On first boot, we default to MONGODB if requested via env, else MOCK
         const defaultEngine = process.env.DB_TYPE || 'MONGODB';
+        let coreConnection;
+        let savedRoutings = {};
         try {
-            await this.hotSwapDomain('AUTH', { primary: { engine: defaultEngine }, mirrors: [] });
-            await this.hotSwapDomain('AUDIT', { primary: { engine: defaultEngine }, mirrors: [] });
-            await this.hotSwapDomain('CHAT', { primary: { engine: defaultEngine }, mirrors: [] });
-            await this.hotSwapDomain('APPLE_MUSIC', { primary: { engine: defaultEngine }, mirrors: [] });
-            // Note: In production, Ephemeral might explicitly use a distinct URI.
-            await this.hotSwapDomain('VFS_PERMANENT', { primary: { engine: defaultEngine }, mirrors: [] });
-            await this.hotSwapDomain('VFS_EPHEMERAL', { primary: { engine: defaultEngine }, mirrors: [] });
+            console.log(`[DB Manager] Attempting to connect to Core DB...`);
+            coreConnection = await (0, connection_1.createMongoConnection)();
+            this.systemRoutingRepository = new MongoSystemRoutingRepository_1.MongoSystemRoutingRepository(coreConnection);
+            savedRoutings = await this.systemRoutingRepository.getAllRoutings();
+            console.log(`[DB Manager] Successfully loaded ${Object.keys(savedRoutings).length} saved domain routings from Core DB.`);
+        }
+        catch (e) {
+            console.error(`[DB Manager] Failed to connect to Core DB. Persistence for Switchboard disabled.`);
+        }
+        const domains = ['AUTH', 'AUDIT', 'CHAT', 'APPLE_MUSIC', 'VFS_PERMANENT', 'VFS_EPHEMERAL'];
+        try {
+            for (const domain of domains) {
+                if (savedRoutings[domain]) {
+                    console.log(`[DB Manager] Rehydrating saved routing for ${domain}...`);
+                    await this.hotSwapDomain(domain, savedRoutings[domain], false); // Don't re-save on boot
+                }
+                else {
+                    await this.hotSwapDomain(domain, { primary: { engine: defaultEngine }, mirrors: [] }, false);
+                }
+            }
         }
         catch (e) {
             console.warn(`[DB Manager] Primary initialize failed, falling back to MOCK universally.`);
-            await this.hotSwapDomain('AUTH', { primary: { engine: 'MOCK' }, mirrors: [] });
-            await this.hotSwapDomain('AUDIT', { primary: { engine: 'MOCK' }, mirrors: [] });
-            await this.hotSwapDomain('CHAT', { primary: { engine: 'MOCK' }, mirrors: [] });
-            await this.hotSwapDomain('APPLE_MUSIC', { primary: { engine: 'MOCK' }, mirrors: [] });
-            await this.hotSwapDomain('VFS_PERMANENT', { primary: { engine: 'MOCK' }, mirrors: [] });
-            await this.hotSwapDomain('VFS_EPHEMERAL', { primary: { engine: 'MOCK' }, mirrors: [] });
+            for (const domain of domains) {
+                try {
+                    await this.hotSwapDomain(domain, { primary: { engine: 'MOCK' }, mirrors: [] }, false);
+                }
+                catch (mockErr) {
+                    console.error(`[DB Manager] FATAL: Failed to even initialize MOCK fallback for ${domain}`);
+                }
+            }
         }
     }
     // The Magic Function: Hot-Swaps a specific domain's database engine (and its mirrors) at runtime
-    async hotSwapDomain(domain, config) {
+    async hotSwapDomain(domain, config, saveToCore = true) {
         console.log(`[DB Manager] Hot-swapping ${domain} domain to Primary: ${config.primary.engine} with ${config.mirrors.length} mirrors...`);
         try {
             // 1. Instantiate the Primary
@@ -93,6 +112,16 @@ class DatabaseManager {
                     break;
             }
             this.currentRouting[domain] = config;
+            // Master Control Plane: Permanently freeze this routing choice into the Core DB
+            if (saveToCore && this.systemRoutingRepository) {
+                try {
+                    await this.systemRoutingRepository.saveRouting(domain, config);
+                    console.log(`[DB Manager] Safely committed ${domain} routing configuration to Core DB.`);
+                }
+                catch (saveErr) {
+                    console.error(`[DB Manager] Warning: Failed to save ${domain} routing to Core DB: ${saveErr.message}`);
+                }
+            }
             console.log(`[DB Manager] Successfully routed ${domain} to Replication Engine (Primary: ${config.primary.engine}, Mirrors: ${mirrorRepos.length}).`);
         }
         catch (err) {

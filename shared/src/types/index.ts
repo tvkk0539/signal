@@ -197,7 +197,7 @@ export interface DbStateRequestMessage extends BaseMessage {
 
 export interface DbRouteSwitchRequestMessage extends BaseMessage {
   type: MessageType.DB_ROUTE_SWITCH_REQUEST;
-  domain: 'AUTH' | 'AUDIT' | 'CHAT';
+  domain: 'AUTH' | 'AUDIT' | 'CHAT' | 'APPLE_MUSIC' | 'VFS_PERMANENT' | 'VFS_EPHEMERAL';
   engine: 'MONGODB' | 'POSTGRES' | 'SUPABASE' | 'FIREBASE' | 'SQLITE' | 'MOCK';
   connectionString?: string;
   apiKey?: string;
@@ -468,6 +468,15 @@ export interface VfsConfigRebootMessage extends BaseMessage {
   workerId: string;
   permanentBlocks: any[];
   ephemeralBlocks: any[];
+}
+
+export interface VfsAliasListRequestMessage extends BaseMessage {
+  type: MessageType.VFS_ALIAS_LIST_REQUEST;
+}
+
+export interface VfsAliasListResponseMessage extends BaseMessage {
+  type: MessageType.VFS_ALIAS_LIST_RESPONSE;
+  aliases: string[];
 }
 
 export interface AppleMusicConfigDataMessage extends BaseMessage {

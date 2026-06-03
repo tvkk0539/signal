@@ -91,4 +91,8 @@ export class MongoVfsIndexRepository implements IVfsIndexRepository {
   async purgeRemoteIndex(remoteAlias: string): Promise<void> {
     await this.fileModel.deleteMany({ remoteAlias }).exec();
   }
+
+  async getDistinctAliases(): Promise<string[]> {
+    return this.configModel.distinct('alias').exec();
+  }
 }

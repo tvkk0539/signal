@@ -26,4 +26,5 @@ export interface IVfsIndexRepository {
     searchFiles(query: string, limit: number, remoteAlias?: string): Promise<VfsFileRecord[]>;
     refreshWorkerHeartbeat(workerId: string, ttlMinutes: number): Promise<void>;
     purgeRemoteIndex(remoteAlias: string): Promise<void>;
+    getDistinctAliases(): Promise<string[]>;
 }

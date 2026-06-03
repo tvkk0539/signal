@@ -76,4 +76,6 @@ var MessageType;
     MessageType["VFS_CONFIG_DELETE"] = "VFS_CONFIG_DELETE";
     MessageType["VFS_INDEX_REQUEST"] = "VFS_INDEX_REQUEST";
     MessageType["VFS_CONFIG_REBOOT"] = "VFS_CONFIG_REBOOT";
+    MessageType["VFS_ALIAS_LIST_REQUEST"] = "VFS_ALIAS_LIST_REQUEST";
+    MessageType["VFS_ALIAS_LIST_RESPONSE"] = "VFS_ALIAS_LIST_RESPONSE";
 })(MessageType || (exports.MessageType = MessageType = {}));
