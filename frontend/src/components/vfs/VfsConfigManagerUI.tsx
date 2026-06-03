@@ -1,4 +1,4 @@
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import { SocketManager } from '../../worker/SocketManager';
 import { MessageType } from '@swarm/shared';
 import { useFleetStore } from '../../store/fleetStore';
@@ -10,7 +10,21 @@ export const VfsConfigManagerUI: React.FC = () => {
     const [configText, setConfigText] = useState('');
     const [isEphemeral, setIsEphemeral] = useState(false);
     const [targetWorkerId, setTargetWorkerId] = useState('');
+    const [savedAliases, setSavedAliases] = useState<string[]>([]);
     const socketManager = SocketManager.getInstance();
+
+    useEffect(() => {
+        const handleAliasList = (msg: any) => {
+            setSavedAliases(msg.aliases || []);
+        };
+
+        socketManager.on(MessageType.VFS_ALIAS_LIST_RESPONSE, handleAliasList);
+        socketManager.emit(MessageType.VFS_ALIAS_LIST_REQUEST, { timestamp: Date.now() });
+
+        return () => {
+            socketManager.off(MessageType.VFS_ALIAS_LIST_RESPONSE, handleAliasList);
+        };
+    }, []);
 
     const handleSave = () => {
         if (!alias) {
@@ -80,7 +94,18 @@ export const VfsConfigManagerUI: React.FC = () => {
             <div className="grid grid-cols-2 gap-4 mb-4">
                 <div>
                     <label className="block text-xs text-gray-400 uppercase tracking-wider mb-1">Remote Alias (DB Identity)</label>
-                    <input value={alias} onChange={e => setAlias(e.target.value)} placeholder="e.g. storage_movies_1" className="w-full bg-gray-800 border border-gray-700 rounded p-2 focus:border-blue-500" />
+                    <input
+                        list="saved-aliases"
+                        value={alias}
+                        onChange={e => setAlias(e.target.value)}
+                        placeholder="e.g. storage_movies_1"
+                        className="w-full bg-gray-800 border border-gray-700 rounded p-2 focus:border-blue-500"
+                    />
+                    <datalist id="saved-aliases">
+                        {savedAliases.map(sa => (
+                            <option key={sa} value={sa} />
+                        ))}
+                    </datalist>
                 </div>
                 <div>
                     <label className="block text-xs text-gray-400 uppercase tracking-wider mb-1">Physical Rclone Name</label>
