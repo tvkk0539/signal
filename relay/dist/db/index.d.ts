@@ -22,9 +22,10 @@ declare class DatabaseManager {
     private appleMusicRepository;
     private vfsPermanentRepository;
     private vfsEphemeralRepository;
+    private systemRoutingRepository;
     private currentRouting;
     initialize(): Promise<void>;
-    hotSwapDomain(domain: DomainService, config: DomainRoutingConfig): Promise<void>;
+    hotSwapDomain(domain: DomainService, config: DomainRoutingConfig, saveToCore?: boolean): Promise<void>;
     getRoutingState(): Record<string, {
         primary: {
             engine: string;
