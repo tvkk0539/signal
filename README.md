@@ -86,6 +86,10 @@ The Monorepo is being developed in strict, highly-engineered phases. The current
     *   **Lightning Search:** Ephemeral workers execute bulk `rclone fast-list` APIs and stream the JSON results directly to the Polyglot DB. The UI queries the DB using virtualized lists (`react-window`) to search millions of cloud files in milliseconds without exhausting cloud API rate limits.
     *   **Hybrid Rclone Configs:** Workers dynamically merge `VFS_PERMANENT` configs (stored in the central database) with `VFS_EPHEMERAL` configs on the fly, creating an isolated `/tmp/rclone.conf` at runtime.
     *   **The Dead Man's Switch:** Ephemeral cloud indexes are protected by a MongoDB TTL index. If a GitHub Action crashes abruptly, the database heartbeat fails, and millions of temporary file records are automatically purged natively by the DB.
+*   **Phase 12: Master Control Plane & Persistent DB Routing (✅ Active):**
+    *   **Core DB Isolation:** The default MongoDB instance provided to the Relay Server acts strictly as the "Core DB". It is responsible only for critical system schemas (like `AUTH`) and storing the system's routing configurations.
+    *   **Independent External Routing:** Through the Pluggable DB Switchboard UI, users can define independent database connection strings (Postgres, Supabase, alternative MongoDB clusters) for specific domains like `VFS_PERMANENT` and `VFS_EPHEMERAL`. This ensures millions of VFS indexing records never bloat the core database.
+    *   **Boot Sequence Hydration:** When the Relay Server reboots, it securely fetches these routing choices from the `SystemRouting` schema within the Core DB. It instantly reconnects all external, independent databases before accepting traffic from workers, creating a true Microservices Database architecture.
 
 ---
 
