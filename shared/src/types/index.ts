@@ -346,6 +346,7 @@ export interface RipperTelemetryMessage extends BaseMessage {
   workerId: string;
   jobId: string;
   log: string;
+  uploadPath?: string;
 }
 
 export interface RipperProgressUpdateMessage extends BaseMessage {

@@ -97,7 +97,7 @@ export const AppleMusicApp: React.FC = () => {
 
     const handleTelemetry = (msg: RipperTelemetryMessage) => {
        if (msg.log && msg.jobId) {
-          appendLog(msg.jobId, msg.log);
+          appendLog(msg.jobId, msg.log, msg.uploadPath);
           if (msg.log.includes('SUCCESS') || msg.log.includes('finished with status')) {
               updateJobStatus(msg.jobId, 'COMPLETED');
           } else if (msg.log.includes('FAILED') || msg.log.includes('ERROR') || msg.log.includes('exited with code')) {

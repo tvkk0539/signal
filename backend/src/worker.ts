@@ -8,6 +8,8 @@ import { AppleMusicWrapperManager } from './services/AppleMusicWrapperManager';
 import { AppleMusicRipperService } from './services/AppleMusicRipperService';
 import { VfsIndexerService } from './services/vfs/VfsIndexerService';
 import { VfsJobOrchestrator } from './VfsJobOrchestrator';
+import fs from 'fs';
+import path from 'path';
 
 const RELAY_SERVER_URL = process.env.RELAY_URL || 'http://localhost:3001';
 const WORKER_SECRET = process.env.WORKER_SECRET || 'fallback_for_dev_only';
@@ -124,12 +126,41 @@ async function bootWorker() {
             // We await this. If it throws, we skip the cleanup block.
             await rcloneManager.uploadDirectory(data.downloadDir, fsStr, pathStr);
 
+            // Determine the deepest created directory in the ephemeral workspace to provide a direct UI shortcut
+            let deepPath = '';
+            try {
+                let currentPath = data.downloadDir;
+                while (true) {
+                    const items = fs.readdirSync(currentPath, { withFileTypes: true });
+                    const dirs = items.filter((i: any) => i.isDirectory());
+                    // If there's exactly one directory and no files at this level, drill down
+                    if (dirs.length === 1 && items.length === dirs.length) {
+                        currentPath = path.join(currentPath, dirs[0].name);
+                    } else if (dirs.length > 0) {
+                        // If there are multiple dirs (or files + dirs), we stop here but maybe take the first one or just stay at current level
+                        // Staying at the current level is safer if it's a multi-disc or multi-format rip
+                        break;
+                    } else {
+                        break;
+                    }
+                }
+                deepPath = path.relative(data.downloadDir, currentPath);
+            } catch (err) {
+                console.error(`[Worker] Failed to determine deep path:`, err);
+            }
+
+            // Construct the final cloud path string
+            // Handle cases where pathStr doesn't end with slash or deepPath is empty
+            const formattedPathStr = pathStr.endsWith('/') ? pathStr : `${pathStr}/`;
+            const finalUploadPath = deepPath ? `${fsStr}${formattedPathStr}${deepPath}` : `${fsStr}${pathStr}`;
+
             socket.emit(MessageType.RIPPER_TELEMETRY, {
                 type: MessageType.RIPPER_TELEMETRY,
                 timestamp: Date.now(),
                 workerId: socket.id,
                 jobId: data.jobId,
-                log: `[SUCCESS] Cloud Handoff Upload Confirmed.`
+                log: `[SUCCESS] Cloud Handoff Upload Confirmed.`,
+                uploadPath: finalUploadPath
             });
 
             // SMART CONFIRMATION: The upload completed successfully without errors.

@@ -1,12 +1,16 @@
 import React, { useState } from 'react';
 import { useAppleMusicQueueStore } from '../../store/appleMusicQueueStore';
-import { Trash2, Terminal, StopCircle, CheckCircle2, XCircle, Clock, PlayCircle } from 'lucide-react';
+import { Trash2, Terminal, StopCircle, CheckCircle2, XCircle, Clock, PlayCircle, FolderOpen } from 'lucide-react';
 import { SocketManager } from '../../worker/SocketManager';
 import { MessageType } from '@swarm/shared';
 import type { AppleMusicCancelRequestMessage } from '@swarm/shared';
+import { useExplorerStore } from '../../store/explorerStore';
+import { useLayoutStore } from '../../store/layoutStore';
 
 export const AppleMusicQueueUI: React.FC = () => {
   const { jobs, removeJobs } = useAppleMusicQueueStore();
+  const { setExplorerTarget } = useExplorerStore();
+  const { setActiveView } = useLayoutStore();
   const [selectedJobIds, setSelectedJobIds] = useState<Set<string>>(new Set());
   const [viewedJobId, setViewedJobId] = useState<string | null>(null);
   const [inspectorTab, setInspectorTab] = useState<'TELEMETRY' | 'CONFIG'>('TELEMETRY');
@@ -114,7 +118,7 @@ export const AppleMusicQueueUI: React.FC = () => {
                                 <span className="px-1.5 py-0.5 bg-white/5 rounded text-[10px] uppercase">{job.configSnapshot.format}</span>
                             </div>
                         </div>
-                        <div className="w-24 flex flex-col items-end gap-1 text-xs">
+                        <div className="w-32 flex flex-col items-end gap-1 text-xs">
                             <div className="flex items-center gap-2">
                                 {getStatusIcon(job.status)}
                                 <span className={
@@ -124,6 +128,23 @@ export const AppleMusicQueueUI: React.FC = () => {
                                     'text-yellow-400 font-bold'
                                 }>{job.status}</span>
                             </div>
+                            {job.status === 'COMPLETED' && job.uploadPath && (
+                                <button
+                                    onClick={(e) => {
+                                        e.stopPropagation();
+                                        const parts = job.uploadPath!.split(':');
+                                        const fsName = parts[0] + ':';
+                                        const dirPath = parts.length > 1 ? parts[1] : '/';
+                                        setExplorerTarget(fsName, dirPath);
+                                        setActiveView('EXPLORER');
+                                    }}
+                                    className="flex items-center gap-1.5 px-2 py-1 bg-green-500/20 text-green-400 hover:bg-green-500/30 rounded transition-colors text-[10px] font-semibold uppercase tracking-wide mt-1 shadow-sm"
+                                    title={`Browse: ${job.uploadPath}`}
+                                >
+                                    <FolderOpen size={12} />
+                                    Browse Upload
+                                </button>
+                            )}
                         </div>
                     </div>
 
