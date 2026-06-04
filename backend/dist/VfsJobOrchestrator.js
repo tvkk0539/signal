@@ -8,7 +8,7 @@ class VfsJobOrchestrator {
     constructor(rcloneManager) {
         this.rcloneManager = rcloneManager;
     }
-    executeBatchAction(jobId, action, srcFs, dstFs, paths, onProgress, onComplete) {
+    executeBatchAction(jobId, action, srcFs, dstFs, paths, advancedConfig, onProgress, onComplete) {
         if (paths.length === 0) {
             onComplete(true);
             return;
@@ -27,7 +27,7 @@ class VfsJobOrchestrator {
                     return;
                 }
                 try {
-                    await this.executeSingle(jobId, action, srcFs, p.src, dstFs, p.dst, (prog) => {
+                    await this.executeSingle(jobId, action, srcFs, p.src, dstFs, p.dst, advancedConfig, (prog) => {
                         // Combine overall item progress with byte progress
                         const baseProg = Math.floor((completed / total) * 100);
                         onProgress(`[${completed + 1}/${total}] ${prog}`);
@@ -46,7 +46,7 @@ class VfsJobOrchestrator {
         this.activeJobs.set(jobId, {});
         runSequentially();
     }
-    executeSingle(jobId, action, srcFs, srcPath, dstFs, dstPath, onProgress) {
+    executeSingle(jobId, action, srcFs, srcPath, dstFs, dstPath, advancedConfig, onProgress) {
         return new Promise((resolve, reject) => {
             const srcFull = this.formatPath(srcFs, srcPath);
             const dstFull = this.formatPath(dstFs, dstPath);
@@ -59,6 +59,18 @@ class VfsJobOrchestrator {
                 '--stats', '500ms',
                 '--stats-one-line'
             ];
+            if (advancedConfig) {
+                if (advancedConfig.transfers)
+                    args.push('--transfers', advancedConfig.transfers.toString());
+                if (advancedConfig.checkers)
+                    args.push('--checkers', advancedConfig.checkers.toString());
+                if (advancedConfig.driveChunkSize)
+                    args.push('--drive-chunk-size', advancedConfig.driveChunkSize);
+                if (advancedConfig.tpslimit)
+                    args.push('--tpslimit', advancedConfig.tpslimit.toString());
+                if (advancedConfig.serverSideAcrossConfigs)
+                    args.push('--drive-server-side-across-configs');
+            }
             const child = (0, child_process_1.spawn)('rclone', args);
             // Update the active map with the real process
             this.activeJobs.set(jobId, child);

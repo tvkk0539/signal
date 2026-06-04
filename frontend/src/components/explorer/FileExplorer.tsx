@@ -32,6 +32,16 @@ export const FileExplorer: React.FC<FileExplorerProps> = ({ isConnected, workerI
   const [targetFs, setTargetFs] = useState<string>('/');
   const [targetPath, setTargetPath] = useState<string>('');
 
+  // Advanced Transfer Options
+  const [showAdvancedTransfer, setShowAdvancedTransfer] = useState(false);
+  const [transferConfig, setTransferConfig] = useState({
+     transfers: 4,
+     checkers: 8,
+     driveChunkSize: '64M',
+     tpslimit: 10,
+     serverSideAcrossConfigs: false
+  });
+
   const socketManager = SocketManager.getInstance();
 
   // Fetch Available Remotes when the worker changes
@@ -222,7 +232,10 @@ export const FileExplorer: React.FC<FileExplorerProps> = ({ isConnected, workerI
         paths: targetPrompt.paths.map(p => ({
            src: p,
            dst: targetPath ? `${targetPath}/${p.split('/').pop()}` : (p.split('/').pop() || '')
-        }))
+        })),
+        advancedConfig: {
+           ...transferConfig
+        }
      };
 
      // Optimistically show the task in the store so the user sees it immediately
@@ -534,9 +547,73 @@ export const FileExplorer: React.FC<FileExplorerProps> = ({ isConnected, workerI
                     </div>
                  </div>
               </div>
+
+              {/* Advanced Transfer Settings Panel */}
+              <div className="mt-4 border-t border-border/50 pt-4">
+                 <button
+                   onClick={() => setShowAdvancedTransfer(!showAdvancedTransfer)}
+                   className="flex items-center gap-2 text-xs font-semibold text-primary hover:text-primary/80 transition-colors uppercase tracking-wider"
+                 >
+                   {showAdvancedTransfer ? 'Hide Advanced Options' : 'Show Advanced Transfer Options (Swarm Parallelism)'}
+                 </button>
+
+                 <div className={`overflow-hidden transition-all duration-300 ${showAdvancedTransfer ? 'max-h-[300px] opacity-100 mt-4' : 'max-h-0 opacity-0'}`}>
+                    <div className="grid grid-cols-2 gap-4">
+                       <div>
+                          <label className="text-xs text-muted-foreground mb-1 block">Parallel Transfers</label>
+                          <input
+                            type="number" min="1" max="64"
+                            value={transferConfig.transfers}
+                            onChange={(e) => setTransferConfig({...transferConfig, transfers: parseInt(e.target.value) || 4})}
+                            className="w-full bg-secondary text-sm text-foreground border border-border/50 rounded p-1.5 outline-none"
+                          />
+                       </div>
+                       <div>
+                          <label className="text-xs text-muted-foreground mb-1 block">Parallel Checkers</label>
+                          <input
+                            type="number" min="1" max="64"
+                            value={transferConfig.checkers}
+                            onChange={(e) => setTransferConfig({...transferConfig, checkers: parseInt(e.target.value) || 8})}
+                            className="w-full bg-secondary text-sm text-foreground border border-border/50 rounded p-1.5 outline-none"
+                          />
+                       </div>
+                       <div>
+                          <label className="text-xs text-muted-foreground mb-1 block">Drive Chunk Size</label>
+                          <input
+                            type="text"
+                            value={transferConfig.driveChunkSize}
+                            onChange={(e) => setTransferConfig({...transferConfig, driveChunkSize: e.target.value})}
+                            className="w-full bg-secondary text-sm text-foreground border border-border/50 rounded p-1.5 outline-none"
+                          />
+                       </div>
+                       <div>
+                          <label className="text-xs text-muted-foreground mb-1 block">TPS Limit</label>
+                          <input
+                            type="number" min="1" max="100"
+                            value={transferConfig.tpslimit}
+                            onChange={(e) => setTransferConfig({...transferConfig, tpslimit: parseInt(e.target.value) || 10})}
+                            className="w-full bg-secondary text-sm text-foreground border border-border/50 rounded p-1.5 outline-none"
+                          />
+                       </div>
+                    </div>
+                    <div className="mt-4 flex items-center justify-between bg-secondary/50 p-2 rounded border border-border/50">
+                       <div>
+                          <span className="text-sm font-semibold text-foreground block">Server-Side Cloud Copy</span>
+                          <span className="text-[10px] text-muted-foreground">Attempts zero-bandwidth transfer. Requires identical cloud providers.</span>
+                       </div>
+                       <input
+                          type="checkbox"
+                          checked={transferConfig.serverSideAcrossConfigs}
+                          onChange={(e) => setTransferConfig({...transferConfig, serverSideAcrossConfigs: e.target.checked})}
+                          className="w-4 h-4 accent-primary cursor-pointer"
+                       />
+                    </div>
+                 </div>
+              </div>
+
               <div className="flex justify-end gap-3 mt-6">
                  <button onClick={() => setTargetPrompt(null)} className="px-4 py-2 text-sm text-muted-foreground hover:text-foreground">Cancel</button>
-                 <button onClick={submitTargetAction} className="px-4 py-2 bg-primary hover:bg-primary/90 text-primary-foreground text-sm font-bold rounded-lg transition-colors">Confirm</button>
+                 <button onClick={submitTargetAction} className="px-4 py-2 bg-primary hover:bg-primary/90 text-primary-foreground text-sm font-bold rounded-lg transition-colors shadow-[0_0_10px_rgba(170,59,255,0.3)]">Confirm Action</button>
               </div>
            </div>
         </div>

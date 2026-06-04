@@ -6,7 +6,13 @@ export declare class VfsJobOrchestrator {
     executeBatchAction(jobId: string, action: 'move' | 'copy', srcFs: string, dstFs: string, paths: {
         src: string;
         dst: string;
-    }[], onProgress: (progressStr: string) => void, onComplete: (success: boolean, error?: string) => void): void;
+    }[], advancedConfig: {
+        transfers?: number;
+        checkers?: number;
+        driveChunkSize?: string;
+        serverSideAcrossConfigs?: boolean;
+        tpslimit?: number;
+    } | undefined, onProgress: (progressStr: string) => void, onComplete: (success: boolean, error?: string) => void): void;
     private executeSingle;
     cancelJob(jobId: string): void;
     private formatPath;
