@@ -7,6 +7,7 @@ import { GrpcSwarmClient } from './grpc/client';
 import { AppleMusicWrapperManager } from './services/AppleMusicWrapperManager';
 import { AppleMusicRipperService } from './services/AppleMusicRipperService';
 import { VfsIndexerService } from './services/vfs/VfsIndexerService';
+import { VfsJobOrchestrator } from './VfsJobOrchestrator';
 
 const RELAY_SERVER_URL = process.env.RELAY_URL || 'http://localhost:3001';
 const WORKER_SECRET = process.env.WORKER_SECRET || 'fallback_for_dev_only';
@@ -232,55 +233,90 @@ async function bootWorker() {
   });
 
   socket.on(MessageType.FILE_MOVE_REQUEST, async (msg: any) => {
+    if (msg.workerId !== socket.id && msg.workerId !== '*') return;
     console.log(`[Worker] Received FILE_MOVE_REQUEST for ${msg.paths.length} items from ${msg.srcFs} to ${msg.dstFs}`);
-    try {
-      for (const p of msg.paths) {
-        await rcloneManager.moveFile(msg.srcFs, p.src, msg.dstFs, p.dst);
+
+    if (!msg.jobId) {
+      // Legacy blocking mode if no jobId provided
+      try {
+        for (const p of msg.paths) {
+          await rcloneManager.moveFile(msg.srcFs, p.src, msg.dstFs, p.dst);
+        }
+        socket.emit(MessageType.FILE_ACTION_RESPONSE, { type: MessageType.FILE_ACTION_RESPONSE, success: true, action: 'MOVE', message: `Successfully moved items.` });
+      } catch (e: any) {
+        socket.emit(MessageType.FILE_ACTION_RESPONSE, { type: MessageType.FILE_ACTION_RESPONSE, success: false, action: 'MOVE', message: `Failed to move items.`, error: e.message });
       }
-      socket.emit(MessageType.FILE_ACTION_RESPONSE, {
-        type: MessageType.FILE_ACTION_RESPONSE,
-        timestamp: Date.now(),
-        success: true,
-        action: 'MOVE',
-        message: `Successfully moved ${msg.paths.length} items.`
-      });
-    } catch (e: any) {
-      console.error(`[Worker] FILE_MOVE_REQUEST failed:`, e.message);
-      socket.emit(MessageType.FILE_ACTION_RESPONSE, {
-        type: MessageType.FILE_ACTION_RESPONSE,
-        timestamp: Date.now(),
-        success: false,
-        action: 'MOVE',
-        message: `Failed to move items.`,
-        error: e.message
-      });
+      return;
     }
+
+    // Orchestrated tracking mode
+    vfsOrchestrator.executeBatchAction(msg.jobId, 'move', msg.srcFs, msg.dstFs, msg.paths,
+      (progressStr: string) => {
+        // Emit live progress to relay
+        let percent = 0;
+        const match = progressStr.match(/(\d+)%/);
+        if (match) percent = parseInt(match[1]);
+
+        socket.emit(MessageType.TASK_PROGRESS, {
+          type: MessageType.TASK_PROGRESS,
+          taskId: msg.jobId,
+          workerId: socket.id,
+          progress: percent,
+          status: `Moving: ${progressStr}`
+        });
+      },
+      (success: boolean, error?: string) => {
+        if (success) {
+           socket.emit(MessageType.TASK_PROGRESS, { type: MessageType.TASK_PROGRESS, taskId: msg.jobId, workerId: socket.id, progress: 100, status: `Complete` });
+           socket.emit(MessageType.FILE_ACTION_RESPONSE, { type: MessageType.FILE_ACTION_RESPONSE, success: true, action: 'MOVE', message: `Successfully moved ${msg.paths.length} items.` });
+        } else {
+           socket.emit(MessageType.TASK_PROGRESS, { type: MessageType.TASK_PROGRESS, taskId: msg.jobId, workerId: socket.id, progress: -1, status: `Error: ${error}` });
+           socket.emit(MessageType.FILE_ACTION_RESPONSE, { type: MessageType.FILE_ACTION_RESPONSE, success: false, action: 'MOVE', message: `Failed to move items.`, error });
+        }
+      }
+    );
   });
 
   socket.on(MessageType.FILE_COPY_REQUEST, async (msg: any) => {
+    if (msg.workerId !== socket.id && msg.workerId !== '*') return;
     console.log(`[Worker] Received FILE_COPY_REQUEST for ${msg.paths.length} items from ${msg.srcFs} to ${msg.dstFs}`);
-    try {
-      for (const p of msg.paths) {
-        await rcloneManager.copyFile(msg.srcFs, p.src, msg.dstFs, p.dst);
+
+    if (!msg.jobId) {
+      try {
+        for (const p of msg.paths) {
+          await rcloneManager.copyFile(msg.srcFs, p.src, msg.dstFs, p.dst);
+        }
+        socket.emit(MessageType.FILE_ACTION_RESPONSE, { type: MessageType.FILE_ACTION_RESPONSE, success: true, action: 'COPY', message: `Successfully copied items.` });
+      } catch (e: any) {
+        socket.emit(MessageType.FILE_ACTION_RESPONSE, { type: MessageType.FILE_ACTION_RESPONSE, success: false, action: 'COPY', message: `Failed to copy items.`, error: e.message });
       }
-      socket.emit(MessageType.FILE_ACTION_RESPONSE, {
-        type: MessageType.FILE_ACTION_RESPONSE,
-        timestamp: Date.now(),
-        success: true,
-        action: 'COPY',
-        message: `Successfully copied ${msg.paths.length} items.`
-      });
-    } catch (e: any) {
-      console.error(`[Worker] FILE_COPY_REQUEST failed:`, e.message);
-      socket.emit(MessageType.FILE_ACTION_RESPONSE, {
-        type: MessageType.FILE_ACTION_RESPONSE,
-        timestamp: Date.now(),
-        success: false,
-        action: 'COPY',
-        message: `Failed to copy items.`,
-        error: e.message
-      });
+      return;
     }
+
+    vfsOrchestrator.executeBatchAction(msg.jobId, 'copy', msg.srcFs, msg.dstFs, msg.paths,
+      (progressStr: string) => {
+        let percent = 0;
+        const match = progressStr.match(/(\d+)%/);
+        if (match) percent = parseInt(match[1]);
+
+        socket.emit(MessageType.TASK_PROGRESS, {
+          type: MessageType.TASK_PROGRESS,
+          taskId: msg.jobId,
+          workerId: socket.id,
+          progress: percent,
+          status: `Copying: ${progressStr}`
+        });
+      },
+      (success: boolean, error?: string) => {
+        if (success) {
+           socket.emit(MessageType.TASK_PROGRESS, { type: MessageType.TASK_PROGRESS, taskId: msg.jobId, workerId: socket.id, progress: 100, status: `Complete` });
+           socket.emit(MessageType.FILE_ACTION_RESPONSE, { type: MessageType.FILE_ACTION_RESPONSE, success: true, action: 'COPY', message: `Successfully copied ${msg.paths.length} items.` });
+        } else {
+           socket.emit(MessageType.TASK_PROGRESS, { type: MessageType.TASK_PROGRESS, taskId: msg.jobId, workerId: socket.id, progress: -1, status: `Error: ${error}` });
+           socket.emit(MessageType.FILE_ACTION_RESPONSE, { type: MessageType.FILE_ACTION_RESPONSE, success: false, action: 'COPY', message: `Failed to copy items.`, error });
+        }
+      }
+    );
   });
 
   socket.on(MessageType.FILE_RENAME_REQUEST, async (msg: any) => {
@@ -408,6 +444,13 @@ async function bootWorker() {
           status: `FAILED: ${e.message}`
       });
     }
+  });
+
+  const vfsOrchestrator = new VfsJobOrchestrator(rcloneManager);
+
+  socket.on(MessageType.VFS_TASK_CANCEL_REQUEST, (msg: any) => {
+    if (msg.workerId !== socket.id) return;
+    vfsOrchestrator.cancelJob(msg.jobId);
   });
 
   socket.on('VFS_CONFIG_REBOOT', async (msg: any) => {

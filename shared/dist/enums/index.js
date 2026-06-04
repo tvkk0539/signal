@@ -84,4 +84,5 @@ var MessageType;
     MessageType["FILE_COPY_REQUEST"] = "FILE_COPY_REQUEST";
     MessageType["FILE_RENAME_REQUEST"] = "FILE_RENAME_REQUEST";
     MessageType["FILE_ACTION_RESPONSE"] = "FILE_ACTION_RESPONSE";
+    MessageType["VFS_TASK_CANCEL_REQUEST"] = "VFS_TASK_CANCEL_REQUEST";
 })(MessageType || (exports.MessageType = MessageType = {}));

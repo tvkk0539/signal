@@ -4,8 +4,10 @@ import type { FileItem, FileListRequestMessage, FileListResponseMessage, RemoteI
 import { MediaPlayerModal } from '../media/MediaPlayerModal';
 import { useAuthStore } from '../../store/authStore';
 import { SocketManager } from '../../worker/SocketManager';
+import { useProgressStore } from '../../store/progressStore';
 import { useVirtualizer } from '@tanstack/react-virtual';
 import { Folder, File, HardDrive, RefreshCw, ArrowUp, LayoutGrid, List as ListIcon, MoreVertical, Trash2, Copy, ArrowRight, Edit2, Play, Download, X } from 'lucide-react';
+import { MiniBrowser } from './MiniBrowser';
 
 interface FileExplorerProps {
   isConnected: boolean;
@@ -209,10 +211,12 @@ export const FileExplorer: React.FC<FileExplorerProps> = ({ isConnected, workerI
 
   const submitTargetAction = () => {
      if (!targetPrompt) return;
+     const jobId = `vfs-${Date.now()}`;
      const payload = {
         type: targetPrompt.type === 'MOVE' ? MessageType.FILE_MOVE_REQUEST : MessageType.FILE_COPY_REQUEST,
         timestamp: Date.now(),
         workerId,
+        jobId,
         srcFs: selectedFs,
         dstFs: targetFs,
         paths: targetPrompt.paths.map(p => ({
@@ -220,6 +224,10 @@ export const FileExplorer: React.FC<FileExplorerProps> = ({ isConnected, workerI
            dst: targetPath ? `${targetPath}/${p.split('/').pop()}` : (p.split('/').pop() || '')
         }))
      };
+
+     // Optimistically show the task in the store so the user sees it immediately
+     useProgressStore.getState().updateTaskProgress(jobId, workerId, 0, `Initializing ${targetPrompt.type.toLowerCase()}...`);
+
      socketManager.emit(payload.type, payload);
      setTargetPrompt(null);
      setSelectedFiles(new Set());
@@ -512,14 +520,18 @@ export const FileExplorer: React.FC<FileExplorerProps> = ({ isConnected, workerI
                     </select>
                  </div>
                  <div>
-                    <label className="text-xs text-muted-foreground mb-1 block">Target Path (leave empty for root)</label>
-                    <input
-                       type="text"
-                       value={targetPath}
-                       onChange={e => setTargetPath(e.target.value)}
-                       placeholder="e.g. Backups/Media"
-                       className="w-full bg-secondary text-sm text-foreground border border-border/50 rounded-lg p-2 outline-none"
+                    <label className="text-xs text-muted-foreground mb-2 block">Target Destination Path</label>
+                    <MiniBrowser
+                      workerId={workerId}
+                      targetFs={targetFs}
+                      onPathSelect={setTargetPath}
                     />
+                    <div className="mt-2 flex items-center gap-2 px-1 text-xs text-muted-foreground">
+                      <span className="font-semibold text-primary">Selected:</span>
+                      <span className="truncate font-mono bg-black/20 px-2 py-0.5 rounded border border-border/30 w-full">
+                         {targetFs}{targetFs === '/' ? '' : ':'}{targetPath || '/'}
+                      </span>
+                    </div>
                  </div>
               </div>
               <div className="flex justify-end gap-3 mt-6">

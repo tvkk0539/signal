@@ -486,6 +486,7 @@ export interface FileDeleteRequestMessage extends BaseMessage {
 export interface FileMoveRequestMessage extends BaseMessage {
     type: MessageType.FILE_MOVE_REQUEST;
     workerId: string;
+    jobId?: string;
     srcFs: string;
     dstFs: string;
     paths: {
@@ -496,12 +497,18 @@ export interface FileMoveRequestMessage extends BaseMessage {
 export interface FileCopyRequestMessage extends BaseMessage {
     type: MessageType.FILE_COPY_REQUEST;
     workerId: string;
+    jobId?: string;
     srcFs: string;
     dstFs: string;
     paths: {
         src: string;
         dst: string;
     }[];
+}
+export interface VfsTaskCancelRequestMessage extends BaseMessage {
+    type: MessageType.VFS_TASK_CANCEL_REQUEST;
+    workerId: string;
+    jobId: string;
 }
 export interface FileRenameRequestMessage extends BaseMessage {
     type: MessageType.FILE_RENAME_REQUEST;

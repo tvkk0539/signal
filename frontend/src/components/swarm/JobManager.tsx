@@ -1,21 +1,21 @@
-import React, { useEffect, useState } from 'react';
+import React, { useEffect } from 'react';
 import { MessageType } from '@swarm/shared';
-import type { BatchTaskRequestMessage } from '@swarm/shared';
+import type { VfsTaskCancelRequestMessage } from '@swarm/shared';
 import { useProgressStore } from '../../store/progressStore';
 import { SocketManager } from '../../worker/SocketManager';
+import { XCircle } from 'lucide-react';
 
 interface JobManagerProps {
-  isConnected: boolean;
+  isConnected?: boolean;
 }
 
-export const JobManager: React.FC<JobManagerProps> = ({ isConnected }) => {
+export const JobManager: React.FC<JobManagerProps> = () => {
   // We subscribe directly to the store now.
   // The Web Worker manages the 100ms flush, so the store is only updated safely.
   const uiTasks = useProgressStore((state) => state.tasks);
   const setTasks = useProgressStore((state) => state.setTasks);
   const clearTasks = useProgressStore((state) => state.clearTasks);
 
-  const [tasksToSubmit, setTasksToSubmit] = useState<number>(10);
   const socketManager = SocketManager.getInstance();
 
   useEffect(() => {
@@ -31,73 +31,38 @@ export const JobManager: React.FC<JobManagerProps> = ({ isConnected }) => {
     };
   }, [setTasks]);
 
-  const handleStartBatch = () => {
-    if (!isConnected) return;
-
-    clearTasks();
-    socketManager.clearTasks(); // Clear the worker's buffer too
-
-    const batch: Array<{ id: string; action: string; payload: any }> = [];
-    for (let i = 0; i < tasksToSubmit; i++) {
-      batch.push({
-        id: `task-${Date.now()}-${i}`,
-        action: 'DOWNLOAD',
-        payload: { file: `dummy-file-${i}.zip` }
-      });
-    }
-
-    const payload: BatchTaskRequestMessage = {
-      type: MessageType.BATCH_TASK_REQUEST,
+  const handleCancelTask = (taskId: string, workerId: string) => {
+    const payload: VfsTaskCancelRequestMessage = {
+      type: MessageType.VFS_TASK_CANCEL_REQUEST,
       timestamp: Date.now(),
-      tasks: batch
+      workerId,
+      jobId: taskId
     };
+    socketManager.emit(MessageType.VFS_TASK_CANCEL_REQUEST, payload);
 
-    console.log(`[Job Manager] Submitting BATCH_TASK_REQUEST with ${batch.length} tasks`);
-    socketManager.emit(MessageType.BATCH_TASK_REQUEST, payload);
+    // Optimistically update UI to show it's cancelled
+    const currentTask = uiTasks[taskId];
+    if (currentTask) {
+       setTasks({ ...uiTasks, [taskId]: { ...currentTask, status: 'Cancelled', progress: -1 }});
+    }
   };
 
   const taskEntries = Object.entries(uiTasks);
-
-  const activeTasks = taskEntries.filter(([, data]) => data.progress < 100);
+  const activeTasks = taskEntries.filter(([, data]) => data.progress >= 0 && data.progress < 100);
 
   return (
     <div className="w-full h-full flex gap-6">
-
-      {/* Simulation Controls (Left side of drawer) */}
-      <div className="w-80 flex-none bg-card/20 p-4 rounded-xl border border-border/50 flex flex-col h-full shadow-inner">
-        <h4 className="text-xs font-semibold text-muted-foreground uppercase tracking-wider mb-4">Task Generator</h4>
-        <div className="flex flex-col gap-3 flex-1">
-          <div className="flex items-center gap-2 mt-auto">
-            <input
-              type="number"
-              value={tasksToSubmit}
-              onChange={e => setTasksToSubmit(Math.max(1, parseInt(e.target.value) || 1))}
-              className="w-20 bg-background border border-border rounded-lg p-2 text-xs text-foreground text-center outline-none focus:border-primary/50"
-              min="1"
-              max="1000"
-            />
-            <button
-              onClick={handleStartBatch}
-              disabled={!isConnected}
-              className="flex-1 bg-primary hover:bg-primary/90 text-primary-foreground font-medium p-2 rounded-lg text-xs transition-colors disabled:opacity-50 disabled:cursor-not-allowed shadow-[0_0_15px_rgba(170,59,255,0.2)]"
-            >
-              Trigger Tasks
-            </button>
-          </div>
-        </div>
-      </div>
-
-      {/* Task Queue Grid (Right side of drawer) */}
+      {/* Task Queue Grid (Full Width now) */}
       <div className="flex-1 flex flex-col h-full">
         <div className="flex justify-between items-center mb-3 px-1">
           <h4 className="text-xs font-semibold text-muted-foreground uppercase tracking-wider flex items-center">
-            Active Jobs
+            VFS Global Task Queue
             <span className="ml-2 bg-primary/20 border border-primary/30 text-primary px-2 py-0.5 rounded-full text-[10px]">
-              {activeTasks.length}
+              {activeTasks.length} Active
             </span>
           </h4>
           {taskEntries.length > 0 && (
-             <button onClick={clearTasks} className="text-xs text-destructive hover:text-destructive/80 transition-colors">
+             <button onClick={clearTasks} className="text-xs text-destructive hover:text-destructive/80 transition-colors font-medium border border-destructive/30 px-3 py-1 rounded-full bg-destructive/10">
                Clear History
              </button>
           )}
@@ -106,20 +71,34 @@ export const JobManager: React.FC<JobManagerProps> = ({ isConnected }) => {
         <div className="flex-1 overflow-y-auto pr-2 grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 lg:grid-cols-4 xl:grid-cols-5 gap-3 content-start">
           {taskEntries.map(([taskId, data]) => {
             const isComplete = data.progress === 100;
+            const isError = data.progress === -1;
+            const isActive = !isComplete && !isError;
+
             return (
-              <div key={taskId} className="bg-card/40 border border-border/50 rounded-lg p-3 flex flex-col gap-2 hover:bg-card/60 transition-colors">
-                <div className="flex justify-between items-center text-xs">
-                  <span className="font-mono text-muted-foreground truncate w-24" title={data.workerId}>
-                     {data.workerId.substring(0, 6)}...
+              <div key={taskId} className="bg-card/40 border border-border/50 rounded-lg p-3 flex flex-col gap-2 hover:bg-card/60 transition-colors group relative">
+                {isActive && (
+                  <button
+                    onClick={() => handleCancelTask(taskId, data.workerId)}
+                    className="absolute -top-2 -right-2 bg-background rounded-full text-muted-foreground hover:text-destructive shadow-lg opacity-0 group-hover:opacity-100 transition-opacity z-10"
+                    title="Cancel Task"
+                  >
+                    <XCircle size={18} className="fill-background" />
+                  </button>
+                )}
+
+                <div className="flex justify-between items-start text-xs gap-2">
+                  <span className="font-mono text-muted-foreground truncate w-20" title={taskId}>
+                     {taskId.split('-')[0]}...
                   </span>
-                  <span className={`font-medium ${isComplete ? 'text-emerald-500' : 'text-primary'}`}>
+                  <span className={`font-medium truncate flex-1 text-right ${isComplete ? 'text-emerald-500' : isError ? 'text-destructive' : 'text-primary'}`} title={data.status}>
                     {data.status}
                   </span>
                 </div>
-                <div className="w-full bg-background/50 rounded-full h-1.5 overflow-hidden">
+
+                <div className="w-full bg-background/50 rounded-full h-1.5 overflow-hidden mt-auto">
                   <div
-                    className={`h-full transition-all duration-200 ease-linear ${isComplete ? 'bg-emerald-500 shadow-[0_0_10px_rgba(46,204,113,0.5)]' : 'bg-primary shadow-[0_0_10px_rgba(170,59,255,0.5)]'}`}
-                    style={{ width: `${data.progress}%` }}
+                    className={`h-full transition-all duration-200 ease-linear ${isComplete ? 'bg-emerald-500 shadow-[0_0_10px_rgba(46,204,113,0.5)]' : isError ? 'bg-destructive shadow-[0_0_10px_rgba(255,0,0,0.5)]' : 'bg-primary shadow-[0_0_10px_rgba(170,59,255,0.5)]'}`}
+                    style={{ width: `${Math.max(0, data.progress)}%` }}
                   />
                 </div>
               </div>
