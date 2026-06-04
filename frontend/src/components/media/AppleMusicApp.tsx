@@ -100,6 +100,8 @@ export const AppleMusicApp: React.FC = () => {
           appendLog(msg.jobId, msg.log, msg.uploadPath);
           if (msg.log.includes('SUCCESS') || msg.log.includes('finished with status')) {
               updateJobStatus(msg.jobId, 'COMPLETED');
+          } else if (msg.log.includes('[UPLOADING]')) {
+              updateJobStatus(msg.jobId, 'UPLOADING');
           } else if (msg.log.includes('FAILED') || msg.log.includes('ERROR') || msg.log.includes('exited with code')) {
               updateJobStatus(msg.jobId, 'FAILED');
           }

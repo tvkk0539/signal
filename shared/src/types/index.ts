@@ -408,6 +408,13 @@ export interface AppleMusicCancelRequestMessage extends BaseMessage {
   jobId: string;
 }
 
+export interface AppleMusicUploadRequestMessage extends BaseMessage {
+  type: MessageType.APPLE_MUSIC_UPLOAD_REQUEST;
+  workerId: string;
+  jobId: string;
+  rcloneRemote: string;
+}
+
 export interface WrapperStateSaveMessage extends BaseMessage {
   type: MessageType.WRAPPER_STATE_SAVE;
   payload: string;

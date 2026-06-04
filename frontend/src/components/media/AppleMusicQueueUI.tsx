@@ -1,16 +1,18 @@
 import React, { useState } from 'react';
 import { useAppleMusicQueueStore } from '../../store/appleMusicQueueStore';
-import { Trash2, Terminal, StopCircle, CheckCircle2, XCircle, Clock, PlayCircle, FolderOpen } from 'lucide-react';
+import { Trash2, Terminal, StopCircle, CheckCircle2, XCircle, Clock, PlayCircle, FolderOpen, UploadCloud, Loader2 } from 'lucide-react';
 import { SocketManager } from '../../worker/SocketManager';
 import { MessageType } from '@swarm/shared';
-import type { AppleMusicCancelRequestMessage } from '@swarm/shared';
+import type { AppleMusicCancelRequestMessage, AppleMusicUploadRequestMessage } from '@swarm/shared';
 import { useExplorerStore } from '../../store/explorerStore';
 import { useLayoutStore } from '../../store/layoutStore';
+import { useAppleMusicStore } from '../../store/appleMusicStore';
 
 export const AppleMusicQueueUI: React.FC = () => {
   const { jobs, removeJobs } = useAppleMusicQueueStore();
   const { setExplorerTarget } = useExplorerStore();
   const { setActiveView } = useLayoutStore();
+  const { rcloneRemote } = useAppleMusicStore();
   const [selectedJobIds, setSelectedJobIds] = useState<Set<string>>(new Set());
   const [viewedJobId, setViewedJobId] = useState<string | null>(null);
   const [inspectorTab, setInspectorTab] = useState<'TELEMETRY' | 'CONFIG'>('TELEMETRY');
@@ -54,6 +56,7 @@ export const AppleMusicQueueUI: React.FC = () => {
   const getStatusIcon = (status: string) => {
     switch(status) {
         case 'RUNNING': return <PlayCircle className="text-blue-500 animate-pulse" size={16} />;
+        case 'UPLOADING': return <Loader2 className="text-purple-500 animate-spin" size={16} />;
         case 'COMPLETED': return <CheckCircle2 className="text-green-500" size={16} />;
         case 'FAILED': return <XCircle className="text-red-500" size={16} />;
         case 'CANCELLED': return <StopCircle className="text-yellow-500" size={16} />;
@@ -123,6 +126,7 @@ export const AppleMusicQueueUI: React.FC = () => {
                                 {getStatusIcon(job.status)}
                                 <span className={
                                     job.status === 'RUNNING' ? 'text-blue-400 font-bold' :
+                                    job.status === 'UPLOADING' ? 'text-purple-400 font-bold' :
                                     job.status === 'COMPLETED' ? 'text-green-400 font-bold' :
                                     job.status === 'FAILED' ? 'text-red-400 font-bold' :
                                     'text-yellow-400 font-bold'
@@ -143,6 +147,28 @@ export const AppleMusicQueueUI: React.FC = () => {
                                 >
                                     <FolderOpen size={12} />
                                     Browse Upload
+                                </button>
+                            )}
+                            {(job.status === 'FAILED' || (job.status === 'COMPLETED' && !job.uploadPath)) && (
+                                <button
+                                    disabled={!rcloneRemote || !rcloneRemote.includes(':')}
+                                    onClick={(e) => {
+                                        e.stopPropagation();
+                                        if (!rcloneRemote || !rcloneRemote.includes(':')) return;
+                                        const payload: AppleMusicUploadRequestMessage = {
+                                            type: MessageType.APPLE_MUSIC_UPLOAD_REQUEST,
+                                            timestamp: Date.now(),
+                                            workerId: 'target-worker-id', // Assuming target routing via relay or load balancer
+                                            jobId: job.jobId,
+                                            rcloneRemote: rcloneRemote
+                                        };
+                                        SocketManager.getInstance().emit(MessageType.APPLE_MUSIC_UPLOAD_REQUEST, payload);
+                                    }}
+                                    className="flex items-center gap-1.5 px-2 py-1 bg-purple-500/20 text-purple-400 hover:bg-purple-500/30 rounded transition-colors text-[10px] font-semibold uppercase tracking-wide mt-1 shadow-sm disabled:opacity-30"
+                                    title={!rcloneRemote || !rcloneRemote.includes(':') ? 'Configure a valid Rclone Remote in settings to upload.' : `Upload to: ${rcloneRemote}`}
+                                >
+                                    <UploadCloud size={12} />
+                                    Upload Now
                                 </button>
                             )}
                         </div>

@@ -1,6 +1,6 @@
 import { create } from 'zustand';
 
-export type JobStatus = 'QUEUED' | 'RUNNING' | 'COMPLETED' | 'FAILED' | 'CANCELLED';
+export type JobStatus = 'QUEUED' | 'RUNNING' | 'UPLOADING' | 'COMPLETED' | 'FAILED' | 'CANCELLED';
 
 export interface Job {
   jobId: string;

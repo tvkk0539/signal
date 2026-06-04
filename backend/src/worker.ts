@@ -735,6 +735,84 @@ async function bootWorker() {
     }
   });
 
+  socket.on(MessageType.APPLE_MUSIC_UPLOAD_REQUEST, async (msg: any) => {
+    console.log(`[Worker] Received APPLE_MUSIC_UPLOAD_REQUEST for Job: ${msg.jobId} using remote: ${msg.rcloneRemote}`);
+    const downloadDir = path.join('/tmp', 'am-ripper-workspace', `job_${msg.jobId}`, 'downloads');
+
+    if (!fs.existsSync(downloadDir)) {
+      socket.emit(MessageType.RIPPER_TELEMETRY, {
+          type: MessageType.RIPPER_TELEMETRY,
+          timestamp: Date.now(),
+          workerId: socket.id,
+          jobId: msg.jobId,
+          log: `[ERROR] Ephemeral Workspace for job ${msg.jobId} not found. The files may have been purged or never existed.`
+      });
+      return;
+    }
+
+    try {
+        const items = fs.readdirSync(downloadDir);
+        if (items.length === 0) {
+           throw new Error('Workspace is completely empty.');
+        }
+
+        socket.emit(MessageType.RIPPER_TELEMETRY, {
+            type: MessageType.RIPPER_TELEMETRY,
+            timestamp: Date.now(),
+            workerId: socket.id,
+            jobId: msg.jobId,
+            log: `[UPLOADING] Manual upload requested. Beaming ephemeral disk directly to ${msg.rcloneRemote}...`
+        });
+
+        const remoteParts = msg.rcloneRemote.split(':');
+        const fsStr = remoteParts[0] + ':';
+        const pathStr = remoteParts.length > 1 ? remoteParts[1] : '/';
+
+        await rcloneManager.uploadDirectory(downloadDir, fsStr, pathStr);
+
+        let deepPath = '';
+        try {
+            let currentPath = downloadDir;
+            while (true) {
+                const subItems = fs.readdirSync(currentPath, { withFileTypes: true });
+                const dirs = subItems.filter((i: any) => i.isDirectory());
+                if (dirs.length === 1 && subItems.length === dirs.length) {
+                    currentPath = path.join(currentPath, dirs[0].name);
+                } else if (dirs.length > 0) {
+                    break;
+                } else {
+                    break;
+                }
+            }
+            deepPath = path.relative(downloadDir, currentPath);
+        } catch (err) {}
+
+        const formattedPathStr = pathStr.endsWith('/') ? pathStr : `${pathStr}/`;
+        const finalUploadPath = deepPath ? `${fsStr}${formattedPathStr}${deepPath}` : `${fsStr}${pathStr}`;
+
+        socket.emit(MessageType.RIPPER_TELEMETRY, {
+            type: MessageType.RIPPER_TELEMETRY,
+            timestamp: Date.now(),
+            workerId: socket.id,
+            jobId: msg.jobId,
+            log: `[SUCCESS] Manual Cloud Handoff Confirmed.`,
+            uploadPath: finalUploadPath
+        });
+
+        ripperService.cleanupWorkspace(msg.jobId);
+
+    } catch (e: any) {
+        console.error(`[Worker] Manual Rclone Handoff Error:`, e);
+        socket.emit(MessageType.RIPPER_TELEMETRY, {
+            type: MessageType.RIPPER_TELEMETRY,
+            timestamp: Date.now(),
+            workerId: socket.id,
+            jobId: msg.jobId,
+            log: `[ERROR] Manual Cloud Handoff Failed: ${e.message}. Files safely retained.`
+        });
+    }
+  });
+
   // Keep track of active profile in this worker instance
   let currentActiveProfileId: string | undefined = undefined;
   let currentActiveProfileName: string | undefined = undefined;
