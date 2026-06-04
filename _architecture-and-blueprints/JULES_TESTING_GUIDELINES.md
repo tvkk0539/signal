@@ -12,6 +12,7 @@ When verifying React frontend changes, adhere to these strict rules to prevent t
 ### A. Environment Booting
 *   Ensure the Relay Server (`npm run start:relay`) and Backend Worker (`npm run start:backend`) are fully booted *before* starting the Frontend dev server.
 *   Wait at least 5 seconds after issuing start commands before running Playwright scripts to allow Node processes to bind to their ports.
+*   **Local DB Fallback:** Note that in standard sandbox environments without a running MongoDB cluster, the Relay Server will gracefully fallback to a volatile `MOCK` in-memory database for its domains (including `AUTH`).
 
 ### B. The Mandatory Authentication Flow (CRITICAL)
 The frontend application is secured via a JWT-based authentication system managed by `zustand`. **You cannot directly test internal UI components (like the FileExplorer or ChatBox) without logging in first.**

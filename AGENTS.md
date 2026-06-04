@@ -15,7 +15,8 @@ Welcome, AI Engineer. You are working on a highly engineered, distributed archit
 ## 3. Testing & Verification Rules (CRITICAL)
 Automated UI testing (Playwright) in sandboxed environments can be flaky and consume excessive session turns.
 *   You **MUST** read and adhere to `_architecture-and-blueprints/JULES_TESTING_GUIDELINES.md` before attempting frontend verification.
-*   **Authentication is Mandatory:** The UI is protected by a Zustand/JWT layer. You cannot test internal components without scripting a user registration/login flow first. Read the testing guidelines for the exact script required.
+*   **Boot Sequencing:** You must ensure the Relay Server and Backend Worker are fully booted and bound to their respective ports *before* starting the Frontend dev server. Failing to do so causes Playwright timeouts during authentication.
+*   **Authentication is Mandatory:** The UI is protected by a Zustand/JWT layer. You cannot test internal components without scripting a user registration/login flow first. Read the testing guidelines for the exact script required. Remember to reuse the same credentials across subsequent scripts if the Mock Database persists.
 *   **Graceful Failure:** Never risk losing functional code due to a failing test script. If a test fails twice, commit your work and ask the user for guidance.
 
 ## 4. Communication
