@@ -6,6 +6,7 @@ interface TaskProgressState {
   updateTaskProgress: (taskId: string, workerId: string, progress: number, status: string) => void;
   clearTasks: () => void;
   clearTasksByFilter: (filter: 'SUCCESS' | 'ERROR') => void;
+  removeTask: (taskId: string) => void;
 }
 
 // Optimization: We throttle re-renders to 100ms in the Web Worker layer now.
@@ -38,6 +39,11 @@ export const useProgressStore = create<TaskProgressState>((set) => ({
         delete newTasks[id];
       }
     }
+    return { tasks: newTasks };
+  }),
+  removeTask: (taskId) => set((state) => {
+    const newTasks = { ...state.tasks };
+    delete newTasks[taskId];
     return { tasks: newTasks };
   })
 }));

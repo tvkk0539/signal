@@ -3,7 +3,7 @@ import { MessageType } from '@swarm/shared';
 import type { VfsTaskCancelRequestMessage } from '@swarm/shared';
 import { useProgressStore } from '../../store/progressStore';
 import { SocketManager } from '../../worker/SocketManager';
-import { XCircle } from 'lucide-react';
+import { XCircle, Trash2 } from 'lucide-react';
 
 interface JobManagerProps {
   isConnected?: boolean;
@@ -16,6 +16,7 @@ export const JobManager: React.FC<JobManagerProps> = () => {
   const setTasks = useProgressStore((state) => state.setTasks);
   const clearTasks = useProgressStore((state) => state.clearTasks);
   const clearTasksByFilter = useProgressStore((state) => state.clearTasksByFilter);
+  const removeTask = useProgressStore((state) => state.removeTask);
 
   const socketManager = SocketManager.getInstance();
 
@@ -85,13 +86,21 @@ export const JobManager: React.FC<JobManagerProps> = () => {
 
             return (
               <div key={taskId} className="bg-card/40 border border-border/50 rounded-lg p-3 flex flex-col gap-2 hover:bg-card/60 transition-colors group relative">
-                {isActive && (
+                {isActive ? (
                   <button
                     onClick={() => handleCancelTask(taskId, data.workerId)}
                     className="absolute -top-2 -right-2 bg-background rounded-full text-muted-foreground hover:text-destructive shadow-lg opacity-0 group-hover:opacity-100 transition-opacity z-10"
                     title="Cancel Task"
                   >
                     <XCircle size={18} className="fill-background" />
+                  </button>
+                ) : (
+                  <button
+                    onClick={() => removeTask(taskId)}
+                    className="absolute -top-2 -right-2 bg-background rounded-full text-muted-foreground hover:text-destructive shadow-lg opacity-0 group-hover:opacity-100 transition-opacity z-10"
+                    title="Clear from History"
+                  >
+                    <Trash2 size={16} className="fill-background" />
                   </button>
                 )}
 
