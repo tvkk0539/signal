@@ -1,9 +1,11 @@
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import { Database, CloudUpload, HardDrive, ShieldCheck, Loader2, Check } from 'lucide-react';
 import { useAppleMusicStore } from '../../store/appleMusicStore';
 import { SocketManager } from '../../worker/SocketManager';
 import { MessageType } from '@swarm/shared';
-import type { AppleMusicConfigSaveMessage } from '@swarm/shared';
+import type { AppleMusicConfigSaveMessage, RemoteListRequestMessage } from '@swarm/shared';
+import { MiniBrowser } from '../explorer/MiniBrowser';
+import { useFleetStore } from '../../store/fleetStore';
 
 export const AppleMusicSettingsUI: React.FC = () => {
   const {
@@ -13,6 +15,45 @@ export const AppleMusicSettingsUI: React.FC = () => {
 
   const [isSyncing, setIsSyncing] = useState(false);
   const [syncSuccess, setSyncSuccess] = useState(false);
+
+  const { workers } = useFleetStore();
+  const [remotes, setRemotes] = useState<any[]>([]);
+  // We parse the current global string to split into remote vs path for the UI components
+  const currentRemoteMatch = rcloneRemote ? rcloneRemote.split(':')[0] + ':' : 'remote:';
+  const currentPathMatch = rcloneRemote ? rcloneRemote.substring(currentRemoteMatch.length) || '/' : '/';
+
+  const [selectedFs, setSelectedFs] = useState(currentRemoteMatch);
+  const [selectedPath, setSelectedPath] = useState(currentPathMatch);
+
+  // Fetch remotes whenever a worker is available
+  useEffect(() => {
+     if (workers.length === 0) return;
+     const socketManager = SocketManager.getInstance();
+
+     const handleRemoteListResponse = (msg: any) => {
+        setRemotes(msg.remotes || []);
+     };
+
+     socketManager.on(MessageType.REMOTE_LIST_RESPONSE, handleRemoteListResponse);
+
+     const payload: RemoteListRequestMessage = {
+        type: MessageType.REMOTE_LIST_REQUEST,
+        timestamp: Date.now(),
+        workerId: workers[0]
+     };
+     socketManager.emit(MessageType.REMOTE_LIST_REQUEST, payload);
+
+     return () => {
+        socketManager.off(MessageType.REMOTE_LIST_RESPONSE, handleRemoteListResponse);
+     };
+  }, [workers]);
+
+  // Sync internal state to the global store string
+  useEffect(() => {
+     if (selectedFs && selectedPath !== undefined) {
+         setRcloneRemote(`${selectedFs}${selectedPath.startsWith('/') ? selectedPath.substring(1) : selectedPath}`);
+     }
+  }, [selectedFs, selectedPath, setRcloneRemote]);
 
   const handleSync = () => {
     setIsSyncing(true);
@@ -79,14 +120,39 @@ export const AppleMusicSettingsUI: React.FC = () => {
                         className="accent-primary w-4 h-4"
                     />
                 </div>
-                <div className="space-y-1 mt-2">
-                    <label className="text-xs text-muted-foreground ml-1">Target Rclone Remote Path</label>
-                    <input
-                        type="text"
-                        value={rcloneRemote}
-                        onChange={(e) => setRcloneRemote(e.target.value)}
-                        className="w-full bg-black/50 border border-white/10 rounded-lg px-3 py-2 text-sm text-white focus:ring-1 focus:ring-primary outline-none font-mono"
-                    />
+                <div className="space-y-3 mt-4 border-t border-white/10 pt-4">
+                    <div>
+                        <label className="text-xs text-muted-foreground ml-1 mb-1 block">Target Rclone Remote</label>
+                        <select
+                            value={selectedFs}
+                            onChange={(e) => setSelectedFs(e.target.value)}
+                            disabled={!autoUpload}
+                            className="w-full bg-black/50 border border-white/10 rounded-lg px-3 py-2 text-sm text-white focus:ring-1 focus:ring-primary outline-none disabled:opacity-50"
+                        >
+                            <option value="remote:">Default Remote (remote:)</option>
+                            {remotes.map(remote => (
+                                <option key={remote.name} value={remote.name}>
+                                    {remote.name === '/' ? 'Local Machine (/)' : `${remote.name} (${remote.type})`}
+                                </option>
+                            ))}
+                        </select>
+                    </div>
+                    <div className={!autoUpload ? 'opacity-50 pointer-events-none' : ''}>
+                        <label className="text-xs text-muted-foreground ml-1 mb-1 block">Target Directory Path</label>
+                        <div className="bg-black/20 border border-white/5 rounded-lg">
+                           <MiniBrowser
+                             workerId={workers[0] || ''}
+                             targetFs={selectedFs}
+                             onPathSelect={setSelectedPath}
+                           />
+                        </div>
+                        <div className="mt-2 flex items-center gap-2 px-1 text-[10px] text-muted-foreground font-mono">
+                            <span className="text-[#FA243C]">Final Path:</span>
+                            <span className="bg-black/40 px-2 py-0.5 rounded border border-white/10 truncate">
+                               {rcloneRemote}
+                            </span>
+                        </div>
+                    </div>
                 </div>
             </div>
 
