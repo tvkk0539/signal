@@ -12,6 +12,13 @@ export class VfsJobOrchestrator {
     srcFs: string,
     dstFs: string,
     paths: { src: string; dst: string }[],
+    advancedConfig: {
+       transfers?: number;
+       checkers?: number;
+       driveChunkSize?: string;
+       serverSideAcrossConfigs?: boolean;
+       tpslimit?: number;
+    } | undefined,
     onProgress: (progressStr: string) => void,
     onComplete: (success: boolean, error?: string) => void
   ) {
@@ -37,7 +44,7 @@ export class VfsJobOrchestrator {
         }
 
         try {
-          await this.executeSingle(jobId, action, srcFs, p.src, dstFs, p.dst, (prog) => {
+          await this.executeSingle(jobId, action, srcFs, p.src, dstFs, p.dst, advancedConfig, (prog) => {
              // Combine overall item progress with byte progress
              const baseProg = Math.floor((completed / total) * 100);
              onProgress(`[${completed + 1}/${total}] ${prog}`);
@@ -64,6 +71,13 @@ export class VfsJobOrchestrator {
     srcPath: string,
     dstFs: string,
     dstPath: string,
+    advancedConfig: {
+       transfers?: number;
+       checkers?: number;
+       driveChunkSize?: string;
+       serverSideAcrossConfigs?: boolean;
+       tpslimit?: number;
+    } | undefined,
     onProgress: (prog: string) => void
   ): Promise<void> {
     return new Promise((resolve, reject) => {
@@ -80,6 +94,14 @@ export class VfsJobOrchestrator {
         '--stats', '500ms',
         '--stats-one-line'
       ];
+
+      if (advancedConfig) {
+         if (advancedConfig.transfers) args.push('--transfers', advancedConfig.transfers.toString());
+         if (advancedConfig.checkers) args.push('--checkers', advancedConfig.checkers.toString());
+         if (advancedConfig.driveChunkSize) args.push('--drive-chunk-size', advancedConfig.driveChunkSize);
+         if (advancedConfig.tpslimit) args.push('--tpslimit', advancedConfig.tpslimit.toString());
+         if (advancedConfig.serverSideAcrossConfigs) args.push('--drive-server-side-across-configs');
+      }
 
       const child = spawn('rclone', args);
 

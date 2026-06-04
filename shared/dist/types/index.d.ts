@@ -493,6 +493,13 @@ export interface FileMoveRequestMessage extends BaseMessage {
         src: string;
         dst: string;
     }[];
+    advancedConfig?: {
+        transfers?: number;
+        checkers?: number;
+        driveChunkSize?: string;
+        serverSideAcrossConfigs?: boolean;
+        tpslimit?: number;
+    };
 }
 export interface FileCopyRequestMessage extends BaseMessage {
     type: MessageType.FILE_COPY_REQUEST;
@@ -504,6 +511,13 @@ export interface FileCopyRequestMessage extends BaseMessage {
         src: string;
         dst: string;
     }[];
+    advancedConfig?: {
+        transfers?: number;
+        checkers?: number;
+        driveChunkSize?: string;
+        serverSideAcrossConfigs?: boolean;
+        tpslimit?: number;
+    };
 }
 export interface VfsTaskCancelRequestMessage extends BaseMessage {
     type: MessageType.VFS_TASK_CANCEL_REQUEST;

@@ -536,6 +536,13 @@ export interface FileMoveRequestMessage extends BaseMessage {
   srcFs: string;
   dstFs: string;
   paths: { src: string, dst: string }[];
+  advancedConfig?: {
+    transfers?: number;
+    checkers?: number;
+    driveChunkSize?: string;
+    serverSideAcrossConfigs?: boolean;
+    tpslimit?: number;
+  };
 }
 
 export interface FileCopyRequestMessage extends BaseMessage {
@@ -545,6 +552,13 @@ export interface FileCopyRequestMessage extends BaseMessage {
   srcFs: string;
   dstFs: string;
   paths: { src: string, dst: string }[];
+  advancedConfig?: {
+    transfers?: number;
+    checkers?: number;
+    driveChunkSize?: string;
+    serverSideAcrossConfigs?: boolean;
+    tpslimit?: number;
+  };
 }
 
 export interface VfsTaskCancelRequestMessage extends BaseMessage {

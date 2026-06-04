@@ -227,7 +227,7 @@ async function bootWorker() {
             return;
         }
         // Orchestrated tracking mode
-        vfsOrchestrator.executeBatchAction(msg.jobId, 'move', msg.srcFs, msg.dstFs, msg.paths, (progressStr) => {
+        vfsOrchestrator.executeBatchAction(msg.jobId, 'move', msg.srcFs, msg.dstFs, msg.paths, msg.advancedConfig, (progressStr) => {
             // Emit live progress to relay
             let percent = 0;
             const match = progressStr.match(/(\d+)%/);
@@ -267,7 +267,7 @@ async function bootWorker() {
             }
             return;
         }
-        vfsOrchestrator.executeBatchAction(msg.jobId, 'copy', msg.srcFs, msg.dstFs, msg.paths, (progressStr) => {
+        vfsOrchestrator.executeBatchAction(msg.jobId, 'copy', msg.srcFs, msg.dstFs, msg.paths, msg.advancedConfig, (progressStr) => {
             let percent = 0;
             const match = progressStr.match(/(\d+)%/);
             if (match)
