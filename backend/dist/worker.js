@@ -1,4 +1,7 @@
 "use strict";
+var __importDefault = (this && this.__importDefault) || function (mod) {
+    return (mod && mod.__esModule) ? mod : { "default": mod };
+};
 Object.defineProperty(exports, "__esModule", { value: true });
 const socket_io_client_1 = require("socket.io-client");
 const werift_1 = require("werift");
@@ -10,6 +13,8 @@ const AppleMusicWrapperManager_1 = require("./services/AppleMusicWrapperManager"
 const AppleMusicRipperService_1 = require("./services/AppleMusicRipperService");
 const VfsIndexerService_1 = require("./services/vfs/VfsIndexerService");
 const VfsJobOrchestrator_1 = require("./VfsJobOrchestrator");
+const fs_1 = __importDefault(require("fs"));
+const path_1 = __importDefault(require("path"));
 const RELAY_SERVER_URL = process.env.RELAY_URL || 'http://localhost:3001';
 const WORKER_SECRET = process.env.WORKER_SECRET || 'fallback_for_dev_only';
 const GRPC_MODE = process.env.GRPC_MODE || 'DIRECT';
@@ -108,12 +113,51 @@ async function bootWorker() {
                 const pathStr = remoteParts.length > 1 ? remoteParts[1] : '/';
                 // We await this. If it throws, we skip the cleanup block.
                 await rcloneManager.uploadDirectory(data.downloadDir, fsStr, pathStr);
+                // Determine the deepest created directory in the ephemeral workspace to provide a direct UI shortcut
+                let deepPath = '';
+                try {
+                    const hasFilesRecursively = (dir) => {
+                        const items = fs_1.default.readdirSync(dir, { withFileTypes: true });
+                        for (const item of items) {
+                            if (item.isFile())
+                                return true;
+                            if (item.isDirectory() && hasFilesRecursively(path_1.default.join(dir, item.name)))
+                                return true;
+                        }
+                        return false;
+                    };
+                    let currentPath = data.downloadDir;
+                    while (true) {
+                        const items = fs_1.default.readdirSync(currentPath, { withFileTypes: true });
+                        const dirs = items.filter((i) => i.isDirectory());
+                        // Filter out empty directories (like the pre-provisioned Alac/Atmos folders that weren't used)
+                        const activeDirs = dirs.filter((d) => hasFilesRecursively(path_1.default.join(currentPath, d.name)));
+                        const files = items.filter((i) => i.isFile());
+                        // Drill down if there is exactly ONE active directory and no files at the current level
+                        if (activeDirs.length === 1 && files.length === 0) {
+                            currentPath = path_1.default.join(currentPath, activeDirs[0].name);
+                        }
+                        else {
+                            // Stop if we hit multiple active dirs (e.g. multi-disc) or found the files
+                            break;
+                        }
+                    }
+                    deepPath = path_1.default.relative(data.downloadDir, currentPath);
+                }
+                catch (err) {
+                    console.error(`[Worker] Failed to determine deep path:`, err);
+                }
+                // Construct the final cloud path string
+                // Handle cases where pathStr doesn't end with slash or deepPath is empty
+                const formattedPathStr = pathStr.endsWith('/') ? pathStr : `${pathStr}/`;
+                const finalUploadPath = deepPath ? `${fsStr}${formattedPathStr}${deepPath}` : `${fsStr}${pathStr}`;
                 socket.emit(shared_1.MessageType.RIPPER_TELEMETRY, {
                     type: shared_1.MessageType.RIPPER_TELEMETRY,
                     timestamp: Date.now(),
                     workerId: socket.id,
                     jobId: data.jobId,
-                    log: `[SUCCESS] Cloud Handoff Upload Confirmed.`
+                    log: `[SUCCESS] Cloud Handoff Upload Confirmed.`,
+                    uploadPath: finalUploadPath
                 });
                 // SMART CONFIRMATION: The upload completed successfully without errors.
                 // ONLY NOW do we securely annihilate the ephemeral payload.
@@ -644,6 +688,86 @@ async function bootWorker() {
         console.log(`[Worker] Received APPLE_MUSIC_CANCEL_REQUEST for Job: ${msg.jobId}`);
         if (msg.jobId) {
             ripperService.cancelJob(msg.jobId);
+        }
+    });
+    socket.on(shared_1.MessageType.APPLE_MUSIC_UPLOAD_REQUEST, async (msg) => {
+        console.log(`[Worker] Received APPLE_MUSIC_UPLOAD_REQUEST for Job: ${msg.jobId} using remote: ${msg.rcloneRemote}`);
+        const downloadDir = path_1.default.join('/tmp', 'am-ripper-workspace', `job_${msg.jobId}`, 'downloads');
+        if (!fs_1.default.existsSync(downloadDir)) {
+            socket.emit(shared_1.MessageType.RIPPER_TELEMETRY, {
+                type: shared_1.MessageType.RIPPER_TELEMETRY,
+                timestamp: Date.now(),
+                workerId: socket.id,
+                jobId: msg.jobId,
+                log: `[ERROR] Ephemeral Workspace for job ${msg.jobId} not found. The files may have been purged or never existed.`
+            });
+            return;
+        }
+        try {
+            const items = fs_1.default.readdirSync(downloadDir);
+            if (items.length === 0) {
+                throw new Error('Workspace is completely empty.');
+            }
+            socket.emit(shared_1.MessageType.RIPPER_TELEMETRY, {
+                type: shared_1.MessageType.RIPPER_TELEMETRY,
+                timestamp: Date.now(),
+                workerId: socket.id,
+                jobId: msg.jobId,
+                log: `[UPLOADING] Manual upload requested. Beaming ephemeral disk directly to ${msg.rcloneRemote}...`
+            });
+            const remoteParts = msg.rcloneRemote.split(':');
+            const fsStr = remoteParts[0] + ':';
+            const pathStr = remoteParts.length > 1 ? remoteParts[1] : '/';
+            await rcloneManager.uploadDirectory(downloadDir, fsStr, pathStr);
+            let deepPath = '';
+            try {
+                const hasFilesRecursively = (dir) => {
+                    const items = fs_1.default.readdirSync(dir, { withFileTypes: true });
+                    for (const item of items) {
+                        if (item.isFile())
+                            return true;
+                        if (item.isDirectory() && hasFilesRecursively(path_1.default.join(dir, item.name)))
+                            return true;
+                    }
+                    return false;
+                };
+                let currentPath = downloadDir;
+                while (true) {
+                    const subItems = fs_1.default.readdirSync(currentPath, { withFileTypes: true });
+                    const dirs = subItems.filter((i) => i.isDirectory());
+                    const activeDirs = dirs.filter((d) => hasFilesRecursively(path_1.default.join(currentPath, d.name)));
+                    const files = subItems.filter((i) => i.isFile());
+                    if (activeDirs.length === 1 && files.length === 0) {
+                        currentPath = path_1.default.join(currentPath, activeDirs[0].name);
+                    }
+                    else {
+                        break;
+                    }
+                }
+                deepPath = path_1.default.relative(downloadDir, currentPath);
+            }
+            catch (err) { }
+            const formattedPathStr = pathStr.endsWith('/') ? pathStr : `${pathStr}/`;
+            const finalUploadPath = deepPath ? `${fsStr}${formattedPathStr}${deepPath}` : `${fsStr}${pathStr}`;
+            socket.emit(shared_1.MessageType.RIPPER_TELEMETRY, {
+                type: shared_1.MessageType.RIPPER_TELEMETRY,
+                timestamp: Date.now(),
+                workerId: socket.id,
+                jobId: msg.jobId,
+                log: `[SUCCESS] Manual Cloud Handoff Confirmed.`,
+                uploadPath: finalUploadPath
+            });
+            ripperService.cleanupWorkspace(msg.jobId);
+        }
+        catch (e) {
+            console.error(`[Worker] Manual Rclone Handoff Error:`, e);
+            socket.emit(shared_1.MessageType.RIPPER_TELEMETRY, {
+                type: shared_1.MessageType.RIPPER_TELEMETRY,
+                timestamp: Date.now(),
+                workerId: socket.id,
+                jobId: msg.jobId,
+                log: `[ERROR] Manual Cloud Handoff Failed: ${e.message}. Files safely retained.`
+            });
         }
     });
     // Keep track of active profile in this worker instance

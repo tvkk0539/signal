@@ -5,6 +5,7 @@ import { MediaPlayerModal } from '../media/MediaPlayerModal';
 import { useAuthStore } from '../../store/authStore';
 import { SocketManager } from '../../worker/SocketManager';
 import { useProgressStore } from '../../store/progressStore';
+import { useExplorerStore } from '../../store/explorerStore';
 import { useVirtualizer } from '@tanstack/react-virtual';
 import { Folder, File, HardDrive, RefreshCw, ArrowUp, LayoutGrid, List as ListIcon, MoreVertical, Trash2, Copy, ArrowRight, Edit2, Play, Download, X } from 'lucide-react';
 import { MiniBrowser } from './MiniBrowser';
@@ -43,6 +44,16 @@ export const FileExplorer: React.FC<FileExplorerProps> = ({ isConnected, workerI
   });
 
   const socketManager = SocketManager.getInstance();
+  const { pendingTargetFs, pendingTargetPath, clearExplorerTarget } = useExplorerStore();
+
+  // Handle external navigation (e.g. from Apple Music Queue)
+  useEffect(() => {
+    if (pendingTargetFs && pendingTargetPath !== undefined) {
+      setSelectedFs(pendingTargetFs);
+      setCurrentPath(pendingTargetPath);
+      clearExplorerTarget();
+    }
+  }, [pendingTargetFs, pendingTargetPath, clearExplorerTarget]);
 
   // Fetch Available Remotes when the worker changes
   useEffect(() => {

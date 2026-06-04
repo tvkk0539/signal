@@ -8,6 +8,8 @@ import { AppleMusicWrapperManager } from './services/AppleMusicWrapperManager';
 import { AppleMusicRipperService } from './services/AppleMusicRipperService';
 import { VfsIndexerService } from './services/vfs/VfsIndexerService';
 import { VfsJobOrchestrator } from './VfsJobOrchestrator';
+import fs from 'fs';
+import path from 'path';
 
 const RELAY_SERVER_URL = process.env.RELAY_URL || 'http://localhost:3001';
 const WORKER_SECRET = process.env.WORKER_SECRET || 'fallback_for_dev_only';
@@ -124,12 +126,52 @@ async function bootWorker() {
             // We await this. If it throws, we skip the cleanup block.
             await rcloneManager.uploadDirectory(data.downloadDir, fsStr, pathStr);
 
+            // Determine the deepest created directory in the ephemeral workspace to provide a direct UI shortcut
+            let deepPath = '';
+            try {
+                const hasFilesRecursively = (dir: string): boolean => {
+                    const items = fs.readdirSync(dir, { withFileTypes: true });
+                    for (const item of items) {
+                        if (item.isFile()) return true;
+                        if (item.isDirectory() && hasFilesRecursively(path.join(dir, item.name))) return true;
+                    }
+                    return false;
+                };
+
+                let currentPath = data.downloadDir;
+                while (true) {
+                    const items = fs.readdirSync(currentPath, { withFileTypes: true });
+                    const dirs = items.filter((i: any) => i.isDirectory());
+
+                    // Filter out empty directories (like the pre-provisioned Alac/Atmos folders that weren't used)
+                    const activeDirs = dirs.filter((d: any) => hasFilesRecursively(path.join(currentPath, d.name)));
+                    const files = items.filter((i: any) => i.isFile());
+
+                    // Drill down if there is exactly ONE active directory and no files at the current level
+                    if (activeDirs.length === 1 && files.length === 0) {
+                        currentPath = path.join(currentPath, activeDirs[0].name);
+                    } else {
+                        // Stop if we hit multiple active dirs (e.g. multi-disc) or found the files
+                        break;
+                    }
+                }
+                deepPath = path.relative(data.downloadDir, currentPath);
+            } catch (err) {
+                console.error(`[Worker] Failed to determine deep path:`, err);
+            }
+
+            // Construct the final cloud path string
+            // Handle cases where pathStr doesn't end with slash or deepPath is empty
+            const formattedPathStr = pathStr.endsWith('/') ? pathStr : `${pathStr}/`;
+            const finalUploadPath = deepPath ? `${fsStr}${formattedPathStr}${deepPath}` : `${fsStr}${pathStr}`;
+
             socket.emit(MessageType.RIPPER_TELEMETRY, {
                 type: MessageType.RIPPER_TELEMETRY,
                 timestamp: Date.now(),
                 workerId: socket.id,
                 jobId: data.jobId,
-                log: `[SUCCESS] Cloud Handoff Upload Confirmed.`
+                log: `[SUCCESS] Cloud Handoff Upload Confirmed.`,
+                uploadPath: finalUploadPath
             });
 
             // SMART CONFIRMATION: The upload completed successfully without errors.
@@ -701,6 +743,95 @@ async function bootWorker() {
     console.log(`[Worker] Received APPLE_MUSIC_CANCEL_REQUEST for Job: ${msg.jobId}`);
     if (msg.jobId) {
       ripperService.cancelJob(msg.jobId);
+    }
+  });
+
+  socket.on(MessageType.APPLE_MUSIC_UPLOAD_REQUEST, async (msg: any) => {
+    console.log(`[Worker] Received APPLE_MUSIC_UPLOAD_REQUEST for Job: ${msg.jobId} using remote: ${msg.rcloneRemote}`);
+    const downloadDir = path.join('/tmp', 'am-ripper-workspace', `job_${msg.jobId}`, 'downloads');
+
+    if (!fs.existsSync(downloadDir)) {
+      socket.emit(MessageType.RIPPER_TELEMETRY, {
+          type: MessageType.RIPPER_TELEMETRY,
+          timestamp: Date.now(),
+          workerId: socket.id,
+          jobId: msg.jobId,
+          log: `[ERROR] Ephemeral Workspace for job ${msg.jobId} not found. The files may have been purged or never existed.`
+      });
+      return;
+    }
+
+    try {
+        const items = fs.readdirSync(downloadDir);
+        if (items.length === 0) {
+           throw new Error('Workspace is completely empty.');
+        }
+
+        socket.emit(MessageType.RIPPER_TELEMETRY, {
+            type: MessageType.RIPPER_TELEMETRY,
+            timestamp: Date.now(),
+            workerId: socket.id,
+            jobId: msg.jobId,
+            log: `[UPLOADING] Manual upload requested. Beaming ephemeral disk directly to ${msg.rcloneRemote}...`
+        });
+
+        const remoteParts = msg.rcloneRemote.split(':');
+        const fsStr = remoteParts[0] + ':';
+        const pathStr = remoteParts.length > 1 ? remoteParts[1] : '/';
+
+        await rcloneManager.uploadDirectory(downloadDir, fsStr, pathStr);
+
+        let deepPath = '';
+        try {
+            const hasFilesRecursively = (dir: string): boolean => {
+                const items = fs.readdirSync(dir, { withFileTypes: true });
+                for (const item of items) {
+                    if (item.isFile()) return true;
+                    if (item.isDirectory() && hasFilesRecursively(path.join(dir, item.name))) return true;
+                }
+                return false;
+            };
+
+            let currentPath = downloadDir;
+            while (true) {
+                const subItems = fs.readdirSync(currentPath, { withFileTypes: true });
+                const dirs = subItems.filter((i: any) => i.isDirectory());
+
+                const activeDirs = dirs.filter((d: any) => hasFilesRecursively(path.join(currentPath, d.name)));
+                const files = subItems.filter((i: any) => i.isFile());
+
+                if (activeDirs.length === 1 && files.length === 0) {
+                    currentPath = path.join(currentPath, activeDirs[0].name);
+                } else {
+                    break;
+                }
+            }
+            deepPath = path.relative(downloadDir, currentPath);
+        } catch (err) {}
+
+        const formattedPathStr = pathStr.endsWith('/') ? pathStr : `${pathStr}/`;
+        const finalUploadPath = deepPath ? `${fsStr}${formattedPathStr}${deepPath}` : `${fsStr}${pathStr}`;
+
+        socket.emit(MessageType.RIPPER_TELEMETRY, {
+            type: MessageType.RIPPER_TELEMETRY,
+            timestamp: Date.now(),
+            workerId: socket.id,
+            jobId: msg.jobId,
+            log: `[SUCCESS] Manual Cloud Handoff Confirmed.`,
+            uploadPath: finalUploadPath
+        });
+
+        ripperService.cleanupWorkspace(msg.jobId);
+
+    } catch (e: any) {
+        console.error(`[Worker] Manual Rclone Handoff Error:`, e);
+        socket.emit(MessageType.RIPPER_TELEMETRY, {
+            type: MessageType.RIPPER_TELEMETRY,
+            timestamp: Date.now(),
+            workerId: socket.id,
+            jobId: msg.jobId,
+            log: `[ERROR] Manual Cloud Handoff Failed: ${e.message}. Files safely retained.`
+        });
     }
   });
 

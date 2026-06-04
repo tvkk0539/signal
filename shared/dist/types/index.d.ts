@@ -317,6 +317,7 @@ export interface RipperTelemetryMessage extends BaseMessage {
     workerId: string;
     jobId: string;
     log: string;
+    uploadPath?: string;
 }
 export interface RipperProgressUpdateMessage extends BaseMessage {
     type: MessageType.RIPPER_PROGRESS_UPDATE;
@@ -373,6 +374,12 @@ export interface AppleMusicCancelRequestMessage extends BaseMessage {
     type: MessageType.APPLE_MUSIC_CANCEL_REQUEST;
     workerId: string;
     jobId: string;
+}
+export interface AppleMusicUploadRequestMessage extends BaseMessage {
+    type: MessageType.APPLE_MUSIC_UPLOAD_REQUEST;
+    workerId: string;
+    jobId: string;
+    rcloneRemote: string;
 }
 export interface WrapperStateSaveMessage extends BaseMessage {
     type: MessageType.WRAPPER_STATE_SAVE;
