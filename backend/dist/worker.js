@@ -9,6 +9,7 @@ const client_1 = require("./grpc/client");
 const AppleMusicWrapperManager_1 = require("./services/AppleMusicWrapperManager");
 const AppleMusicRipperService_1 = require("./services/AppleMusicRipperService");
 const VfsIndexerService_1 = require("./services/vfs/VfsIndexerService");
+const VfsJobOrchestrator_1 = require("./VfsJobOrchestrator");
 const RELAY_SERVER_URL = process.env.RELAY_URL || 'http://localhost:3001';
 const WORKER_SECRET = process.env.WORKER_SECRET || 'fallback_for_dev_only';
 const GRPC_MODE = process.env.GRPC_MODE || 'DIRECT';
@@ -181,6 +182,139 @@ async function bootWorker() {
             socket.emit(shared_1.MessageType.FILE_LIST_RESPONSE, errorResponse);
         }
     });
+    // --- Universal VFS Operations (Phase 13) ---
+    socket.on(shared_1.MessageType.FILE_DELETE_REQUEST, async (msg) => {
+        console.log(`[Worker] Received FILE_DELETE_REQUEST for ${msg.paths.length} items on fs: ${msg.fs}`);
+        try {
+            for (const path of msg.paths) {
+                await rcloneManager.deleteFile(msg.fs, path);
+            }
+            socket.emit(shared_1.MessageType.FILE_ACTION_RESPONSE, {
+                type: shared_1.MessageType.FILE_ACTION_RESPONSE,
+                timestamp: Date.now(),
+                success: true,
+                action: 'DELETE',
+                message: `Successfully deleted ${msg.paths.length} items.`
+            });
+        }
+        catch (e) {
+            console.error(`[Worker] FILE_DELETE_REQUEST failed:`, e.message);
+            socket.emit(shared_1.MessageType.FILE_ACTION_RESPONSE, {
+                type: shared_1.MessageType.FILE_ACTION_RESPONSE,
+                timestamp: Date.now(),
+                success: false,
+                action: 'DELETE',
+                message: `Failed to delete items.`,
+                error: e.message
+            });
+        }
+    });
+    socket.on(shared_1.MessageType.FILE_MOVE_REQUEST, async (msg) => {
+        if (msg.workerId !== socket.id && msg.workerId !== '*')
+            return;
+        console.log(`[Worker] Received FILE_MOVE_REQUEST for ${msg.paths.length} items from ${msg.srcFs} to ${msg.dstFs}`);
+        if (!msg.jobId) {
+            // Legacy blocking mode if no jobId provided
+            try {
+                for (const p of msg.paths) {
+                    await rcloneManager.moveFile(msg.srcFs, p.src, msg.dstFs, p.dst);
+                }
+                socket.emit(shared_1.MessageType.FILE_ACTION_RESPONSE, { type: shared_1.MessageType.FILE_ACTION_RESPONSE, success: true, action: 'MOVE', message: `Successfully moved items.` });
+            }
+            catch (e) {
+                socket.emit(shared_1.MessageType.FILE_ACTION_RESPONSE, { type: shared_1.MessageType.FILE_ACTION_RESPONSE, success: false, action: 'MOVE', message: `Failed to move items.`, error: e.message });
+            }
+            return;
+        }
+        // Orchestrated tracking mode
+        vfsOrchestrator.executeBatchAction(msg.jobId, 'move', msg.srcFs, msg.dstFs, msg.paths, (progressStr) => {
+            // Emit live progress to relay
+            let percent = 0;
+            const match = progressStr.match(/(\d+)%/);
+            if (match)
+                percent = parseInt(match[1]);
+            socket.emit(shared_1.MessageType.TASK_PROGRESS, {
+                type: shared_1.MessageType.TASK_PROGRESS,
+                taskId: msg.jobId,
+                workerId: socket.id,
+                progress: percent,
+                status: `Moving: ${progressStr}`
+            });
+        }, (success, error) => {
+            if (success) {
+                socket.emit(shared_1.MessageType.TASK_PROGRESS, { type: shared_1.MessageType.TASK_PROGRESS, taskId: msg.jobId, workerId: socket.id, progress: 100, status: `Complete` });
+                socket.emit(shared_1.MessageType.FILE_ACTION_RESPONSE, { type: shared_1.MessageType.FILE_ACTION_RESPONSE, success: true, action: 'MOVE', message: `Successfully moved ${msg.paths.length} items.` });
+            }
+            else {
+                socket.emit(shared_1.MessageType.TASK_PROGRESS, { type: shared_1.MessageType.TASK_PROGRESS, taskId: msg.jobId, workerId: socket.id, progress: -1, status: `Error: ${error}` });
+                socket.emit(shared_1.MessageType.FILE_ACTION_RESPONSE, { type: shared_1.MessageType.FILE_ACTION_RESPONSE, success: false, action: 'MOVE', message: `Failed to move items.`, error });
+            }
+        });
+    });
+    socket.on(shared_1.MessageType.FILE_COPY_REQUEST, async (msg) => {
+        if (msg.workerId !== socket.id && msg.workerId !== '*')
+            return;
+        console.log(`[Worker] Received FILE_COPY_REQUEST for ${msg.paths.length} items from ${msg.srcFs} to ${msg.dstFs}`);
+        if (!msg.jobId) {
+            try {
+                for (const p of msg.paths) {
+                    await rcloneManager.copyFile(msg.srcFs, p.src, msg.dstFs, p.dst);
+                }
+                socket.emit(shared_1.MessageType.FILE_ACTION_RESPONSE, { type: shared_1.MessageType.FILE_ACTION_RESPONSE, success: true, action: 'COPY', message: `Successfully copied items.` });
+            }
+            catch (e) {
+                socket.emit(shared_1.MessageType.FILE_ACTION_RESPONSE, { type: shared_1.MessageType.FILE_ACTION_RESPONSE, success: false, action: 'COPY', message: `Failed to copy items.`, error: e.message });
+            }
+            return;
+        }
+        vfsOrchestrator.executeBatchAction(msg.jobId, 'copy', msg.srcFs, msg.dstFs, msg.paths, (progressStr) => {
+            let percent = 0;
+            const match = progressStr.match(/(\d+)%/);
+            if (match)
+                percent = parseInt(match[1]);
+            socket.emit(shared_1.MessageType.TASK_PROGRESS, {
+                type: shared_1.MessageType.TASK_PROGRESS,
+                taskId: msg.jobId,
+                workerId: socket.id,
+                progress: percent,
+                status: `Copying: ${progressStr}`
+            });
+        }, (success, error) => {
+            if (success) {
+                socket.emit(shared_1.MessageType.TASK_PROGRESS, { type: shared_1.MessageType.TASK_PROGRESS, taskId: msg.jobId, workerId: socket.id, progress: 100, status: `Complete` });
+                socket.emit(shared_1.MessageType.FILE_ACTION_RESPONSE, { type: shared_1.MessageType.FILE_ACTION_RESPONSE, success: true, action: 'COPY', message: `Successfully copied ${msg.paths.length} items.` });
+            }
+            else {
+                socket.emit(shared_1.MessageType.TASK_PROGRESS, { type: shared_1.MessageType.TASK_PROGRESS, taskId: msg.jobId, workerId: socket.id, progress: -1, status: `Error: ${error}` });
+                socket.emit(shared_1.MessageType.FILE_ACTION_RESPONSE, { type: shared_1.MessageType.FILE_ACTION_RESPONSE, success: false, action: 'COPY', message: `Failed to copy items.`, error });
+            }
+        });
+    });
+    socket.on(shared_1.MessageType.FILE_RENAME_REQUEST, async (msg) => {
+        console.log(`[Worker] Received FILE_RENAME_REQUEST for ${msg.srcPath} to ${msg.dstPath} on fs: ${msg.fs}`);
+        // Renaming is essentially moving within the same filesystem
+        try {
+            await rcloneManager.moveFile(msg.fs, msg.srcPath, msg.fs, msg.dstPath);
+            socket.emit(shared_1.MessageType.FILE_ACTION_RESPONSE, {
+                type: shared_1.MessageType.FILE_ACTION_RESPONSE,
+                timestamp: Date.now(),
+                success: true,
+                action: 'RENAME',
+                message: `Successfully renamed item.`
+            });
+        }
+        catch (e) {
+            console.error(`[Worker] FILE_RENAME_REQUEST failed:`, e.message);
+            socket.emit(shared_1.MessageType.FILE_ACTION_RESPONSE, {
+                type: shared_1.MessageType.FILE_ACTION_RESPONSE,
+                timestamp: Date.now(),
+                success: false,
+                action: 'RENAME',
+                message: `Failed to rename item.`,
+                error: e.message
+            });
+        }
+    });
     socket.on(shared_1.MessageType.REMOTE_LIST_REQUEST, async (msg) => {
         console.log(`[Worker] Received REMOTE_LIST_REQUEST`);
         try {
@@ -271,6 +405,12 @@ async function bootWorker() {
                 status: `FAILED: ${e.message}`
             });
         }
+    });
+    const vfsOrchestrator = new VfsJobOrchestrator_1.VfsJobOrchestrator(rcloneManager);
+    socket.on(shared_1.MessageType.VFS_TASK_CANCEL_REQUEST, (msg) => {
+        if (msg.workerId !== socket.id)
+            return;
+        vfsOrchestrator.cancelJob(msg.jobId);
     });
     socket.on('VFS_CONFIG_REBOOT', async (msg) => {
         console.log(`[Worker] Received VFS_CONFIG_REBOOT Request. Rebuilding Hybrid Config...`);

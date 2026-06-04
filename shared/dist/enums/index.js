@@ -78,4 +78,11 @@ var MessageType;
     MessageType["VFS_CONFIG_REBOOT"] = "VFS_CONFIG_REBOOT";
     MessageType["VFS_ALIAS_LIST_REQUEST"] = "VFS_ALIAS_LIST_REQUEST";
     MessageType["VFS_ALIAS_LIST_RESPONSE"] = "VFS_ALIAS_LIST_RESPONSE";
+    // File Operations
+    MessageType["FILE_DELETE_REQUEST"] = "FILE_DELETE_REQUEST";
+    MessageType["FILE_MOVE_REQUEST"] = "FILE_MOVE_REQUEST";
+    MessageType["FILE_COPY_REQUEST"] = "FILE_COPY_REQUEST";
+    MessageType["FILE_RENAME_REQUEST"] = "FILE_RENAME_REQUEST";
+    MessageType["FILE_ACTION_RESPONSE"] = "FILE_ACTION_RESPONSE";
+    MessageType["VFS_TASK_CANCEL_REQUEST"] = "VFS_TASK_CANCEL_REQUEST";
 })(MessageType || (exports.MessageType = MessageType = {}));
