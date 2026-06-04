@@ -5,6 +5,7 @@ import { AppleMusicWrapperUI } from './AppleMusicWrapperUI';
 import { AppleMusicConfigUI } from './AppleMusicConfigUI';
 import { AppleMusicSettingsUI } from './AppleMusicSettingsUI';
 import { AppleMusicQueueUI } from './AppleMusicQueueUI';
+import { useFleetStore } from '../../store/fleetStore';
 import { SocketManager } from '../../worker/SocketManager';
 import { MessageType } from '@swarm/shared';
 import type { AppleMusicRipRequestMessage, RipperTelemetryMessage, RipperProgressUpdateMessage, WrapperStatusUpdateMessage, Wrapper2FAChallengeMessage } from '@swarm/shared';
@@ -28,6 +29,7 @@ export const AppleMusicApp: React.FC = () => {
   const [debugMode, setDebugMode] = useState(false);
 
   const { addJob, appendLog, updateJobStatus, updateJobProgress } = useAppleMusicQueueStore();
+  const { workers } = useFleetStore();
 
   const {
     mediaUserToken, storefront, setMediaUserToken, setStorefront, setAutoUpload, setRcloneRemote,
@@ -222,8 +224,11 @@ export const AppleMusicApp: React.FC = () => {
        convertDeleteBadAlac
     };
 
+    const activeWorkerId = workers[0] || 'target-worker-id';
+
     addJob({
       jobId: newJobId,
+      workerId: activeWorkerId,
       url,
       status: 'QUEUED',
       configSnapshot: frozenConfigSnapshot,
@@ -234,7 +239,7 @@ export const AppleMusicApp: React.FC = () => {
     const payload: AppleMusicRipRequestMessage = {
        type: MessageType.APPLE_MUSIC_RIP_REQUEST,
        timestamp: Date.now(),
-       workerId: 'target-worker-id',
+       workerId: activeWorkerId,
        jobId: newJobId,
        url,
        ripMode,

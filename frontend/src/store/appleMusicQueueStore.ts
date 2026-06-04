@@ -4,6 +4,7 @@ export type JobStatus = 'QUEUED' | 'RUNNING' | 'UPLOADING' | 'COMPLETED' | 'FAIL
 
 export interface Job {
   jobId: string;
+  workerId: string;
   url: string;
   status: JobStatus;
   configSnapshot: any;

@@ -116,20 +116,29 @@ async function bootWorker() {
                 // Determine the deepest created directory in the ephemeral workspace to provide a direct UI shortcut
                 let deepPath = '';
                 try {
+                    const hasFilesRecursively = (dir) => {
+                        const items = fs_1.default.readdirSync(dir, { withFileTypes: true });
+                        for (const item of items) {
+                            if (item.isFile())
+                                return true;
+                            if (item.isDirectory() && hasFilesRecursively(path_1.default.join(dir, item.name)))
+                                return true;
+                        }
+                        return false;
+                    };
                     let currentPath = data.downloadDir;
                     while (true) {
                         const items = fs_1.default.readdirSync(currentPath, { withFileTypes: true });
                         const dirs = items.filter((i) => i.isDirectory());
-                        // If there's exactly one directory and no files at this level, drill down
-                        if (dirs.length === 1 && items.length === dirs.length) {
-                            currentPath = path_1.default.join(currentPath, dirs[0].name);
-                        }
-                        else if (dirs.length > 0) {
-                            // If there are multiple dirs (or files + dirs), we stop here but maybe take the first one or just stay at current level
-                            // Staying at the current level is safer if it's a multi-disc or multi-format rip
-                            break;
+                        // Filter out empty directories (like the pre-provisioned Alac/Atmos folders that weren't used)
+                        const activeDirs = dirs.filter((d) => hasFilesRecursively(path_1.default.join(currentPath, d.name)));
+                        const files = items.filter((i) => i.isFile());
+                        // Drill down if there is exactly ONE active directory and no files at the current level
+                        if (activeDirs.length === 1 && files.length === 0) {
+                            currentPath = path_1.default.join(currentPath, activeDirs[0].name);
                         }
                         else {
+                            // Stop if we hit multiple active dirs (e.g. multi-disc) or found the files
                             break;
                         }
                     }
@@ -712,15 +721,24 @@ async function bootWorker() {
             await rcloneManager.uploadDirectory(downloadDir, fsStr, pathStr);
             let deepPath = '';
             try {
+                const hasFilesRecursively = (dir) => {
+                    const items = fs_1.default.readdirSync(dir, { withFileTypes: true });
+                    for (const item of items) {
+                        if (item.isFile())
+                            return true;
+                        if (item.isDirectory() && hasFilesRecursively(path_1.default.join(dir, item.name)))
+                            return true;
+                    }
+                    return false;
+                };
                 let currentPath = downloadDir;
                 while (true) {
                     const subItems = fs_1.default.readdirSync(currentPath, { withFileTypes: true });
                     const dirs = subItems.filter((i) => i.isDirectory());
-                    if (dirs.length === 1 && subItems.length === dirs.length) {
-                        currentPath = path_1.default.join(currentPath, dirs[0].name);
-                    }
-                    else if (dirs.length > 0) {
-                        break;
+                    const activeDirs = dirs.filter((d) => hasFilesRecursively(path_1.default.join(currentPath, d.name)));
+                    const files = subItems.filter((i) => i.isFile());
+                    if (activeDirs.length === 1 && files.length === 0) {
+                        currentPath = path_1.default.join(currentPath, activeDirs[0].name);
                     }
                     else {
                         break;

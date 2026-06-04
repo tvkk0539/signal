@@ -40,7 +40,7 @@ export const AppleMusicQueueUI: React.FC = () => {
       const payload: AppleMusicCancelRequestMessage = {
         type: MessageType.APPLE_MUSIC_CANCEL_REQUEST,
         timestamp: Date.now(),
-        workerId: 'target-worker-id', // Assuming target worker routing here
+        workerId: j.workerId || 'target-worker-id',
         jobId: j.jobId
       };
       SocketManager.getInstance().emit(MessageType.APPLE_MUSIC_CANCEL_REQUEST, payload);
@@ -158,7 +158,7 @@ export const AppleMusicQueueUI: React.FC = () => {
                                         const payload: AppleMusicUploadRequestMessage = {
                                             type: MessageType.APPLE_MUSIC_UPLOAD_REQUEST,
                                             timestamp: Date.now(),
-                                            workerId: 'target-worker-id', // Assuming target routing via relay or load balancer
+                                            workerId: job.workerId || 'target-worker-id',
                                             jobId: job.jobId,
                                             rcloneRemote: rcloneRemote
                                         };

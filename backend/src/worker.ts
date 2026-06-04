@@ -129,18 +129,29 @@ async function bootWorker() {
             // Determine the deepest created directory in the ephemeral workspace to provide a direct UI shortcut
             let deepPath = '';
             try {
+                const hasFilesRecursively = (dir: string): boolean => {
+                    const items = fs.readdirSync(dir, { withFileTypes: true });
+                    for (const item of items) {
+                        if (item.isFile()) return true;
+                        if (item.isDirectory() && hasFilesRecursively(path.join(dir, item.name))) return true;
+                    }
+                    return false;
+                };
+
                 let currentPath = data.downloadDir;
                 while (true) {
                     const items = fs.readdirSync(currentPath, { withFileTypes: true });
                     const dirs = items.filter((i: any) => i.isDirectory());
-                    // If there's exactly one directory and no files at this level, drill down
-                    if (dirs.length === 1 && items.length === dirs.length) {
-                        currentPath = path.join(currentPath, dirs[0].name);
-                    } else if (dirs.length > 0) {
-                        // If there are multiple dirs (or files + dirs), we stop here but maybe take the first one or just stay at current level
-                        // Staying at the current level is safer if it's a multi-disc or multi-format rip
-                        break;
+
+                    // Filter out empty directories (like the pre-provisioned Alac/Atmos folders that weren't used)
+                    const activeDirs = dirs.filter((d: any) => hasFilesRecursively(path.join(currentPath, d.name)));
+                    const files = items.filter((i: any) => i.isFile());
+
+                    // Drill down if there is exactly ONE active directory and no files at the current level
+                    if (activeDirs.length === 1 && files.length === 0) {
+                        currentPath = path.join(currentPath, activeDirs[0].name);
                     } else {
+                        // Stop if we hit multiple active dirs (e.g. multi-disc) or found the files
                         break;
                     }
                 }
@@ -772,14 +783,25 @@ async function bootWorker() {
 
         let deepPath = '';
         try {
+            const hasFilesRecursively = (dir: string): boolean => {
+                const items = fs.readdirSync(dir, { withFileTypes: true });
+                for (const item of items) {
+                    if (item.isFile()) return true;
+                    if (item.isDirectory() && hasFilesRecursively(path.join(dir, item.name))) return true;
+                }
+                return false;
+            };
+
             let currentPath = downloadDir;
             while (true) {
                 const subItems = fs.readdirSync(currentPath, { withFileTypes: true });
                 const dirs = subItems.filter((i: any) => i.isDirectory());
-                if (dirs.length === 1 && subItems.length === dirs.length) {
-                    currentPath = path.join(currentPath, dirs[0].name);
-                } else if (dirs.length > 0) {
-                    break;
+
+                const activeDirs = dirs.filter((d: any) => hasFilesRecursively(path.join(currentPath, d.name)));
+                const files = subItems.filter((i: any) => i.isFile());
+
+                if (activeDirs.length === 1 && files.length === 0) {
+                    currentPath = path.join(currentPath, activeDirs[0].name);
                 } else {
                     break;
                 }
