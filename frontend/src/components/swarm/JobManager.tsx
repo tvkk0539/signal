@@ -15,6 +15,7 @@ export const JobManager: React.FC<JobManagerProps> = () => {
   const uiTasks = useProgressStore((state) => state.tasks);
   const setTasks = useProgressStore((state) => state.setTasks);
   const clearTasks = useProgressStore((state) => state.clearTasks);
+  const clearTasksByFilter = useProgressStore((state) => state.clearTasksByFilter);
 
   const socketManager = SocketManager.getInstance();
 
@@ -62,9 +63,17 @@ export const JobManager: React.FC<JobManagerProps> = () => {
             </span>
           </h4>
           {taskEntries.length > 0 && (
-             <button onClick={clearTasks} className="text-xs text-destructive hover:text-destructive/80 transition-colors font-medium border border-destructive/30 px-3 py-1 rounded-full bg-destructive/10">
-               Clear History
-             </button>
+            <div className="flex items-center gap-2">
+              <button onClick={() => clearTasksByFilter('SUCCESS')} className="text-[10px] text-emerald-500 hover:bg-emerald-500/10 transition-colors font-medium border border-emerald-500/30 px-2 py-0.5 rounded-full">
+                Clear Successful
+              </button>
+              <button onClick={() => clearTasksByFilter('ERROR')} className="text-[10px] text-destructive hover:bg-destructive/10 transition-colors font-medium border border-destructive/30 px-2 py-0.5 rounded-full">
+                Clear Failed
+              </button>
+              <button onClick={clearTasks} className="text-[10px] text-muted-foreground hover:bg-white/5 transition-colors font-medium border border-border px-2 py-0.5 rounded-full">
+                Clear All Inactive
+              </button>
+            </div>
           )}
         </div>
 
