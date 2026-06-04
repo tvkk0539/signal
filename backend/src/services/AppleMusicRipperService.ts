@@ -89,7 +89,19 @@ export class AppleMusicRipperService extends EventEmitter {
      */
     private generateConfigYaml(workspaceDir: string, config: RipperConfig): string {
         const downloadsDir = path.join(workspaceDir, 'downloads');
-        if (!fs.existsSync(downloadsDir)) fs.mkdirSync(downloadsDir, { recursive: true });
+
+        // Highly Engineered Isolation: Pre-provision the strict taxonomy directories
+        // This guarantees the external Go binary never fails on missing directory errors
+        const taxonomyDirs = [
+            path.join(downloadsDir, 'AppleMusic', 'Alac'),
+            path.join(downloadsDir, 'AppleMusic', 'Atmos'),
+            path.join(downloadsDir, 'AppleMusic', 'AAC'),
+            path.join(downloadsDir, 'AppleMusic', 'MusicVideos')
+        ];
+
+        for (const dir of taxonomyDirs) {
+            if (!fs.existsSync(dir)) fs.mkdirSync(dir, { recursive: true });
+        }
 
         // Helper to safely format string values inside quotes
         const q = (val: string | undefined, defaultVal: string) => `"${val !== undefined ? val : defaultVal}"`;
@@ -118,10 +130,10 @@ cover-size: ${raw(config.coverSize, '5000x5000')}
 cover-format: ${raw(config.coverFormat, 'jpg')}       #jpg png or original
 tag-sort-order: ${b(config.tagSortOrder, true)}
 tag-itunes-id: true
-alac-save-folder: ${downloadsDir}
-atmos-save-folder: ${downloadsDir}
-aac-save-folder: ${downloadsDir}
-mv-save-folder: ${downloadsDir}
+alac-save-folder: ${downloadsDir}/AppleMusic/Alac
+atmos-save-folder: ${downloadsDir}/AppleMusic/Atmos
+aac-save-folder: ${downloadsDir}/AppleMusic/AAC
+mv-save-folder: ${downloadsDir}/AppleMusic/MusicVideos
 max-memory-limit: ${n(config.maxMemoryLimit, 256)} # MB
 decrypt-m3u8-port: "127.0.0.1:10020"
 get-m3u8-port: "127.0.0.1:20020"
