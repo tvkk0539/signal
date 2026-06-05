@@ -300,7 +300,8 @@ export class RcloneDaemonManager {
             localPath,
             `${remoteFs}${remotePath}`,
             '--stats', '1s',
-            '-v'
+            '-v',
+            '--config', this.configPath
         ]);
 
         child.stdout.on('data', (data) => console.log(`[Rclone Upload] ${data.toString().trim()}`));
