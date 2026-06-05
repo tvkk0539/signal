@@ -4,6 +4,7 @@ export declare class VfsIndexerService {
     private workerId;
     private readonly BATCH_SIZE;
     constructor(workerId: string);
+    private isMockFallback;
     connect(uri: string): Promise<void>;
     disconnect(): Promise<void>;
     /**

@@ -248,18 +248,45 @@ async function bootWorker() {
 
   // --- Universal VFS Operations (Phase 13) ---
 
-  socket.on(MessageType.FILE_DELETE_REQUEST, async (msg: any) => {
-    console.log(`[Worker] Received FILE_DELETE_REQUEST for ${msg.paths.length} items on fs: ${msg.fs}`);
+
+  socket.on(MessageType.FILE_MKDIR_REQUEST, async (msg: any) => {
+    console.log(`[Worker] Received FILE_MKDIR_REQUEST on fs: ${msg.fs}, path: ${msg.path}`);
     try {
-      for (const path of msg.paths) {
-        await rcloneManager.deleteFile(msg.fs, path);
+      await rcloneManager.mkdir(msg.fs, msg.path);
+      socket.emit(MessageType.FILE_ACTION_RESPONSE, {
+         type: MessageType.FILE_ACTION_RESPONSE,
+         action: 'MKDIR',
+         success: true,
+         workerId: process.env.WORKER_ID || require('os').hostname()
+      });
+    } catch (error: any) {
+      console.error(`[Worker] FILE_MKDIR_REQUEST failed:`, error.message);
+      socket.emit(MessageType.FILE_ACTION_RESPONSE, {
+         type: MessageType.FILE_ACTION_RESPONSE,
+         action: 'MKDIR',
+         success: false,
+         error: error.message,
+         workerId: process.env.WORKER_ID || require('os').hostname()
+      });
+    }
+  });
+
+  socket.on(MessageType.FILE_DELETE_REQUEST, async (msg: any) => {
+    console.log(`[Worker] Received FILE_DELETE_REQUEST for ${msg.items?.length || 0} items on fs: ${msg.fs}`);
+    try {
+      for (const item of msg.items) {
+        if (item.isDir) {
+          await rcloneManager.purge(msg.fs, item.path);
+        } else {
+          await rcloneManager.deleteFile(msg.fs, item.path);
+        }
       }
       socket.emit(MessageType.FILE_ACTION_RESPONSE, {
         type: MessageType.FILE_ACTION_RESPONSE,
         timestamp: Date.now(),
         success: true,
         action: 'DELETE',
-        message: `Successfully deleted ${msg.paths.length} items.`
+        message: `Successfully deleted ${msg.items?.length || 0} items.`
       });
     } catch (e: any) {
       console.error(`[Worker] FILE_DELETE_REQUEST failed:`, e.message);

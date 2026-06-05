@@ -162,6 +162,50 @@ export class RcloneDaemonManager {
     }
   }
 
+
+  public async mkdir(fs: string, path: string): Promise<void> {
+    if (!this.isRunning) throw new Error('Rclone daemon is not running');
+    const targetFs = fs || '/';
+    try {
+      console.log(`[Rclone] Executing mkdir on fs: "${targetFs}", path: "${path}"`);
+      const auth = Buffer.from(`${RCLONE_RC_USER}:${RCLONE_RC_PASS}`).toString('base64');
+      await axios.post(`${RCLONE_RC_BASE_URL}/operations/mkdir`, {
+        fs: targetFs,
+        remote: path
+      }, {
+        headers: {
+          'Authorization': `Basic ${auth}`,
+          'Content-Type': 'application/json'
+        }
+      });
+    } catch (error: any) {
+      console.error(`[Rclone] mkdir Error: ${error.response?.data?.error || error.message}`);
+      throw new Error(error.response?.data?.error || error.message);
+    }
+  }
+
+
+  public async purge(fs: string, path: string): Promise<void> {
+    if (!this.isRunning) throw new Error('Rclone daemon is not running');
+    const targetFs = fs || '/';
+    try {
+      console.log(`[Rclone] Executing purge (delete folder) on fs: "${targetFs}", path: "${path}"`);
+      const auth = Buffer.from(`${RCLONE_RC_USER}:${RCLONE_RC_PASS}`).toString('base64');
+      await axios.post(`${RCLONE_RC_BASE_URL}/operations/purge`, {
+        fs: targetFs,
+        remote: path
+      }, {
+        headers: {
+          'Authorization': `Basic ${auth}`,
+          'Content-Type': 'application/json'
+        }
+      });
+    } catch (error: any) {
+      console.error(`[Rclone] purge Error: ${error.response?.data?.error || error.message}`);
+      throw new Error(error.response?.data?.error || error.message);
+    }
+  }
+
   public async deleteFile(fs: string, path: string): Promise<void> {
     if (!this.isRunning) throw new Error('Rclone daemon is not running');
     const targetFs = fs || '/';

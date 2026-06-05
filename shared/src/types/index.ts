@@ -540,7 +540,7 @@ export interface FileDeleteRequestMessage extends BaseMessage {
   type: MessageType.FILE_DELETE_REQUEST;
   workerId: string;
   fs: string;
-  paths: string[];
+  items: { path: string; isDir: boolean }[];
 }
 
 export interface FileMoveRequestMessage extends BaseMessage {
@@ -579,6 +579,14 @@ export interface VfsTaskCancelRequestMessage extends BaseMessage {
   type: MessageType.VFS_TASK_CANCEL_REQUEST;
   workerId: string;
   jobId: string;
+}
+
+
+export interface FileMkdirRequestMessage extends BaseMessage {
+  type: MessageType.FILE_MKDIR_REQUEST;
+  workerId: string;
+  fs: string;
+  path: string;
 }
 
 export interface FileRenameRequestMessage extends BaseMessage {
