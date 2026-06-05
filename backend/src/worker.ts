@@ -450,7 +450,9 @@ async function bootWorker() {
 
     try {
       // Direct Bypass Connection
-      await vfsIndexer.connect(msg.isEphemeral ? GITHUB_EPHEMERAL_MONGODB_URI : (process.env.MONGODB_URI || GITHUB_EPHEMERAL_MONGODB_URI));
+      // Use the injected connection string if provided by the Relay, otherwise fallback to local env vars
+      const targetUri = msg.connectionString || (msg.isEphemeral ? GITHUB_EPHEMERAL_MONGODB_URI : (process.env.MONGODB_URI || GITHUB_EPHEMERAL_MONGODB_URI));
+      await vfsIndexer.connect(targetUri);
 
       const rcloneProc = rcloneManager.streamFastList(msg.rcloneName);
 

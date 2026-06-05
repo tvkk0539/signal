@@ -417,7 +417,9 @@ async function bootWorker() {
         console.log(`[Worker] Received VFS_INDEX_REQUEST for Remote: ${msg.remoteAlias}`);
         try {
             // Direct Bypass Connection
-            await vfsIndexer.connect(msg.isEphemeral ? GITHUB_EPHEMERAL_MONGODB_URI : (process.env.MONGODB_URI || GITHUB_EPHEMERAL_MONGODB_URI));
+            // Use the injected connection string if provided by the Relay, otherwise fallback to local env vars
+            const targetUri = msg.connectionString || (msg.isEphemeral ? GITHUB_EPHEMERAL_MONGODB_URI : (process.env.MONGODB_URI || GITHUB_EPHEMERAL_MONGODB_URI));
+            await vfsIndexer.connect(targetUri);
             const rcloneProc = rcloneManager.streamFastList(msg.rcloneName);
             // Tell UI we started
             socket.emit(shared_1.MessageType.TASK_PROGRESS, {

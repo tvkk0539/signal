@@ -428,6 +428,7 @@ export interface VfsIndexRequestMessage extends BaseMessage {
     remoteAlias: string;
     rcloneName: string;
     isEphemeral: boolean;
+    connectionString?: string;
 }
 export interface VfsConfigRebootMessage extends BaseMessage {
     type: MessageType.VFS_CONFIG_REBOOT;

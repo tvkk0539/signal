@@ -469,6 +469,7 @@ export interface VfsIndexRequestMessage extends BaseMessage {
   remoteAlias: string;
   rcloneName: string;
   isEphemeral: boolean;
+  connectionString?: string; // Phase 12: Injected by Relay to tell Worker where to stream
 }
 
 export interface VfsConfigRebootMessage extends BaseMessage {

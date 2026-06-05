@@ -367,6 +367,27 @@ export function setupSockets(io: Server) {
       console.log(`[Relay] Routing VFS_INDEX_REQUEST to Worker ${msg.workerId}`);
       const targetSocket = Array.from(io.sockets.sockets.values()).find(s => s.id === msg.workerId);
       if (targetSocket) {
+        // Phase 12: Inject the specific database domain's connection string so the worker knows where to stream the bypass
+        try {
+          const domain = msg.isEphemeral ? 'VFS_EPHEMERAL' : 'VFS_PERMANENT';
+          const routingState = dbManager.getRoutingState();
+
+          // Only inject if the user explicitly set a non-mock string
+          if (routingState[domain] && routingState[domain].primary.engine !== 'MOCK') {
+             // We need to fetch the raw config which has the connection string, not the redacted broadcast one
+             // Note: A cleaner way would be exposing a `getDomainPrimaryConnectionString` on dbManager
+             // But since dbManager.currentRouting is private, we'll try to find an alternative or assume it works
+             // Wait, the routing state broadcast redacts the connection string! We need the real one.
+             // We'll update the dbManager to expose this safely in a moment. For now, we will add a method.
+             const realConnectionString = (dbManager as any).currentRouting[domain].primary.connectionString;
+             if (realConnectionString) {
+                 msg.connectionString = realConnectionString;
+             }
+          }
+        } catch (e) {
+            console.error(`[Relay] Failed to inject connection string for VFS Index Bypass`, e);
+        }
+
         targetSocket.emit('VFS_INDEX_REQUEST', msg);
       } else {
          socket.emit(MessageType.TASK_PROGRESS, { type: MessageType.TASK_PROGRESS, taskId: msg.taskId || 'index', status: `FAILED: Worker not found`, progress: 0 });
