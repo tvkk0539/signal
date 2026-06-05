@@ -25,9 +25,10 @@ const RELAY_SERVER_URL = import.meta.env.VITE_RELAY_URL && import.meta.env.VITE_
 export const IDELayout: React.FC = () => {
   const { token, isAuthenticated } = useAuthStore();
   const { activeView } = useLayoutStore();
-  const { setWorkers, targetWorkerId, setTargetWorkerId } = useFleetStore();
+  const { setWorkers } = useFleetStore();
 
   const [isConnected, setIsConnected] = useState(false);
+  const [targetWorkerId, setTargetWorkerId] = useState<string>('');
 
   const socketManager = SocketManager.getInstance();
 
@@ -98,18 +99,14 @@ export const IDELayout: React.FC = () => {
         {/* Dynamic App View */}
         <div className="flex-1 overflow-hidden relative flex flex-col pb-16"> {/* pb-16 for TelemetryDrawer handle */}
 
-          {/* Global Fleet Bar injected dynamically based on view needs */}
-          {['EXPLORER', 'CHAT'].includes(activeView) && (
+          {activeView === 'EXPLORER' && (
+            <div className="flex-1 flex flex-col h-full">
               <HorizontalFleetBar
-                targetWorkerId={targetWorkerId || ''}
+                targetWorkerId={targetWorkerId}
                 setTargetWorkerId={setTargetWorkerId}
                 isConnected={isConnected}
               />
-          )}
-
-          {activeView === 'EXPLORER' && (
-            <div className="flex-1 flex flex-col h-full">
-              <div className="flex-1 overflow-hidden p-6 pt-0 mt-4">
+              <div className="flex-1 overflow-hidden p-6 pt-0">
                 {targetWorkerId ? (
                   <FileExplorer isConnected={isConnected} workerId={targetWorkerId} />
                 ) : (
@@ -126,8 +123,8 @@ export const IDELayout: React.FC = () => {
           )}
 
           {activeView === 'CHAT' && (
-            <div className="h-full w-full max-w-4xl mx-auto mt-4">
-               <ChatBox targetId={targetWorkerId || ''} isOnline={false} />
+            <div className="h-full w-full max-w-4xl mx-auto">
+               <ChatBox targetId={targetWorkerId} isOnline={false} />
             </div>
           )}
 

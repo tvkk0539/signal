@@ -386,6 +386,30 @@ async function bootWorker() {
     }
   });
 
+  socket.on(MessageType.DIR_CREATE_REQUEST, async (msg: any) => {
+    console.log(`[Worker] Received DIR_CREATE_REQUEST for ${msg.path} on fs: ${msg.fs}`);
+    try {
+      await rcloneManager.createDirectory(msg.fs, msg.path);
+      socket.emit(MessageType.FILE_ACTION_RESPONSE, {
+        type: MessageType.FILE_ACTION_RESPONSE,
+        timestamp: Date.now(),
+        success: true,
+        action: 'MKDIR',
+        message: `Successfully created folder.`
+      });
+    } catch (e: any) {
+      console.error(`[Worker] DIR_CREATE_REQUEST failed:`, e.message);
+      socket.emit(MessageType.FILE_ACTION_RESPONSE, {
+        type: MessageType.FILE_ACTION_RESPONSE,
+        timestamp: Date.now(),
+        success: false,
+        action: 'MKDIR',
+        message: `Failed to create folder.`,
+        error: e.message
+      });
+    }
+  });
+
   socket.on(MessageType.REMOTE_LIST_REQUEST, async (msg: RemoteListRequestMessage) => {
     console.log(`[Worker] Received REMOTE_LIST_REQUEST`);
     try {
@@ -450,9 +474,7 @@ async function bootWorker() {
 
     try {
       // Direct Bypass Connection
-      // Use the injected connection string if provided by the Relay, otherwise fallback to local env vars
-      const targetUri = msg.connectionString || (msg.isEphemeral ? GITHUB_EPHEMERAL_MONGODB_URI : (process.env.MONGODB_URI || GITHUB_EPHEMERAL_MONGODB_URI));
-      await vfsIndexer.connect(targetUri);
+      await vfsIndexer.connect(msg.isEphemeral ? GITHUB_EPHEMERAL_MONGODB_URI : (process.env.MONGODB_URI || GITHUB_EPHEMERAL_MONGODB_URI));
 
       const rcloneProc = rcloneManager.streamFastList(msg.rcloneName);
 
@@ -910,16 +932,6 @@ async function bootWorker() {
     } catch (e: any) {
       console.error(`[Worker] Wrapper 2FA Input Error:`, e);
     }
-  });
-
-  socket.on(MessageType.WRAPPER_STATUS_REQUEST, (msg: any) => {
-    console.log(`[Worker] Received WRAPPER_STATUS_REQUEST. Syncing UI...`);
-    socket.emit(MessageType.WRAPPER_STATUS_UPDATE, {
-      type: MessageType.WRAPPER_STATUS_UPDATE,
-      timestamp: Date.now(),
-      workerId: socket.id,
-      ...wrapperManager.getStatus()
-    });
   });
 
   socket.on(MessageType.APPLE_MUSIC_RIP_REQUEST, async (msg: any) => {

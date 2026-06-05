@@ -278,11 +278,6 @@ export interface Wrapper2FASubmitMessage extends BaseMessage {
   code: string;
 }
 
-export interface WrapperStatusRequestMessage extends BaseMessage {
-  type: MessageType.WRAPPER_STATUS_REQUEST;
-  workerId: string;
-}
-
 export interface WrapperStatusUpdateMessage extends BaseMessage {
   type: MessageType.WRAPPER_STATUS_UPDATE;
   workerId: string;
@@ -474,7 +469,6 @@ export interface VfsIndexRequestMessage extends BaseMessage {
   remoteAlias: string;
   rcloneName: string;
   isEphemeral: boolean;
-  connectionString?: string; // Phase 12: Injected by Relay to tell Worker where to stream
 }
 
 export interface VfsConfigRebootMessage extends BaseMessage {
@@ -589,10 +583,17 @@ export interface FileRenameRequestMessage extends BaseMessage {
   dstPath: string;
 }
 
+export interface DirCreateRequestMessage extends BaseMessage {
+  type: MessageType.DIR_CREATE_REQUEST;
+  workerId: string;
+  fs: string;
+  path: string;
+}
+
 export interface FileActionResponseMessage extends BaseMessage {
   type: MessageType.FILE_ACTION_RESPONSE;
   success: boolean;
-  action: 'DELETE' | 'MOVE' | 'COPY' | 'RENAME';
+  action: 'DELETE' | 'MOVE' | 'COPY' | 'RENAME' | 'MKDIR';
   message: string;
   error?: string;
 }

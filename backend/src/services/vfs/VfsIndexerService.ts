@@ -30,30 +30,19 @@ export class VfsIndexerService {
     this.workerId = workerId;
   }
 
-  private isMockFallback = false;
-
   public async connect(uri: string): Promise<void> {
     if (this.isConnected) return;
     console.log(`[VFS Indexer] Direct Bypass: Connecting to MongoDB at ${uri.split('@').pop()}`);
-    try {
-      await mongoose.connect(uri, { serverSelectionTimeoutMS: 2000 });
-      this.isConnected = true;
-      this.isMockFallback = false;
-      console.log(`[VFS Indexer] Connected to MongoDB Bypass.`);
-    } catch (e: any) {
-      console.warn(`[VFS Indexer] Failed to connect to MongoDB (${e.message}). Falling back to MOCK mode.`);
-      this.isConnected = true;
-      this.isMockFallback = true;
-    }
+    await mongoose.connect(uri);
+    this.isConnected = true;
+    console.log(`[VFS Indexer] Connected to MongoDB Bypass.`);
   }
 
   public async disconnect(): Promise<void> {
     if (!this.isConnected) return;
-    if (!this.isMockFallback) {
-       await mongoose.disconnect();
-    }
+    await mongoose.disconnect();
     this.isConnected = false;
-    console.log(`[VFS Indexer] Disconnected from Database Bypass.`);
+    console.log(`[VFS Indexer] Disconnected from MongoDB Bypass.`);
   }
 
   /**
@@ -97,12 +86,6 @@ export class VfsIndexerService {
             upsert: true
           }
         }));
-
-        if (this.isMockFallback) {
-            // Mock mode: Just log the batch size to simulate processing
-            console.log(`[VFS Indexer MOCK] Processed and simulated insertion of ${items.length} items.`);
-            return;
-        }
 
         try {
           await FileModel.bulkWrite(ops, { ordered: false });
@@ -158,7 +141,7 @@ export class VfsIndexerService {
    * Heartbeat to push the Dead Man's Switch forward.
    */
   public async pulseHeartbeat(ttlMinutes: number = 5): Promise<void> {
-    if (!this.isConnected || this.isMockFallback) return;
+    if (!this.isConnected) return;
     try {
       const newExpiry = new Date(Date.now() + ttlMinutes * 60000);
       await FileModel.updateMany(
