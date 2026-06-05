@@ -96,7 +96,9 @@ self.onmessage = (event: MessageEvent) => {
         MessageType.RIPPER_TELEMETRY,
         MessageType.APPLE_MUSIC_CONFIG_DATA,
         MessageType.WRAPPER_PROFILES_LIST,
-        MessageType.FILE_ACTION_RESPONSE
+        MessageType.FILE_ACTION_RESPONSE,
+        MessageType.VFS_ALIAS_LIST_RESPONSE,
+        MessageType.VFS_SEARCH_RESPONSE
       ];
 
       passThroughEvents.forEach(eventType => {

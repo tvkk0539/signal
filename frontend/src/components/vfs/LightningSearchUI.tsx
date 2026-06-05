@@ -11,11 +11,17 @@ export const LightningSearchUI: React.FC = () => {
     const [aliases, setAliases] = useState<string[]>([]);
     const [selectedAlias, setSelectedAlias] = useState<string>('');
     const searchTimeout = useRef<any>(null);
+    const queryRef = useRef(query);
     const socketManager = SocketManager.getInstance();
+
+    // Keep ref in sync so the empty-dep useEffect has access to latest without re-triggering
+    useEffect(() => {
+        queryRef.current = query;
+    }, [query]);
 
     useEffect(() => {
         const handleSearchResponse = (msg: any) => {
-            if (msg.query === query) {
+            if (msg.query === queryRef.current) {
                 setResults(msg.results);
                 setIsSearching(false);
             }
@@ -35,7 +41,7 @@ export const LightningSearchUI: React.FC = () => {
             socketManager.off(MessageType.VFS_SEARCH_RESPONSE, handleSearchResponse);
             socketManager.off(MessageType.VFS_ALIAS_LIST_RESPONSE, handleAliasList);
         };
-    }, [query]);
+    }, []); // Empty dependency array ensures we only bind once
 
     const handleSearchChange = (e: React.ChangeEvent<HTMLInputElement>) => {
         const val = e.target.value;
