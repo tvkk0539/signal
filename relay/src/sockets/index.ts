@@ -330,6 +330,7 @@ export function setupSockets(io: Server) {
     socket.on(MessageType.WRAPPER_START_REQUEST, (msg: any) => routeToIdleWorker(MessageType.WRAPPER_START_REQUEST, msg));
     socket.on(MessageType.WRAPPER_STOP_REQUEST, (msg: any) => routeToIdleWorker(MessageType.WRAPPER_STOP_REQUEST, msg));
     socket.on(MessageType.WRAPPER_2FA_SUBMIT, (msg: any) => routeToIdleWorker(MessageType.WRAPPER_2FA_SUBMIT, msg));
+    socket.on(MessageType.WRAPPER_STATUS_REQUEST, (msg: any) => routeToIdleWorker(MessageType.WRAPPER_STATUS_REQUEST, msg));
     socket.on(MessageType.APPLE_MUSIC_RIP_REQUEST, (msg: any) => routeToIdleWorker(MessageType.APPLE_MUSIC_RIP_REQUEST, msg));
 
     // --- Phase 11: Dual-State VFS & Hybrid Config Routing ---

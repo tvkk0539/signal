@@ -912,6 +912,16 @@ async function bootWorker() {
     }
   });
 
+  socket.on(MessageType.WRAPPER_STATUS_REQUEST, (msg: any) => {
+    console.log(`[Worker] Received WRAPPER_STATUS_REQUEST. Syncing UI...`);
+    socket.emit(MessageType.WRAPPER_STATUS_UPDATE, {
+      type: MessageType.WRAPPER_STATUS_UPDATE,
+      timestamp: Date.now(),
+      workerId: socket.id,
+      ...wrapperManager.getStatus()
+    });
+  });
+
   socket.on(MessageType.APPLE_MUSIC_RIP_REQUEST, async (msg: any) => {
     console.log(`[Worker] Received APPLE_MUSIC_RIP_REQUEST for URL: ${msg.url}`);
     try {

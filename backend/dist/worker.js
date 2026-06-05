@@ -838,6 +838,15 @@ async function bootWorker() {
             console.error(`[Worker] Wrapper 2FA Input Error:`, e);
         }
     });
+    socket.on(shared_1.MessageType.WRAPPER_STATUS_REQUEST, (msg) => {
+        console.log(`[Worker] Received WRAPPER_STATUS_REQUEST. Syncing UI...`);
+        socket.emit(shared_1.MessageType.WRAPPER_STATUS_UPDATE, {
+            type: shared_1.MessageType.WRAPPER_STATUS_UPDATE,
+            timestamp: Date.now(),
+            workerId: socket.id,
+            ...wrapperManager.getStatus()
+        });
+    });
     socket.on(shared_1.MessageType.APPLE_MUSIC_RIP_REQUEST, async (msg) => {
         console.log(`[Worker] Received APPLE_MUSIC_RIP_REQUEST for URL: ${msg.url}`);
         try {

@@ -296,6 +296,7 @@ function setupSockets(io) {
         socket.on(shared_1.MessageType.WRAPPER_START_REQUEST, (msg) => routeToIdleWorker(shared_1.MessageType.WRAPPER_START_REQUEST, msg));
         socket.on(shared_1.MessageType.WRAPPER_STOP_REQUEST, (msg) => routeToIdleWorker(shared_1.MessageType.WRAPPER_STOP_REQUEST, msg));
         socket.on(shared_1.MessageType.WRAPPER_2FA_SUBMIT, (msg) => routeToIdleWorker(shared_1.MessageType.WRAPPER_2FA_SUBMIT, msg));
+        socket.on(shared_1.MessageType.WRAPPER_STATUS_REQUEST, (msg) => routeToIdleWorker(shared_1.MessageType.WRAPPER_STATUS_REQUEST, msg));
         socket.on(shared_1.MessageType.APPLE_MUSIC_RIP_REQUEST, (msg) => routeToIdleWorker(shared_1.MessageType.APPLE_MUSIC_RIP_REQUEST, msg));
         // --- Phase 11: Dual-State VFS & Hybrid Config Routing ---
         socket.on(shared_1.MessageType.VFS_CONFIG_SAVE, async (msg) => {

@@ -251,6 +251,10 @@ export interface Wrapper2FASubmitMessage extends BaseMessage {
     workerId: string;
     code: string;
 }
+export interface WrapperStatusRequestMessage extends BaseMessage {
+    type: MessageType.WRAPPER_STATUS_REQUEST;
+    workerId: string;
+}
 export interface WrapperStatusUpdateMessage extends BaseMessage {
     type: MessageType.WRAPPER_STATUS_UPDATE;
     workerId: string;

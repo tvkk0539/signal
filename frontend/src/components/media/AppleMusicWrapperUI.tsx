@@ -55,6 +55,13 @@ export const AppleMusicWrapperUI: React.FC = () => {
     // Request initial list
     socketManager.emit(MessageType.WRAPPER_PROFILES_REQUEST, { timestamp: Date.now() });
 
+    // Request active proxy status so we sync immediately on tab mount/refresh
+    socketManager.emit(MessageType.WRAPPER_STATUS_REQUEST, {
+       type: MessageType.WRAPPER_STATUS_REQUEST,
+       timestamp: Date.now(),
+       workerId: 'target-worker-id' // Relay will route this to an idle worker
+    });
+
     return () => {
        socketManager.off(MessageType.WRAPPER_PROFILES_LIST, handleProfileList);
     };
