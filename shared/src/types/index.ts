@@ -583,10 +583,17 @@ export interface FileRenameRequestMessage extends BaseMessage {
   dstPath: string;
 }
 
+export interface DirCreateRequestMessage extends BaseMessage {
+  type: MessageType.DIR_CREATE_REQUEST;
+  workerId: string;
+  fs: string;
+  path: string;
+}
+
 export interface FileActionResponseMessage extends BaseMessage {
   type: MessageType.FILE_ACTION_RESPONSE;
   success: boolean;
-  action: 'DELETE' | 'MOVE' | 'COPY' | 'RENAME';
+  action: 'DELETE' | 'MOVE' | 'COPY' | 'RENAME' | 'MKDIR';
   message: string;
   error?: string;
 }

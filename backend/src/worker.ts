@@ -386,6 +386,30 @@ async function bootWorker() {
     }
   });
 
+  socket.on(MessageType.DIR_CREATE_REQUEST, async (msg: any) => {
+    console.log(`[Worker] Received DIR_CREATE_REQUEST for ${msg.path} on fs: ${msg.fs}`);
+    try {
+      await rcloneManager.createDirectory(msg.fs, msg.path);
+      socket.emit(MessageType.FILE_ACTION_RESPONSE, {
+        type: MessageType.FILE_ACTION_RESPONSE,
+        timestamp: Date.now(),
+        success: true,
+        action: 'MKDIR',
+        message: `Successfully created folder.`
+      });
+    } catch (e: any) {
+      console.error(`[Worker] DIR_CREATE_REQUEST failed:`, e.message);
+      socket.emit(MessageType.FILE_ACTION_RESPONSE, {
+        type: MessageType.FILE_ACTION_RESPONSE,
+        timestamp: Date.now(),
+        success: false,
+        action: 'MKDIR',
+        message: `Failed to create folder.`,
+        error: e.message
+      });
+    }
+  });
+
   socket.on(MessageType.REMOTE_LIST_REQUEST, async (msg: RemoteListRequestMessage) => {
     console.log(`[Worker] Received REMOTE_LIST_REQUEST`);
     try {

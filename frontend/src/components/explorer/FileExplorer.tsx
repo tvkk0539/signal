@@ -7,7 +7,7 @@ import { SocketManager } from '../../worker/SocketManager';
 import { useProgressStore } from '../../store/progressStore';
 import { useExplorerStore } from '../../store/explorerStore';
 import { useVirtualizer } from '@tanstack/react-virtual';
-import { Folder, File, HardDrive, RefreshCw, ArrowUp, LayoutGrid, List as ListIcon, MoreVertical, Trash2, Copy, ArrowRight, Edit2, Play, Download, X } from 'lucide-react';
+import { Folder, File, HardDrive, RefreshCw, ArrowUp, LayoutGrid, List as ListIcon, MoreVertical, Trash2, Copy, ArrowRight, Edit2, Play, Download, X, FolderPlus } from 'lucide-react';
 import { MiniBrowser } from './MiniBrowser';
 
 interface FileExplorerProps {
@@ -26,6 +26,8 @@ export const FileExplorer: React.FC<FileExplorerProps> = ({ isConnected, workerI
 
   // VFS Operations State
   const [selectedFiles, setSelectedFiles] = useState<Set<string>>(new Set());
+  const [isCreatingFolder, setIsCreatingFolder] = useState(false);
+  const [newFolderName, setNewFolderName] = useState('');
   const [mediaPrompt, setMediaPrompt] = useState<FileItem | null>(null);
   const [renamePrompt, setRenamePrompt] = useState<FileItem | null>(null);
   const [renameValue, setRenameValue] = useState('');
@@ -211,6 +213,23 @@ export const FileExplorer: React.FC<FileExplorerProps> = ({ isConnected, workerI
      setSelectedFiles(new Set());
   };
 
+  const handleCreateFolder = () => {
+    if (!newFolderName.trim()) {
+      setIsCreatingFolder(false);
+      return;
+    }
+    const path = currentPath ? `${currentPath}/${newFolderName}` : newFolderName;
+    socketManager.emit(MessageType.DIR_CREATE_REQUEST, {
+      type: MessageType.DIR_CREATE_REQUEST,
+      timestamp: Date.now(),
+      workerId,
+      fs: selectedFs,
+      path: path
+    });
+    setIsCreatingFolder(false);
+    setNewFolderName('');
+  };
+
   const submitRename = () => {
      if (!renamePrompt || !renameValue) return;
      const oldPath = currentPath ? `${currentPath}/${renamePrompt.Name}` : renamePrompt.Name;
@@ -328,6 +347,13 @@ export const FileExplorer: React.FC<FileExplorerProps> = ({ isConnected, workerI
             >
               <RefreshCw size={18} />
             </button>
+            <button
+              onClick={() => setIsCreatingFolder(!isCreatingFolder)}
+              className="p-1.5 rounded-md hover:bg-background/80 transition-colors text-muted-foreground hover:text-foreground"
+              title="New Folder"
+            >
+              <FolderPlus size={18} />
+            </button>
           </div>
 
           <div className="flex-1 bg-secondary/30 border border-border/50 rounded-lg px-4 py-2 font-mono text-sm text-muted-foreground flex items-center gap-2 overflow-hidden whitespace-nowrap">
@@ -394,6 +420,27 @@ export const FileExplorer: React.FC<FileExplorerProps> = ({ isConnected, workerI
         </div>
       )}
 
+      {/* New Folder Inline Prompt */}
+      {isCreatingFolder && (
+        <div className="px-6 py-3 bg-black/40 border-b border-white/5 flex items-center gap-3 animate-in fade-in slide-in-from-top-2 z-20 relative">
+          <Folder size={18} className="text-blue-400" />
+          <input
+            type="text"
+            autoFocus
+            placeholder="Folder name..."
+            value={newFolderName}
+            onChange={e => setNewFolderName(e.target.value)}
+            onKeyDown={e => {
+              if (e.key === 'Enter') handleCreateFolder();
+              if (e.key === 'Escape') { setIsCreatingFolder(false); setNewFolderName(''); }
+            }}
+            className="bg-black/50 border border-white/10 rounded-lg px-3 py-1.5 text-sm text-white focus:outline-none focus:ring-1 focus:ring-blue-500 w-72"
+          />
+          <button onClick={handleCreateFolder} className="px-4 py-1.5 bg-blue-600 hover:bg-blue-500 rounded-lg text-xs font-bold text-white transition-colors">Create</button>
+          <button onClick={() => { setIsCreatingFolder(false); setNewFolderName(''); }} className="px-4 py-1.5 hover:bg-white/10 rounded-lg text-xs text-muted-foreground transition-colors">Cancel</button>
+        </div>
+      )}
+
       {/* File Area */}
       <div className="flex-1 overflow-hidden relative bg-[url('https://www.transparenttextures.com/patterns/cubes.png')] bg-opacity-5">
 
@@ -414,14 +461,14 @@ export const FileExplorer: React.FC<FileExplorerProps> = ({ isConnected, workerI
 
           {viewMode === 'LIST' && files.length > 0 && (
             <div style={{ height: `${rowVirtualizer.getTotalSize()}px`, width: '100%', position: 'relative' }}>
-               {/* List Header (Sticky logic can be complex with virtualizers, we'll keep it simple for now) */}
-               <div className="flex items-center text-xs font-semibold text-muted-foreground uppercase tracking-wider mb-2 px-4 border-b border-border/50 pb-2">
+               {/* List Header */}
+               <div className="flex items-center text-xs font-semibold text-muted-foreground uppercase tracking-wider px-4 border-b border-border/50 pb-3 mb-4 bg-[#0f1218]/90 backdrop-blur-sm sticky top-0 z-10 shadow-sm">
                  <div className="w-10 flex items-center justify-center">
                     <input
                        type="checkbox"
                        checked={selectedFiles.size === files.length && files.length > 0}
                        onChange={handleSelectAll}
-                       className="cursor-pointer accent-primary"
+                       className="cursor-pointer accent-primary w-4 h-4 rounded border-white/20 bg-black/50"
                     />
                  </div>
                  <div className="w-10"></div>
@@ -431,21 +478,22 @@ export const FileExplorer: React.FC<FileExplorerProps> = ({ isConnected, workerI
                  <div className="w-10"></div>
                </div>
 
-               {rowVirtualizer.getVirtualItems().map((virtualItem) => {
-                 const file = files[virtualItem.index];
-                 const filePath = currentPath ? `${currentPath}/${file.Name}` : file.Name;
-                 const isSelected = selectedFiles.has(filePath);
+               <div className="pt-4 mt-8"> {/* Added top padding and margin to prevent the checkbox overlap */}
+                 {rowVirtualizer.getVirtualItems().map((virtualItem) => {
+                   const file = files[virtualItem.index];
+                   const filePath = currentPath ? `${currentPath}/${file.Name}` : file.Name;
+                   const isSelected = selectedFiles.has(filePath);
 
-                 return (
-                   <div
-                     key={virtualItem.key}
-                     onClick={() => handleRowClick(file)}
-                     className={`absolute top-0 left-0 w-full flex items-center px-4 py-2 border-b border-border/30 cursor-pointer transition-colors group ${isSelected ? 'bg-primary/10' : 'hover:bg-white/5'}`}
-                     style={{
-                       height: `${virtualItem.size}px`,
-                       transform: `translateY(${virtualItem.start}px)`,
-                     }}
-                   >
+                   return (
+                     <div
+                       key={virtualItem.key}
+                       onClick={() => handleRowClick(file)}
+                       className={`absolute top-0 left-0 w-full flex items-center px-4 py-2 border-b border-border/30 cursor-pointer transition-colors group ${isSelected ? 'bg-primary/10' : 'hover:bg-white/5'}`}
+                       style={{
+                         height: `${virtualItem.size}px`,
+                         transform: `translateY(${virtualItem.start + 48}px)`, // Offset by the header height to avoid overlap
+                       }}
+                     >
                      <div className="w-10 flex items-center justify-center">
                         <input
                            type="checkbox"
@@ -475,6 +523,7 @@ export const FileExplorer: React.FC<FileExplorerProps> = ({ isConnected, workerI
                    </div>
                  );
                })}
+               </div>
             </div>
           )}
 
