@@ -4,6 +4,7 @@ import { SocketManager } from '../../worker/SocketManager';
 import { MessageType } from '@swarm/shared';
 import type { WrapperStartRequestMessage, WrapperStopRequestMessage, Wrapper2FASubmitMessage, WrapperStateDeleteMessage } from '@swarm/shared';
 import { useAppleMusicStore } from '../../store/appleMusicStore';
+import { useFleetStore } from '../../store/fleetStore';
 
 export const AppleMusicWrapperUI: React.FC = () => {
   const {
@@ -19,6 +20,8 @@ export const AppleMusicWrapperUI: React.FC = () => {
       setWrapperProfiles,
       setSelectedProfileId
   } = useAppleMusicStore();
+
+  const { targetWorkerId } = useFleetStore();
 
   const [isInstalling, setIsInstalling] = useState(false);
   const [username, setUsername] = useState('');
@@ -59,13 +62,13 @@ export const AppleMusicWrapperUI: React.FC = () => {
     socketManager.emit(MessageType.WRAPPER_STATUS_REQUEST, {
        type: MessageType.WRAPPER_STATUS_REQUEST,
        timestamp: Date.now(),
-       workerId: 'target-worker-id' // Relay will route this to an idle worker
+       workerId: targetWorkerId || 'target-worker-id' // Relay will route this to an idle worker or targeted
     });
 
     return () => {
        socketManager.off(MessageType.WRAPPER_PROFILES_LIST, handleProfileList);
     };
-  }, []);
+  }, [targetWorkerId]);
 
   const logsEndRef = useRef<HTMLDivElement>(null);
 
@@ -97,10 +100,11 @@ export const AppleMusicWrapperUI: React.FC = () => {
         appendWrapperLog("[UI-ERROR] Missing Apple ID or Password.");
         return;
     }
+    // Phase 14: Use global targeted worker if available, else let Relay Route
     const payload: WrapperStartRequestMessage = {
        type: MessageType.WRAPPER_START_REQUEST,
        timestamp: Date.now(),
-       workerId: 'target-worker-id',
+       workerId: targetWorkerId || 'target-worker-id',
        username,
        password,
        profileId: selectedProfileId || undefined,
@@ -113,7 +117,7 @@ export const AppleMusicWrapperUI: React.FC = () => {
     const payload: WrapperStopRequestMessage = {
        type: MessageType.WRAPPER_STOP_REQUEST,
        timestamp: Date.now(),
-       workerId: 'target-worker-id',
+       workerId: targetWorkerId || 'target-worker-id',
        profileId: selectedProfileId || undefined
     };
     socketManager.emit(MessageType.WRAPPER_STOP_REQUEST, payload);
@@ -156,7 +160,7 @@ export const AppleMusicWrapperUI: React.FC = () => {
       const payload: Wrapper2FASubmitMessage = {
          type: MessageType.WRAPPER_2FA_SUBMIT,
          timestamp: Date.now(),
-         workerId: 'target-worker-id',
+         workerId: targetWorkerId || 'target-worker-id',
          code: twoFaCode
       };
 

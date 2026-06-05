@@ -29,7 +29,7 @@ export const AppleMusicApp: React.FC = () => {
   const [debugMode, setDebugMode] = useState(false);
 
   const { addJob, appendLog, updateJobStatus, updateJobProgress } = useAppleMusicQueueStore();
-  const { workers } = useFleetStore();
+  const { workers, targetWorkerId } = useFleetStore();
 
   const {
     mediaUserToken, storefront, setMediaUserToken, setStorefront, setAutoUpload, setRcloneRemote,
@@ -224,7 +224,7 @@ export const AppleMusicApp: React.FC = () => {
        convertDeleteBadAlac
     };
 
-    const activeWorkerId = workers[0] || 'target-worker-id';
+    const activeWorkerId = targetWorkerId || workers[0] || 'target-worker-id';
 
     addJob({
       jobId: newJobId,
