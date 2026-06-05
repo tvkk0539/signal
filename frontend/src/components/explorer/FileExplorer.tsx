@@ -202,12 +202,22 @@ export const FileExplorer: React.FC<FileExplorerProps> = ({ isConnected, workerI
 
   const handleBulkDelete = () => {
      if (!window.confirm(`Are you sure you want to permanently delete ${selectedFiles.size} items?`)) return;
+
+     const items = Array.from(selectedFiles).map(path => {
+        const fileName = path.split('/').pop();
+        const fileObj = files.find(f => f.Name === fileName);
+        return {
+           path: path,
+           isDir: fileObj ? fileObj.IsDir : false
+        };
+     });
+
      const payload: FileDeleteRequestMessage = {
         type: MessageType.FILE_DELETE_REQUEST,
         timestamp: Date.now(),
         workerId,
         fs: selectedFs,
-        paths: Array.from(selectedFiles)
+        items
      };
      socketManager.emit(MessageType.FILE_DELETE_REQUEST, payload);
      setSelectedFiles(new Set());

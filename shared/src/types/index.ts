@@ -540,7 +540,7 @@ export interface FileDeleteRequestMessage extends BaseMessage {
   type: MessageType.FILE_DELETE_REQUEST;
   workerId: string;
   fs: string;
-  paths: string[];
+  items: { path: string; isDir: boolean }[];
 }
 
 export interface FileMoveRequestMessage extends BaseMessage {

@@ -272,17 +272,21 @@ async function bootWorker() {
   });
 
   socket.on(MessageType.FILE_DELETE_REQUEST, async (msg: any) => {
-    console.log(`[Worker] Received FILE_DELETE_REQUEST for ${msg.paths.length} items on fs: ${msg.fs}`);
+    console.log(`[Worker] Received FILE_DELETE_REQUEST for ${msg.items?.length || 0} items on fs: ${msg.fs}`);
     try {
-      for (const path of msg.paths) {
-        await rcloneManager.deleteFile(msg.fs, path);
+      for (const item of msg.items) {
+        if (item.isDir) {
+          await rcloneManager.purge(msg.fs, item.path);
+        } else {
+          await rcloneManager.deleteFile(msg.fs, item.path);
+        }
       }
       socket.emit(MessageType.FILE_ACTION_RESPONSE, {
         type: MessageType.FILE_ACTION_RESPONSE,
         timestamp: Date.now(),
         success: true,
         action: 'DELETE',
-        message: `Successfully deleted ${msg.paths.length} items.`
+        message: `Successfully deleted ${msg.items?.length || 0} items.`
       });
     } catch (e: any) {
       console.error(`[Worker] FILE_DELETE_REQUEST failed:`, e.message);
