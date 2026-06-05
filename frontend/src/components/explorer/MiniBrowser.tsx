@@ -48,8 +48,6 @@ export const MiniBrowser: React.FC<MiniBrowserProps> = ({ workerId, targetFs, on
            // We only care about directories in the mini browser
            const dirs = (data.files || []).filter((f: any) => f.IsDir);
            setItems(dirs);
-           // Also auto-select the current path in the parent component
-           onPathSelect(currentPath);
         }
       }
     };
@@ -115,6 +113,19 @@ export const MiniBrowser: React.FC<MiniBrowserProps> = ({ workerId, targetFs, on
              );
           })}
         </div>
+      </div>
+
+      {/* Selection Toolbar */}
+      <div className="p-2 border-b border-border/50 bg-black/20 flex justify-between items-center">
+         <div className="text-xs text-muted-foreground truncate flex-1 mr-2">
+            Selected: <span className="text-white font-mono">{currentPath || '/'}</span>
+         </div>
+         <button
+           onClick={() => onPathSelect(currentPath)}
+           className="px-3 py-1 bg-primary text-primary-foreground text-xs font-semibold rounded hover:bg-primary/90 transition-colors"
+         >
+           Select This Folder
+         </button>
       </div>
 
       {/* Directory List */}

@@ -24,6 +24,7 @@ export const AppleMusicSettingsUI: React.FC = () => {
 
   const [selectedFs, setSelectedFs] = useState(currentRemoteMatch);
   const [selectedPath, setSelectedPath] = useState(currentPathMatch);
+  const [isEditingPath, setIsEditingPath] = useState(false);
 
   // Fetch remotes whenever a worker is available
   useEffect(() => {
@@ -139,14 +140,34 @@ export const AppleMusicSettingsUI: React.FC = () => {
                         </select>
                     </div>
                     <div className={!autoUpload ? 'opacity-50 pointer-events-none' : ''}>
-                        <label className="text-xs text-muted-foreground ml-1 mb-1 block">Target Directory Path</label>
-                        <div className="bg-black/20 border border-white/5 rounded-lg">
-                           <MiniBrowser
-                             workerId={workers[0] || ''}
-                             targetFs={selectedFs}
-                             onPathSelect={setSelectedPath}
-                           />
+                        <div className="flex justify-between items-end mb-1">
+                            <label className="text-xs text-muted-foreground ml-1 block">Target Directory Path</label>
+                            {!isEditingPath && (
+                                <button
+                                    onClick={() => setIsEditingPath(true)}
+                                    className="text-[10px] px-2 py-0.5 bg-primary/20 text-primary hover:bg-primary/30 rounded border border-primary/30 transition-colors"
+                                >
+                                    Edit Path
+                                </button>
+                            )}
                         </div>
+
+                        {isEditingPath ? (
+                            <div className="bg-black/20 border border-white/5 rounded-lg">
+                               <MiniBrowser
+                                 workerId={workers[0] || ''}
+                                 targetFs={selectedFs}
+                                 onPathSelect={(path) => {
+                                    setSelectedPath(path);
+                                    setIsEditingPath(false);
+                                 }}
+                               />
+                            </div>
+                        ) : (
+                            <div className="bg-black/40 border border-white/10 rounded-lg p-3 flex items-center justify-between">
+                                <div className="text-sm text-white font-mono truncate">{selectedPath || '/'}</div>
+                            </div>
+                        )}
                         <div className="mt-2 flex items-center gap-2 px-1 text-[10px] text-muted-foreground font-mono">
                             <span className="text-[#FA243C]">Final Path:</span>
                             <span className="bg-black/40 px-2 py-0.5 rounded border border-white/10 truncate">
