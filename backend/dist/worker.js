@@ -417,9 +417,7 @@ async function bootWorker() {
         console.log(`[Worker] Received VFS_INDEX_REQUEST for Remote: ${msg.remoteAlias}`);
         try {
             // Direct Bypass Connection
-            // Use the injected connection string if provided by the Relay, otherwise fallback to local env vars
-            const targetUri = msg.connectionString || (msg.isEphemeral ? GITHUB_EPHEMERAL_MONGODB_URI : (process.env.MONGODB_URI || GITHUB_EPHEMERAL_MONGODB_URI));
-            await vfsIndexer.connect(targetUri);
+            await vfsIndexer.connect(msg.isEphemeral ? GITHUB_EPHEMERAL_MONGODB_URI : (process.env.MONGODB_URI || GITHUB_EPHEMERAL_MONGODB_URI));
             const rcloneProc = rcloneManager.streamFastList(msg.rcloneName);
             // Tell UI we started
             socket.emit(shared_1.MessageType.TASK_PROGRESS, {
@@ -837,15 +835,6 @@ async function bootWorker() {
         catch (e) {
             console.error(`[Worker] Wrapper 2FA Input Error:`, e);
         }
-    });
-    socket.on(shared_1.MessageType.WRAPPER_STATUS_REQUEST, (msg) => {
-        console.log(`[Worker] Received WRAPPER_STATUS_REQUEST. Syncing UI...`);
-        socket.emit(shared_1.MessageType.WRAPPER_STATUS_UPDATE, {
-            type: shared_1.MessageType.WRAPPER_STATUS_UPDATE,
-            timestamp: Date.now(),
-            workerId: socket.id,
-            ...wrapperManager.getStatus()
-        });
     });
     socket.on(shared_1.MessageType.APPLE_MUSIC_RIP_REQUEST, async (msg) => {
         console.log(`[Worker] Received APPLE_MUSIC_RIP_REQUEST for URL: ${msg.url}`);

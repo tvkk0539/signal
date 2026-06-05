@@ -4,12 +4,22 @@ import { MessageType } from '@swarm/shared';
 import { useFleetStore } from '../../store/fleetStore';
 
 export const VfsConfigManagerUI: React.FC = () => {
-    const { workers } = useFleetStore();
+    const { workers, targetWorkerId } = useFleetStore();
     const [alias, setAlias] = useState('');
-    const [rcloneName, setRcloneName] = useState('drive:');
+    const [rcloneName, setRcloneName] = useState(''); // Removed hardcoded 'drive:'
     const [configText, setConfigText] = useState('');
+
+    // Phase 14: Smart Autofill for Physical Name based on Config Text
+    useEffect(() => {
+        if (configText && !rcloneName) {
+            // Rclone config headers look like [remote_name]
+            const match = configText.match(/^\[(.*?)\]/);
+            if (match && match[1]) {
+                setRcloneName(`${match[1]}:`);
+            }
+        }
+    }, [configText, rcloneName]);
     const [isEphemeral, setIsEphemeral] = useState(false);
-    const [targetWorkerId, setTargetWorkerId] = useState('');
     const [savedAliases, setSavedAliases] = useState<string[]>([]);
     const socketManager = SocketManager.getInstance();
 
@@ -63,11 +73,12 @@ export const VfsConfigManagerUI: React.FC = () => {
     };
 
     const handleIndexDrive = () => {
-        if (targetWorkerId) {
+        const activeTarget = targetWorkerId || workers[0];
+        if (activeTarget) {
             socketManager.emit(MessageType.VFS_INDEX_REQUEST, {
                 type: MessageType.VFS_INDEX_REQUEST,
                 timestamp: Date.now(),
-                workerId: targetWorkerId,
+                workerId: activeTarget,
                 remoteAlias: alias,
                 rcloneName: rcloneName,
                 isEphemeral: isEphemeral
@@ -79,9 +90,12 @@ export const VfsConfigManagerUI: React.FC = () => {
     };
 
     const handleRebootConfig = () => {
-        if (targetWorkerId) {
-            socketManager.emit('REQUEST_VFS_CONFIG_REBOOT', { workerId: targetWorkerId });
+        const activeTarget = targetWorkerId || workers[0];
+        if (activeTarget) {
+            socketManager.emit('REQUEST_VFS_CONFIG_REBOOT', { workerId: activeTarget });
             alert('Hybrid Config Reboot command sent to worker.');
+        } else {
+            alert('Please select an active worker first.');
         }
     };
 
@@ -143,16 +157,11 @@ export const VfsConfigManagerUI: React.FC = () => {
 
             <div className="border-t border-gray-800 pt-6">
                 <h3 className="text-lg font-bold mb-4 text-gray-300">Swarm Dispatch</h3>
-                <div className="flex space-x-4 mb-4">
-                    <select value={targetWorkerId} onChange={e => setTargetWorkerId(e.target.value)} className="flex-1 bg-gray-800 border border-gray-700 rounded p-2">
-                        <option value="">-- Select Active Worker --</option>
-                        {workers.map((w: any) => (
-                            <option key={w} value={w}>Worker: {w.substring(0, 8)}</option>
-                        ))}
-                    </select>
+                <div className="text-xs text-gray-400 mb-4 bg-gray-800 p-3 rounded border border-gray-700">
+                    <span className="font-bold text-gray-300">Target Node:</span> {targetWorkerId || workers[0] || 'None Selected (Select from top Fleet Bar)'}
                 </div>
                 <div className="flex space-x-4">
-                    <button onClick={handleIndexDrive} className="flex-1 bg-purple-600 hover:bg-purple-500 text-white font-bold py-2 rounded transition-colors">
+                    <button onClick={handleIndexDrive} disabled={!alias} className="flex-1 bg-purple-600 hover:bg-purple-500 disabled:opacity-50 text-white font-bold py-2 rounded transition-colors">
                         Build VFS Index (fast-list)
                     </button>
                     <button onClick={handleRebootConfig} className="flex-1 bg-gray-700 hover:bg-gray-600 text-white font-bold py-2 rounded transition-colors border border-gray-600">

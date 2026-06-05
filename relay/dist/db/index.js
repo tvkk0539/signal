@@ -57,12 +57,7 @@ class DatabaseManager {
                     await this.hotSwapDomain(domain, savedRoutings[domain], false); // Don't re-save on boot
                 }
                 else {
-                    // Master Control Plane Enforcement: Only AUTH defaults to the core engine.
-                    // All other domains MUST be explicitly configured by the user, otherwise they
-                    // fall back to MOCK to prevent accidental bloat of the Core DB.
-                    const engineToUse = domain === 'AUTH' ? defaultEngine : 'MOCK';
-                    console.log(`[DB Manager] No saved routing for ${domain}. Defaulting to ${engineToUse}.`);
-                    await this.hotSwapDomain(domain, { primary: { engine: engineToUse }, mirrors: [] }, false);
+                    await this.hotSwapDomain(domain, { primary: { engine: defaultEngine }, mirrors: [] }, false);
                 }
             }
         }
