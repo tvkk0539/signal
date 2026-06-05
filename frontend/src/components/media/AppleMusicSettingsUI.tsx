@@ -126,10 +126,11 @@ export const AppleMusicSettingsUI: React.FC = () => {
                         <select
                             value={selectedFs}
                             onChange={(e) => setSelectedFs(e.target.value)}
-                            disabled={!autoUpload}
+                            disabled={!autoUpload || remotes.length === 0}
                             className="w-full bg-black/50 border border-white/10 rounded-lg px-3 py-2 text-sm text-white focus:ring-1 focus:ring-primary outline-none disabled:opacity-50"
                         >
-                            <option value="remote:">Default Remote (remote:)</option>
+                            {remotes.length === 0 && <option value="remote:">No remotes loaded in backend. Add a config first.</option>}
+                            {remotes.length > 0 && <option value="remote:">Default Remote (remote:)</option>}
                             {remotes.map(remote => (
                                 <option key={remote.name} value={remote.name}>
                                     {remote.name === '/' ? 'Local Machine (/)' : `${remote.name} (${remote.type})`}
