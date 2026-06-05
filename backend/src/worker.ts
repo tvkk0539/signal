@@ -248,6 +248,29 @@ async function bootWorker() {
 
   // --- Universal VFS Operations (Phase 13) ---
 
+
+  socket.on(MessageType.FILE_MKDIR_REQUEST, async (msg: any) => {
+    console.log(`[Worker] Received FILE_MKDIR_REQUEST on fs: ${msg.fs}, path: ${msg.path}`);
+    try {
+      await rcloneManager.mkdir(msg.fs, msg.path);
+      socket.emit(MessageType.FILE_ACTION_RESPONSE, {
+         type: MessageType.FILE_ACTION_RESPONSE,
+         action: 'MKDIR',
+         success: true,
+         workerId: process.env.WORKER_ID || require('os').hostname()
+      });
+    } catch (error: any) {
+      console.error(`[Worker] FILE_MKDIR_REQUEST failed:`, error.message);
+      socket.emit(MessageType.FILE_ACTION_RESPONSE, {
+         type: MessageType.FILE_ACTION_RESPONSE,
+         action: 'MKDIR',
+         success: false,
+         error: error.message,
+         workerId: process.env.WORKER_ID || require('os').hostname()
+      });
+    }
+  });
+
   socket.on(MessageType.FILE_DELETE_REQUEST, async (msg: any) => {
     console.log(`[Worker] Received FILE_DELETE_REQUEST for ${msg.paths.length} items on fs: ${msg.fs}`);
     try {

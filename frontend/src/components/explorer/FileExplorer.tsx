@@ -7,7 +7,7 @@ import { SocketManager } from '../../worker/SocketManager';
 import { useProgressStore } from '../../store/progressStore';
 import { useExplorerStore } from '../../store/explorerStore';
 import { useVirtualizer } from '@tanstack/react-virtual';
-import { Folder, File, HardDrive, RefreshCw, ArrowUp, LayoutGrid, List as ListIcon, MoreVertical, Trash2, Copy, ArrowRight, Edit2, Play, Download, X } from 'lucide-react';
+import { Folder, File, HardDrive, RefreshCw, ArrowUp, LayoutGrid, List as ListIcon, MoreVertical, Trash2, Copy, ArrowRight, Edit2, Play, Download, X, FolderPlus } from 'lucide-react';
 import { MiniBrowser } from './MiniBrowser';
 
 interface FileExplorerProps {
@@ -29,6 +29,8 @@ export const FileExplorer: React.FC<FileExplorerProps> = ({ isConnected, workerI
   const [mediaPrompt, setMediaPrompt] = useState<FileItem | null>(null);
   const [renamePrompt, setRenamePrompt] = useState<FileItem | null>(null);
   const [renameValue, setRenameValue] = useState('');
+  const [mkdirPrompt, setMkdirPrompt] = useState(false);
+  const [mkdirValue, setMkdirValue] = useState('');
   const [targetPrompt, setTargetPrompt] = useState<{ type: 'MOVE' | 'COPY', paths: string[] } | null>(null);
   const [targetFs, setTargetFs] = useState<string>('/');
   const [targetPath, setTargetPath] = useState<string>('');
@@ -230,6 +232,21 @@ export const FileExplorer: React.FC<FileExplorerProps> = ({ isConnected, workerI
      setSelectedFiles(new Set());
   };
 
+  const submitMkdir = () => {
+     if (!mkdirValue) return;
+     const newPath = currentPath ? `${currentPath}/${mkdirValue}` : mkdirValue;
+
+     socketManager.emit(MessageType.FILE_MKDIR_REQUEST as any, {
+        type: MessageType.FILE_MKDIR_REQUEST,
+        timestamp: Date.now(),
+        workerId,
+        fs: selectedFs,
+        path: newPath
+     });
+     setMkdirPrompt(false);
+     setMkdirValue('');
+  };
+
   const submitTargetAction = () => {
      if (!targetPrompt) return;
      const jobId = `vfs-${Date.now()}`;
@@ -328,6 +345,13 @@ export const FileExplorer: React.FC<FileExplorerProps> = ({ isConnected, workerI
             >
               <RefreshCw size={18} />
             </button>
+            <button
+              onClick={() => setMkdirPrompt(true)}
+              className="p-2 bg-secondary/80 hover:bg-background border border-border/50 rounded-lg text-muted-foreground hover:text-primary transition-colors"
+              title="New Folder"
+            >
+              <FolderPlus size={18} />
+            </button>
           </div>
 
           <div className="flex-1 bg-secondary/30 border border-border/50 rounded-lg px-4 py-2 font-mono text-sm text-muted-foreground flex items-center gap-2 overflow-hidden whitespace-nowrap">
@@ -413,9 +437,9 @@ export const FileExplorer: React.FC<FileExplorerProps> = ({ isConnected, workerI
           )}
 
           {viewMode === 'LIST' && files.length > 0 && (
-            <div style={{ height: `${rowVirtualizer.getTotalSize()}px`, width: '100%', position: 'relative' }}>
-               {/* List Header (Sticky logic can be complex with virtualizers, we'll keep it simple for now) */}
-               <div className="flex items-center text-xs font-semibold text-muted-foreground uppercase tracking-wider mb-2 px-4 border-b border-border/50 pb-2">
+            <div className="flex flex-col h-full w-full">
+               {/* List Header extracted from relative virtualizer to fix spacing overlap */}
+               <div className="flex items-center text-xs font-semibold text-muted-foreground uppercase tracking-wider mb-2 px-4 border-b border-border/50 pb-2 sticky top-0 z-10 bg-background/90 backdrop-blur-sm pt-2">
                  <div className="w-10 flex items-center justify-center">
                     <input
                        type="checkbox"
@@ -431,21 +455,22 @@ export const FileExplorer: React.FC<FileExplorerProps> = ({ isConnected, workerI
                  <div className="w-10"></div>
                </div>
 
-               {rowVirtualizer.getVirtualItems().map((virtualItem) => {
-                 const file = files[virtualItem.index];
-                 const filePath = currentPath ? `${currentPath}/${file.Name}` : file.Name;
-                 const isSelected = selectedFiles.has(filePath);
+               <div style={{ height: `${rowVirtualizer.getTotalSize()}px`, width: '100%', position: 'relative' }}>
+                 {rowVirtualizer.getVirtualItems().map((virtualItem) => {
+                   const file = files[virtualItem.index];
+                   const filePath = currentPath ? `${currentPath}/${file.Name}` : file.Name;
+                   const isSelected = selectedFiles.has(filePath);
 
-                 return (
-                   <div
-                     key={virtualItem.key}
-                     onClick={() => handleRowClick(file)}
-                     className={`absolute top-0 left-0 w-full flex items-center px-4 py-2 border-b border-border/30 cursor-pointer transition-colors group ${isSelected ? 'bg-primary/10' : 'hover:bg-white/5'}`}
-                     style={{
-                       height: `${virtualItem.size}px`,
-                       transform: `translateY(${virtualItem.start}px)`,
-                     }}
-                   >
+                   return (
+                     <div
+                       key={virtualItem.key}
+                       onClick={() => handleRowClick(file)}
+                       className={`absolute top-0 left-0 w-full flex items-center px-4 py-2 border-b border-border/30 cursor-pointer transition-colors group ${isSelected ? 'bg-primary/10' : 'hover:bg-white/5'}`}
+                       style={{
+                         height: `${virtualItem.size}px`,
+                         transform: `translateY(${virtualItem.start}px)`,
+                       }}
+                     >
                      <div className="w-10 flex items-center justify-center">
                         <input
                            type="checkbox"
@@ -474,7 +499,8 @@ export const FileExplorer: React.FC<FileExplorerProps> = ({ isConnected, workerI
                      </div>
                    </div>
                  );
-               })}
+                 })}
+               </div>
             </div>
           )}
 
@@ -625,6 +651,29 @@ export const FileExplorer: React.FC<FileExplorerProps> = ({ isConnected, workerI
               <div className="flex justify-end gap-3 mt-6">
                  <button onClick={() => setTargetPrompt(null)} className="px-4 py-2 text-sm text-muted-foreground hover:text-foreground">Cancel</button>
                  <button onClick={submitTargetAction} className="px-4 py-2 bg-primary hover:bg-primary/90 text-primary-foreground text-sm font-bold rounded-lg transition-colors shadow-[0_0_10px_rgba(170,59,255,0.3)]">Confirm Action</button>
+              </div>
+           </div>
+        </div>
+      )}
+
+      {/* Mkdir Prompt */}
+      {mkdirPrompt && (
+        <div className="fixed inset-0 bg-background/80 backdrop-blur-sm z-[60] flex items-center justify-center p-4">
+           <div className="bg-card border border-border/50 rounded-2xl shadow-2xl p-6 max-w-md w-full">
+              <h3 className="text-lg font-bold text-foreground mb-4">Create New Folder</h3>
+              <div>
+                 <input
+                    type="text"
+                    value={mkdirValue}
+                    onChange={e => setMkdirValue(e.target.value)}
+                    placeholder="Folder Name"
+                    autoFocus
+                    className="w-full bg-secondary text-sm text-foreground border border-border/50 rounded-lg p-2 outline-none"
+                 />
+              </div>
+              <div className="flex justify-end gap-3 mt-6">
+                 <button onClick={() => setMkdirPrompt(false)} className="px-4 py-2 text-sm text-muted-foreground hover:text-foreground">Cancel</button>
+                 <button onClick={submitMkdir} disabled={!mkdirValue} className="px-4 py-2 bg-primary hover:bg-primary/90 text-white text-sm font-bold rounded-lg transition-colors disabled:opacity-50">Create</button>
               </div>
            </div>
         </div>

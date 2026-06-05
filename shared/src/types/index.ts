@@ -581,6 +581,14 @@ export interface VfsTaskCancelRequestMessage extends BaseMessage {
   jobId: string;
 }
 
+
+export interface FileMkdirRequestMessage extends BaseMessage {
+  type: MessageType.FILE_MKDIR_REQUEST;
+  workerId: string;
+  fs: string;
+  path: string;
+}
+
 export interface FileRenameRequestMessage extends BaseMessage {
   type: MessageType.FILE_RENAME_REQUEST;
   workerId: string;
