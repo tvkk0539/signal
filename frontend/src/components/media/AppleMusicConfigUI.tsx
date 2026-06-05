@@ -80,7 +80,7 @@ export const AppleMusicConfigUI: React.FC = () => {
      };
   }, []);
 
-  // Sync the global combined string into local split states when component loads
+  // Initialize local states from global store on mount
   useEffect(() => {
      if (rcloneRemote) {
         const parts = rcloneRemote.split(':');
@@ -92,16 +92,24 @@ export const AppleMusicConfigUI: React.FC = () => {
            setRemotePath(rcloneRemote.replace(/^\//, ''));
         }
      }
-  }, [rcloneRemote]);
+  }, []);
 
-  // Sync local split states back into the global combined string whenever they change
-  useEffect(() => {
-     if (selectedFs && selectedFs !== '/') {
-        useAppleMusicStore.getState().setRcloneRemote(`${selectedFs}${remotePath.startsWith('/') ? remotePath : `/${remotePath}`}`);
-     } else {
-        useAppleMusicStore.getState().setRcloneRemote(`/${remotePath.replace(/^\//, '')}`);
-     }
-  }, [selectedFs, remotePath]);
+  // Update global store only when user explicitly changes dropdown or input
+  const handleFsChange = (newFs: string) => {
+     setSelectedFs(newFs);
+     const newRemote = newFs && newFs !== '/'
+         ? `${newFs}${remotePath.startsWith('/') ? remotePath : `/${remotePath}`}`
+         : `/${remotePath.replace(/^\//, '')}`;
+     useAppleMusicStore.getState().setRcloneRemote(newRemote);
+  };
+
+  const handlePathChange = (newPath: string) => {
+     setRemotePath(newPath);
+     const newRemote = selectedFs && selectedFs !== '/'
+         ? `${selectedFs}${newPath.startsWith('/') ? newPath : `/${newPath}`}`
+         : `/${newPath.replace(/^\//, '')}`;
+     useAppleMusicStore.getState().setRcloneRemote(newRemote);
+  };
 
   const handleSave = () => {
     setIsSaving(true);
@@ -237,7 +245,7 @@ export const AppleMusicConfigUI: React.FC = () => {
                         <label className="text-xs text-muted-foreground ml-1 font-semibold tracking-wide">Target Remote Provider</label>
                         <select
                             value={selectedFs}
-                            onChange={(e) => setSelectedFs(e.target.value)}
+                            onChange={(e) => handleFsChange(e.target.value)}
                             className="w-full bg-black/50 border border-white/10 rounded-lg px-3 py-2.5 text-sm text-white focus:ring-1 focus:ring-blue-500 outline-none"
                         >
                             {availableRemotes.map(remote => (
@@ -251,7 +259,7 @@ export const AppleMusicConfigUI: React.FC = () => {
                         <input
                             type="text"
                             value={remotePath}
-                            onChange={(e) => setRemotePath(e.target.value)}
+                            onChange={(e) => handlePathChange(e.target.value)}
                             placeholder="/Media/Music/Rips"
                             className="w-full bg-black/50 border border-white/10 rounded-lg px-3 py-2.5 text-sm text-white focus:ring-1 focus:ring-blue-500 outline-none font-mono"
                         />
