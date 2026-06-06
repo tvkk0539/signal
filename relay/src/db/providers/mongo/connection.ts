@@ -4,7 +4,7 @@ import mongoose, { Connection } from 'mongoose';
 const connections = new Map<string, Connection>();
 
 export const createMongoConnection = async (connectionString?: string): Promise<Connection> => {
-  const uri = connectionString || process.env.MONGO_URI || 'mongodb://127.0.0.1:27017/swarm_commander';
+  const uri = connectionString || process.env.MONGODB_URI || process.env.MONGO_URI || 'mongodb://127.0.0.1:27017/swarm_commander';
 
   if (connections.has(uri)) {
     console.log(`[MongoDB] Using existing connection for URI: ${uri}`);

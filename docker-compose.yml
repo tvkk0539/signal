@@ -1,0 +1,74 @@
+version: '3.8'
+
+services:
+  mongodb:
+    image: mongo:6.0
+    container_name: swarm-core-db
+    restart: unless-stopped
+    ports:
+      - "27017:27017"
+    volumes:
+      - swarm_mongo_data:/data/db
+    networks:
+      - swarm-network
+
+  relay:
+    build:
+      context: .
+      dockerfile: relay/Dockerfile
+    container_name: swarm-relay
+    restart: unless-stopped
+    ports:
+      - "3001:3001"
+    environment:
+      - PORT=3001
+      - DB_TYPE=MONGODB
+      - MONGODB_URI=mongodb://mongodb:27017/swarm_core
+    depends_on:
+      - mongodb
+    networks:
+      - swarm-network
+
+  backend-worker:
+    build:
+      context: .
+      dockerfile: backend/Dockerfile
+    container_name: swarm-worker-1
+    restart: unless-stopped
+    # Privileged is required to mount loopback devices or FUSE mounts if needed by third-party binaries,
+    # though the Swarm primarily uses stateless HTTP APIs.
+    privileged: true
+    environment:
+      - RELAY_URL=http://relay:3001
+      - WORKER_SECRET=fallback_for_dev_only
+    depends_on:
+      - relay
+    volumes:
+      # Optional: Persist the rclone configs if you don't want to use the database switchboard
+      - ~/.config/rclone:/root/.config/rclone
+    networks:
+      - swarm-network
+
+  frontend:
+    build:
+      context: .
+      dockerfile: frontend/Dockerfile
+    container_name: swarm-frontend
+    restart: unless-stopped
+    ports:
+      - "80:80"
+    environment:
+      # Inject the Relay URL for the client browser to connect to.
+      # IMPORTANT: If accessing from outside localhost, change this to your VM's public IP (e.g. http://192.168.1.100:3001)
+      - VITE_RELAY_URL=${VITE_RELAY_URL:-http://localhost:3001}
+    depends_on:
+      - relay
+    networks:
+      - swarm-network
+
+volumes:
+  swarm_mongo_data:
+
+networks:
+  swarm-network:
+    driver: bridge

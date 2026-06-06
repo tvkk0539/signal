@@ -35,10 +35,10 @@ echo ""
 echo "--- 🔐 Environment Configuration ---"
 read -p "Enter a highly secure JWT_SECRET (for UI logins): " JWT_SECRET
 read -p "Enter a highly secure WORKER_SECRET (for Backend auth): " WORKER_SECRET
-read -p "Enter your MONGO_URI (or press enter to use a local fallback): " MONGO_URI
+read -p "Enter your MONGODB_URI (or press enter to use a local fallback): " MONGODB_URI
 
-if [ -z "$MONGO_URI" ]; then
-    MONGO_URI="mongodb://localhost:27017/swarm"
+if [ -z "$MONGODB_URI" ]; then
+    MONGODB_URI="mongodb://localhost:27017/swarm"
 fi
 
 # Write the .env file inside the relay workspace
@@ -48,7 +48,7 @@ PORT=3001
 JWT_SECRET=${JWT_SECRET}
 WORKER_SECRET=${WORKER_SECRET}
 DB_TYPE=MONGODB
-MONGO_URI=${MONGO_URI}
+MONGODB_URI=${MONGODB_URI}
 ENV
 
 if [ "$DEPLOY_METHOD" == "1" ]; then

@@ -99,6 +99,7 @@ The Monorepo is being developed in strict, highly-engineered phases. The current
     *   **Interactive Target Modals & Mini-Browser:** For copy/move actions, instead of forcing the user to type destination paths via text input, the UI injects a dynamic `MiniBrowser.tsx`. This isolated file picker browses the target remote folder structure on the fly so users can visually select their destination.
     *   **Non-Blocking Backend Orchestration (`VfsJobOrchestrator`):** Instead of freezing the backend worker using traditional blocking HTTP APIs (`rclone rc`), large-scale move/copy commands are orchestrated using parallel `child_process.spawn()` commands dynamically injected with the advanced speed parameters. The worker tracks the active PIDs and pipes the `rclone stats` output stream directly to the UI.
     *   **Live VFS Telemetry & Selective Deletion:** The Global Task Queue Drawer maps these specific VFS operations to visual progress bars. The UI natively supports `SIGKILL` capabilities via `VFS_TASK_CANCEL_REQUEST` to instantly kill errant cloud-to-cloud operations mid-flight. Furthermore, users have precise control over the telemetry data store with granular actions to wipe specific `taskId` entries or selectively clear only 'SUCCESS' or 'FAILED' history objects from the React `zustand` state.
+    *   **VFS Config Auto-Fill UX (State Restoration):** To streamline the UI when managing multiple remote configurations, the VFS Config Manager implements an intelligent auto-fill feature. When a user selects a previously saved `Remote Alias` from the searchable datalist combo-box, the frontend explicitly fires a `VFS_CONFIG_LOAD_REQUEST` WebSocket event. The Relay Server intercepts this, queries the Polyglot DB across both Permanent and Ephemeral domains, and streams the exact saved configuration (`rcloneName`, `configText`, and `isEphemeral` toggle) back to the client. This instantly restores the full visual state of the form to exactly how the user left it, rather than just retaining the physical remote name.
 *   **Phase 12: Master Control Plane & Persistent DB Routing (✅ Active):**
     *   **Core DB Isolation Principle:** The default MongoDB instance provided to the Relay Server acts strictly as the "Core DB". It is exclusively responsible for critical system schemas (like `AUTH`) and storing the system's routing configurations. To mathematically guarantee the Core DB is never bloated with multi-gigabyte VFS index payloads, the `DatabaseManager` explicitly forces all unconfigured database domains (like `VFS_PERMANENT` or `APPLE_MUSIC`) to default to a volatile `MOCK` in-memory engine upon boot.
     *   **Independent External Routing:** Through the Pluggable DB Switchboard UI, users can define independent database connection strings (Postgres, Supabase, alternative MongoDB clusters) for specific domains.
@@ -148,6 +149,45 @@ npm run dev:frontend
 ```
 
 Open your browser to `http://localhost:5173` to take control of your swarm.
+
+---
+
+## 🐳 Single-Instance Deployment (Docker Compose)
+
+While the Distributed Swarm is designed to scale across dozens of ephemeral cloud instances to bypass IP rate-limits and maximize parallel bandwidth, it can easily be deployed on a single Virtual Machine (e.g., AWS EC2, DigitalOcean Droplet, or a home Raspberry Pi) using `docker-compose`.
+
+### Single VM vs. Distributed Swarm
+*   **Benefits of Single VM:** Zero network latency between the Relay and Worker, cheaper hosting, and simpler networking (no NAT hole-punching).
+*   **Trade-offs:** A single VM relies on a single Public IP, making it susceptible to `429 Too Many Requests` API bans from cloud providers during massive bulk rips. It also limits maximum CPU/RAM for heavy media encoding.
+
+### Deployment Steps (Automated Script)
+To make GCP/AWS deployments incredibly fast, we provide an all-in-one bootstrapper. It detects your OS, installs Docker automatically, figures out your Public IP, and configures the environment variables for you.
+
+#### Firewall Requirements
+Before running the script, ensure your Cloud Provider's firewall (e.g., VPC Network in GCP or Security Groups in AWS) allows incoming traffic on:
+*   **TCP Port 80** (HTTP for the UI)
+*   **TCP Port 443** (HTTPS if using Let's Encrypt / Certbot generation)
+*   **TCP Port 3001** (WebSockets for the Relay Server - Optional if using Certbot proxy)
+
+#### Run the Bootstrapper
+SSH into your fresh Debian/Ubuntu VM and run this one-liner:
+```bash
+wget -qO- https://raw.githubusercontent.com/YOUR_REPO_ORG/distributed-swarm-monorepo/main/deploy_single_vm.sh | sudo bash
+```
+*(Note: If you haven't pushed the script to GitHub yet, simply clone this repository onto the VM and execute `sudo bash deploy_single_vm.sh`).*
+
+The script will prompt you to confirm your Public IP address and then build the entire architecture. Once finished, visit `http://<YOUR_VM_IP>` in your browser.
+
+### Manual Deployment Steps
+If you prefer not to use the automated script:
+1. Ensure Docker and Docker Compose are installed on your VM.
+2. Clone the repository to the VM.
+3. Create a `.env` file in the root directory containing `VITE_RELAY_URL=http://<YOUR_VM_IP>:3001`.
+4. Build and start the Swarm stack:
+```bash
+docker compose up -d --build
+```
+5. The UI will be available at `http://<YOUR_VM_IP>:80`, powered by Nginx. The MongoDB Core Database and the Relay Server will automatically bind and communicate over the internal isolated Docker network.
 
 ---
 

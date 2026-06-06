@@ -8,7 +8,7 @@ const mongoose_1 = __importDefault(require("mongoose"));
 // Map to hold multiple connections if different domains connect to different MongoDB clusters
 const connections = new Map();
 const createMongoConnection = async (connectionString) => {
-    const uri = connectionString || process.env.MONGO_URI || 'mongodb://127.0.0.1:27017/swarm_commander';
+    const uri = connectionString || process.env.MONGODB_URI || process.env.MONGO_URI || 'mongodb://127.0.0.1:27017/swarm_commander';
     if (connections.has(uri)) {
         console.log(`[MongoDB] Using existing connection for URI: ${uri}`);
         return connections.get(uri);

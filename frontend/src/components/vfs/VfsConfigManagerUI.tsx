@@ -18,13 +18,40 @@ export const VfsConfigManagerUI: React.FC = () => {
             setSavedAliases(msg.aliases || []);
         };
 
+        const handleConfigLoad = (msg: any) => {
+            // Because this is bound once on mount, we use an updater function
+            // or just always apply it if the server returned it based on our request.
+            // Since we explicitly request this config, it's safe to just apply it.
+            setRcloneName(msg.rcloneName);
+            setConfigText(msg.configText);
+            setIsEphemeral(msg.isEphemeral);
+        };
+
         socketManager.on(MessageType.VFS_ALIAS_LIST_RESPONSE, handleAliasList);
+        socketManager.on(MessageType.VFS_CONFIG_LOAD_RESPONSE, handleConfigLoad);
+
+        // Fetch the list of aliases exactly once when the component mounts
         socketManager.emit(MessageType.VFS_ALIAS_LIST_REQUEST, { timestamp: Date.now() });
 
         return () => {
             socketManager.off(MessageType.VFS_ALIAS_LIST_RESPONSE, handleAliasList);
+            socketManager.off(MessageType.VFS_CONFIG_LOAD_RESPONSE, handleConfigLoad);
         };
-    }, []);
+    }, []); // Empty dependency array ensures we don't spam requests on keystrokes
+
+    const handleAliasChange = (e: React.ChangeEvent<HTMLInputElement>) => {
+        const newAlias = e.target.value;
+        setAlias(newAlias);
+
+        // If the newly typed or selected alias exists in our saved list, fetch its config automatically
+        if (savedAliases.includes(newAlias)) {
+            socketManager.emit(MessageType.VFS_CONFIG_LOAD_REQUEST, {
+                type: MessageType.VFS_CONFIG_LOAD_REQUEST,
+                timestamp: Date.now(),
+                alias: newAlias
+            });
+        }
+    };
 
     const handleSave = () => {
         if (!alias) {
@@ -97,7 +124,7 @@ export const VfsConfigManagerUI: React.FC = () => {
                     <input
                         list="saved-aliases"
                         value={alias}
-                        onChange={e => setAlias(e.target.value)}
+                        onChange={handleAliasChange}
                         placeholder="e.g. storage_movies_1"
                         className="w-full bg-gray-800 border border-gray-700 rounded p-2 focus:border-blue-500"
                     />

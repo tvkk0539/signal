@@ -376,6 +376,32 @@ function setupSockets(io) {
                 console.error(`[Relay] VFS Alias List Error: ${e.message}`);
             }
         });
+        socket.on(shared_1.MessageType.VFS_CONFIG_LOAD_REQUEST, async (msg) => {
+            try {
+                const targetAlias = msg.alias;
+                if (!targetAlias)
+                    return;
+                const [ephemeralConfigs, permanentConfigs] = await Promise.all([
+                    db_1.dbManager.getVfsEphemeral().getConfigBlocks(),
+                    db_1.dbManager.getVfsPermanent().getConfigBlocks()
+                ]);
+                const allConfigs = [...ephemeralConfigs, ...permanentConfigs];
+                const match = allConfigs.find(c => c.alias === targetAlias);
+                if (match) {
+                    socket.emit(shared_1.MessageType.VFS_CONFIG_LOAD_RESPONSE, {
+                        type: shared_1.MessageType.VFS_CONFIG_LOAD_RESPONSE,
+                        timestamp: Date.now(),
+                        alias: match.alias,
+                        rcloneName: match.rcloneName,
+                        configText: match.configText,
+                        isEphemeral: match.isEphemeral
+                    });
+                }
+            }
+            catch (e) {
+                console.error(`[Relay] VFS Config Load Error: ${e.message}`);
+            }
+        });
         socket.on(shared_1.MessageType.VFS_SEARCH_REQUEST, async (msg) => {
             try {
                 // Parallel Query against both Ephemeral and Permanent Switchboard Domains
