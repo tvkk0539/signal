@@ -31,14 +31,16 @@ fi
 # 2. Configuration Prompts
 echo -e "\n${BLUE}--- Configuration ---${NC}"
 
-# Ask for the Docker Hub image namespace
-read -p "Enter your Docker Hub Username (where the 'swarm-monolith' image is hosted): " DOCKER_USER
-if [ -z "$DOCKER_USER" ]; then
-    echo -e "${RED}[ERROR] Docker Username cannot be empty.${NC}"
+# Ask for the GitHub Container Registry namespace
+echo -e "${YELLOW}[INFO] Your image should be hosted at ghcr.io/YOUR_GITHUB_ORG/REPO_NAME-appliance:latest${NC}"
+read -p "Enter the full GHCR image URL (e.g. ghcr.io/my-org/swarm-appliance:latest): " IMAGE_NAME
+if [ -z "$IMAGE_NAME" ]; then
+    echo -e "${RED}[ERROR] Image URL cannot be empty.${NC}"
     exit 1
 fi
 
-IMAGE_NAME="${DOCKER_USER}/swarm-monolith:latest"
+# Ensure user is authenticated to GHCR if the repo is private
+echo -e "${YELLOW}[INFO] If your repository is PRIVATE, you must run 'docker login ghcr.io' first!${NC}"
 
 # Get the URL/IP to configure WebSockets
 DETECTED_IP=$(curl -s -m 5 https://ifconfig.me || echo "")
