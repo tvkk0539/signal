@@ -201,7 +201,30 @@ else
 fi
 echo -e "${GREEN}[OK] UI will be configured to connect to Relay at: $FINAL_URL${NC}"
 
-# 5. Environment Variable Setup (.env generation)
+# 5. Database Configuration
+echo -e "\n${BLUE}--- Database Configuration ---${NC}"
+read -p "Do you have an external MongoDB connection string (e.g. MongoDB Atlas)? If so, paste it here. Otherwise, press [Enter] to install a local database: " USER_MONGO_URI
+
+FINAL_MONGO_URI="mongodb://mongodb:27017/swarm_core"
+if [ -n "$USER_MONGO_URI" ]; then
+    FINAL_MONGO_URI="$USER_MONGO_URI"
+    echo -e "${GREEN}[OK] Using External MongoDB URI.${NC}"
+
+    # Remove the local mongodb block and depends_on from docker-compose.yml to save VM resources
+    echo -e "${YELLOW}[INFO] Removing local MongoDB container from docker-compose.yml...${NC}"
+    # This sed command deletes from 'mongodb:' to the first blank line (which removes the service)
+    sed -i '/^  mongodb:/,/^$/d' docker-compose.yml
+    # Remove the volumes block for mongo and the parent volumes block if empty
+    sed -i '/^  swarm_mongo_data:/d' docker-compose.yml
+    sed -i '/^volumes:/d' docker-compose.yml
+    # Remove the depends_on reference from the relay and the parent depends_on block
+    sed -i '/- mongodb/d' docker-compose.yml
+    sed -i '/depends_on:/d' docker-compose.yml
+else
+    echo -e "${GREEN}[OK] Using Local Dockerized MongoDB.${NC}"
+fi
+
+# 6. Environment Variable Setup (.env generation)
 echo -e "${YELLOW}[INFO] Generating .env file for docker-compose...${NC}"
 
 cat <<EOF > .env
@@ -209,25 +232,26 @@ cat <<EOF > .env
 VITE_RELAY_URL=$FINAL_URL
 PORT=3001
 DB_TYPE=MONGODB
-MONGODB_URI=mongodb://mongodb:27017/swarm_core
+MONGODB_URI=$FINAL_MONGO_URI
 WORKER_SECRET=production_secret_key_change_me
 EOF
 
 echo -e "${GREEN}[OK] .env file created.${NC}"
 
-# 6. Check docker-compose.yml modification (We use .env variable replacement)
-# The docker-compose.yml must be configured to use ${VITE_RELAY_URL} instead of a hardcoded string.
-# We will dynamically ensure the compose file uses the env variable.
+# 7. Check docker-compose.yml modification (We use .env variable replacement)
+# The docker-compose.yml must be configured to use variables instead of hardcoded strings.
 
 if grep -q "VITE_RELAY_URL=" docker-compose.yml; then
-    # Use sed to replace the hardcoded line with the variable interpolation
     sed -i 's/VITE_RELAY_URL=.*/VITE_RELAY_URL=${VITE_RELAY_URL}/g' docker-compose.yml
-    echo -e "${GREEN}[OK] docker-compose.yml verified.${NC}"
-else
-    echo -e "${RED}[WARNING] Could not find VITE_RELAY_URL in docker-compose.yml. Proceeding anyway.${NC}"
+    echo -e "${GREEN}[OK] docker-compose.yml UI endpoints verified.${NC}"
 fi
 
-# 7. Deployment
+if grep -q "MONGODB_URI=" docker-compose.yml; then
+    sed -i 's/MONGODB_URI=.*/MONGODB_URI=${MONGODB_URI}/g' docker-compose.yml
+    echo -e "${GREEN}[OK] docker-compose.yml DB endpoints verified.${NC}"
+fi
+
+# 8. Deployment
 echo -e "\n${BLUE}--- Deploying Swarm ---${NC}"
 echo -e "Building containers and starting the architecture. This may take several minutes..."
 
