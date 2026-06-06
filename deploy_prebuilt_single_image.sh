@@ -65,9 +65,90 @@ read -p "Are you using an SSL Reverse Proxy (like Cloudflare) for this domain? (
 if [[ "$USE_SSL" =~ ^[Yy]$ ]]; then
     PROTOCOL="https"
     FINAL_URL="${PROTOCOL}://${FINAL_HOST}"
+    HAS_CUSTOM_SSL=true
+    DOCKER_SSL_ARGS=""
 else
     PROTOCOL="http"
     FINAL_URL="${PROTOCOL}://${FINAL_HOST}:3001"
+    HAS_CUSTOM_SSL=false
+    DOCKER_SSL_ARGS=""
+
+    # Optional Free SSL via Certbot (Only if they actually provided a domain, not just an IP)
+    if [[ "$FINAL_HOST" =~ [a-zA-Z] ]]; then
+        echo -e "\n${YELLOW}[INFO] You have a domain but no SSL.${NC}"
+        read -p "Would you like to automatically install a FREE Let's Encrypt SSL certificate using Certbot? (y/N): " INSTALL_CERTBOT
+        if [[ "$INSTALL_CERTBOT" =~ ^[Yy]$ ]]; then
+            read -p "Enter your email address (Required by Let's Encrypt for urgent renewal notices): " USER_EMAIL
+            if [ -z "$USER_EMAIL" ]; then
+                echo -e "${YELLOW}[WARNING] No email provided. Using a dummy email. You won't receive expiry warnings!${NC}"
+                USER_EMAIL="admin@${FINAL_HOST}"
+            fi
+
+            echo -e "Installing Certbot and generating certificates for ${FINAL_HOST}..."
+            apt-get install -y certbot
+
+            # Stop any process listening on Port 80 before running standalone challenge
+            systemctl stop nginx 2>/dev/null || true
+            docker stop swarm-appliance 2>/dev/null || true
+
+            certbot certonly --standalone -d $FINAL_HOST --non-interactive --agree-tos -m "$USER_EMAIL"
+
+            if [ -d "/etc/letsencrypt/live/${FINAL_HOST}" ]; then
+                echo -e "${GREEN}[OK] SSL Certificates generated successfully!${NC}"
+                PROTOCOL="https"
+                FINAL_URL="${PROTOCOL}://${FINAL_HOST}"
+                HAS_CUSTOM_SSL=true
+
+                # We need to configure Nginx to use SSL and route websockets internally
+                echo -e "${YELLOW}[INFO] Creating custom Nginx SSL configuration...${NC}"
+                cat <<EOF > default.conf
+server {
+    listen 80;
+    server_name $FINAL_HOST;
+    return 301 https://\$host\$request_uri;
+}
+
+server {
+    listen 443 ssl;
+    server_name $FINAL_HOST;
+
+    ssl_certificate /etc/letsencrypt/live/$FINAL_HOST/fullchain.pem;
+    ssl_certificate_key /etc/letsencrypt/live/$FINAL_HOST/privkey.pem;
+
+    root /usr/share/nginx/html;
+    index index.html index.htm;
+
+    location / {
+        try_files \$uri \$uri/ /index.html;
+    }
+
+    # Reverse proxy for Relay Server WebSockets and API to bypass mixed-content errors
+    location /socket.io/ {
+        # The relay is running on the same container on port 3001
+        proxy_pass http://127.0.0.1:3001;
+        proxy_http_version 1.1;
+        proxy_set_header Upgrade \$http_upgrade;
+        proxy_set_header Connection "upgrade";
+        proxy_set_header Host \$host;
+        proxy_cache_bypass \$http_upgrade;
+    }
+
+    location /api/ {
+        proxy_pass http://127.0.0.1:3001;
+        proxy_http_version 1.1;
+        proxy_set_header Host \$host;
+        proxy_cache_bypass \$http_upgrade;
+    }
+}
+EOF
+
+                # Build the extra args required for the docker run command
+                DOCKER_SSL_ARGS="-p 443:443 -v /etc/letsencrypt:/etc/letsencrypt:ro -v $(pwd)/default.conf:/etc/nginx/conf.d/default.conf:ro"
+            else
+                echo -e "${RED}[ERROR] Certbot failed to generate certificates. Falling back to HTTP.${NC}"
+            fi
+        fi
+    fi
 fi
 
 # Ask for MongoDB Configuration
@@ -96,6 +177,7 @@ docker run -d \
     --privileged \
     -p 80:80 \
     -p 3001:3001 \
+    $DOCKER_SSL_ARGS \
     -e VITE_RELAY_URL="$FINAL_URL" \
     -e MONGODB_URI="$MONGO_URI" \
     -e DB_TYPE="MONGODB" \
