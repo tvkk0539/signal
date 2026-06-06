@@ -160,13 +160,31 @@ While the Distributed Swarm is designed to scale across dozens of ephemeral clou
 *   **Benefits of Single VM:** Zero network latency between the Relay and Worker, cheaper hosting, and simpler networking (no NAT hole-punching).
 *   **Trade-offs:** A single VM relies on a single Public IP, making it susceptible to `429 Too Many Requests` API bans from cloud providers during massive bulk rips. It also limits maximum CPU/RAM for heavy media encoding.
 
-### Deployment Steps
+### Deployment Steps (Automated Script)
+To make GCP/AWS deployments incredibly fast, we provide an all-in-one bootstrapper. It detects your OS, installs Docker automatically, figures out your Public IP, and configures the environment variables for you.
+
+#### Firewall Requirements
+Before running the script, ensure your Cloud Provider's firewall (e.g., VPC Network in GCP or Security Groups in AWS) allows incoming traffic on:
+*   **TCP Port 80** (HTTP for the UI)
+*   **TCP Port 3001** (WebSockets for the Relay Server)
+
+#### Run the Bootstrapper
+SSH into your fresh Debian/Ubuntu VM and run this one-liner:
+```bash
+wget -qO- https://raw.githubusercontent.com/YOUR_REPO_ORG/distributed-swarm-monorepo/main/deploy_single_vm.sh | sudo bash
+```
+*(Note: If you haven't pushed the script to GitHub yet, simply clone this repository onto the VM and execute `sudo bash deploy_single_vm.sh`).*
+
+The script will prompt you to confirm your Public IP address and then build the entire architecture. Once finished, visit `http://<YOUR_VM_IP>` in your browser.
+
+### Manual Deployment Steps
+If you prefer not to use the automated script:
 1. Ensure Docker and Docker Compose are installed on your VM.
 2. Clone the repository to the VM.
-3. If deploying to a public server, open the `docker-compose.yml` file and update the `VITE_RELAY_URL` environment variable under the `frontend` service to match your VM's public IP address (e.g., `http://203.0.113.50:3001`).
+3. Create a `.env` file in the root directory containing `VITE_RELAY_URL=http://<YOUR_VM_IP>:3001`.
 4. Build and start the Swarm stack:
 ```bash
-docker-compose up -d --build
+docker compose up -d --build
 ```
 5. The UI will be available at `http://<YOUR_VM_IP>:80`, powered by Nginx. The MongoDB Core Database and the Relay Server will automatically bind and communicate over the internal isolated Docker network.
 
