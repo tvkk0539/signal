@@ -88,11 +88,88 @@ FINAL_HOST=""
 if [ -n "$USER_DOMAIN" ]; then
     FINAL_HOST=$USER_DOMAIN
     # Ask about SSL if using a domain (Cloudflare often provides this free)
-    read -p "Does your domain use HTTPS/SSL? (y/N): " USE_SSL
+    read -p "Does your domain already use HTTPS/SSL (e.g. via Cloudflare)? (y/N): " USE_SSL
     if [[ "$USE_SSL" =~ ^[Yy]$ ]]; then
         PROTOCOL="https"
+        HAS_CUSTOM_SSL=true
     else
         PROTOCOL="http"
+        HAS_CUSTOM_SSL=false
+
+        # Optional Free SSL via Certbot
+        echo -e "\n${YELLOW}[INFO] You have a domain but no SSL.${NC}"
+        read -p "Would you like to automatically install a FREE Let's Encrypt SSL certificate using Certbot? (y/N): " INSTALL_CERTBOT
+        if [[ "$INSTALL_CERTBOT" =~ ^[Yy]$ ]]; then
+            echo -e "Installing Certbot and generating certificates for ${FINAL_HOST}..."
+            apt-get install -y certbot
+
+            # Stop any process listening on Port 80 before running standalone challenge
+            systemctl stop nginx 2>/dev/null || true
+            docker stop swarm-frontend 2>/dev/null || true
+
+            certbot certonly --standalone -d $FINAL_HOST --non-interactive --agree-tos -m "admin@${FINAL_HOST}"
+
+            if [ -d "/etc/letsencrypt/live/${FINAL_HOST}" ]; then
+                echo -e "${GREEN}[OK] SSL Certificates generated successfully!${NC}"
+                PROTOCOL="https"
+                HAS_CUSTOM_SSL=true
+
+                # We need to configure Nginx to use SSL
+                echo -e "${YELLOW}[INFO] Creating custom Nginx SSL configuration...${NC}"
+                cat <<EOF > default.conf
+server {
+    listen 80;
+    server_name $FINAL_HOST;
+    return 301 https://\$host\$request_uri;
+}
+
+server {
+    listen 443 ssl;
+    server_name $FINAL_HOST;
+
+    ssl_certificate /etc/letsencrypt/live/$FINAL_HOST/fullchain.pem;
+    ssl_certificate_key /etc/letsencrypt/live/$FINAL_HOST/privkey.pem;
+
+    root /usr/share/nginx/html;
+    index index.html index.htm;
+
+    location / {
+        try_files \$uri \$uri/ /index.html;
+    }
+
+    # Reverse proxy for Relay Server WebSockets and API to bypass mixed-content errors
+    location /socket.io/ {
+        proxy_pass http://relay:3001;
+        proxy_http_version 1.1;
+        proxy_set_header Upgrade \$http_upgrade;
+        proxy_set_header Connection "upgrade";
+        proxy_set_header Host \$host;
+        proxy_cache_bypass \$http_upgrade;
+    }
+
+    location /api/ {
+        proxy_pass http://relay:3001;
+        proxy_http_version 1.1;
+        proxy_set_header Host \$host;
+        proxy_cache_bypass \$http_upgrade;
+    }
+}
+EOF
+                # Create a docker-compose override to mount the certs and the new config into the frontend container
+                cat <<EOF > docker-compose.override.yml
+version: '3.8'
+services:
+  frontend:
+    ports:
+      - "443:443"
+    volumes:
+      - /etc/letsencrypt:/etc/letsencrypt:ro
+      - ./default.conf:/etc/nginx/conf.d/default.conf:ro
+EOF
+            else
+                echo -e "${RED}[ERROR] Certbot failed to generate certificates. Falling back to HTTP.${NC}"
+            fi
+        fi
     fi
 else
     if [ -n "$DETECTED_IP" ]; then
@@ -116,7 +193,12 @@ fi
 # Clean up any accidental http:// typed by user
 FINAL_HOST=$(echo $FINAL_HOST | sed -e 's|^[^/]*//||' -e 's|/.*$||')
 
-FINAL_URL="${PROTOCOL}://${FINAL_HOST}:3001"
+# If using generated SSL via Certbot, we reverse proxy over 443, so drop the :3001 port
+if [ "$INSTALL_CERTBOT" == "y" ] || [ "$INSTALL_CERTBOT" == "Y" ]; then
+    FINAL_URL="${PROTOCOL}://${FINAL_HOST}"
+else
+    FINAL_URL="${PROTOCOL}://${FINAL_HOST}:3001"
+fi
 echo -e "${GREEN}[OK] UI will be configured to connect to Relay at: $FINAL_URL${NC}"
 
 # 5. Environment Variable Setup (.env generation)

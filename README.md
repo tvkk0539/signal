@@ -166,7 +166,8 @@ To make GCP/AWS deployments incredibly fast, we provide an all-in-one bootstrapp
 #### Firewall Requirements
 Before running the script, ensure your Cloud Provider's firewall (e.g., VPC Network in GCP or Security Groups in AWS) allows incoming traffic on:
 *   **TCP Port 80** (HTTP for the UI)
-*   **TCP Port 3001** (WebSockets for the Relay Server)
+*   **TCP Port 443** (HTTPS if using Let's Encrypt / Certbot generation)
+*   **TCP Port 3001** (WebSockets for the Relay Server - Optional if using Certbot proxy)
 
 #### Run the Bootstrapper
 SSH into your fresh Debian/Ubuntu VM and run this one-liner:
