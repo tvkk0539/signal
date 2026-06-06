@@ -39,6 +39,14 @@ if [ -z "$IMAGE_NAME" ]; then
     exit 1
 fi
 
+# Safety check to prevent users from accidentally pulling GitHub Action cache layers
+if [[ "$IMAGE_NAME" == *":buildcache"* ]]; then
+    echo -e "${RED}[ERROR] You entered a URL ending in ':buildcache'.${NC}"
+    echo -e "${YELLOW}Docker cannot run a 'buildcache' because it is just a hidden temporary file used by GitHub Actions, not a real image.${NC}"
+    echo -e "${GREEN}Please re-run the script and use the tag ':latest' instead!${NC}"
+    exit 1
+fi
+
 # Ensure user is authenticated to GHCR if the repo is private
 echo -e "${YELLOW}[INFO] If your repository is PRIVATE, you must run 'docker login ghcr.io' first!${NC}"
 
