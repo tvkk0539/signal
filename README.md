@@ -152,4 +152,24 @@ Open your browser to `http://localhost:5173` to take control of your swarm.
 
 ---
 
+## 🐳 Single-Instance Deployment (Docker Compose)
+
+While the Distributed Swarm is designed to scale across dozens of ephemeral cloud instances to bypass IP rate-limits and maximize parallel bandwidth, it can easily be deployed on a single Virtual Machine (e.g., AWS EC2, DigitalOcean Droplet, or a home Raspberry Pi) using `docker-compose`.
+
+### Single VM vs. Distributed Swarm
+*   **Benefits of Single VM:** Zero network latency between the Relay and Worker, cheaper hosting, and simpler networking (no NAT hole-punching).
+*   **Trade-offs:** A single VM relies on a single Public IP, making it susceptible to `429 Too Many Requests` API bans from cloud providers during massive bulk rips. It also limits maximum CPU/RAM for heavy media encoding.
+
+### Deployment Steps
+1. Ensure Docker and Docker Compose are installed on your VM.
+2. Clone the repository to the VM.
+3. If deploying to a public server, open the `docker-compose.yml` file and update the `VITE_RELAY_URL` environment variable under the `frontend` service to match your VM's public IP address (e.g., `http://203.0.113.50:3001`).
+4. Build and start the Swarm stack:
+```bash
+docker-compose up -d --build
+```
+5. The UI will be available at `http://<YOUR_VM_IP>:80`, powered by Nginx. The MongoDB Core Database and the Relay Server will automatically bind and communicate over the internal isolated Docker network.
+
+---
+
 > *"Any sufficiently advanced technology is indistinguishable from magic."*
