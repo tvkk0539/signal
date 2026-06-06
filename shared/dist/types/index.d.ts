@@ -447,6 +447,17 @@ export interface VfsAliasListResponseMessage extends BaseMessage {
     type: MessageType.VFS_ALIAS_LIST_RESPONSE;
     aliases: string[];
 }
+export interface VfsConfigLoadRequestMessage extends BaseMessage {
+    type: MessageType.VFS_CONFIG_LOAD_REQUEST;
+    alias: string;
+}
+export interface VfsConfigLoadResponseMessage extends BaseMessage {
+    type: MessageType.VFS_CONFIG_LOAD_RESPONSE;
+    alias: string;
+    rcloneName: string;
+    configText: string;
+    isEphemeral: boolean;
+}
 export interface AppleMusicConfigDataMessage extends BaseMessage {
     type: MessageType.APPLE_MUSIC_CONFIG_DATA;
     mediaUserToken: string;

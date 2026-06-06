@@ -98,6 +98,7 @@ self.onmessage = (event: MessageEvent) => {
         MessageType.WRAPPER_PROFILES_LIST,
         MessageType.FILE_ACTION_RESPONSE,
         MessageType.VFS_ALIAS_LIST_RESPONSE,
+        MessageType.VFS_CONFIG_LOAD_RESPONSE,
         MessageType.VFS_SEARCH_RESPONSE
       ];
 
