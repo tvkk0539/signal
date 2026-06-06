@@ -27,6 +27,9 @@ if [ "$EUID" -ne 0 ]; then
   exit 1
 fi
 
+# Clean up any old override files from previous failed runs
+rm -f docker-compose.override.yml
+
 # 2. OS Detection (Basic check for Debian/Ubuntu)
 if [ -f /etc/os-release ]; then
     . /etc/os-release
@@ -100,6 +103,12 @@ if [ -n "$USER_DOMAIN" ]; then
         echo -e "\n${YELLOW}[INFO] You have a domain but no SSL.${NC}"
         read -p "Would you like to automatically install a FREE Let's Encrypt SSL certificate using Certbot? (y/N): " INSTALL_CERTBOT
         if [[ "$INSTALL_CERTBOT" =~ ^[Yy]$ ]]; then
+            read -p "Enter your email address (Required by Let's Encrypt for urgent renewal notices): " USER_EMAIL
+            if [ -z "$USER_EMAIL" ]; then
+                echo -e "${YELLOW}[WARNING] No email provided. Using a dummy email. You won't receive expiry warnings!${NC}"
+                USER_EMAIL="admin@${FINAL_HOST}"
+            fi
+
             echo -e "Installing Certbot and generating certificates for ${FINAL_HOST}..."
             apt-get install -y certbot
 
@@ -107,7 +116,7 @@ if [ -n "$USER_DOMAIN" ]; then
             systemctl stop nginx 2>/dev/null || true
             docker stop swarm-frontend 2>/dev/null || true
 
-            certbot certonly --standalone -d $FINAL_HOST --non-interactive --agree-tos -m "admin@${FINAL_HOST}"
+            certbot certonly --standalone -d $FINAL_HOST --non-interactive --agree-tos -m "$USER_EMAIL"
 
             if [ -d "/etc/letsencrypt/live/${FINAL_HOST}" ]; then
                 echo -e "${GREEN}[OK] SSL Certificates generated successfully!${NC}"
@@ -156,9 +165,12 @@ server {
 }
 EOF
                 # Create a docker-compose override to mount the certs and the new config into the frontend container
-                cat <<EOF > docker-compose.override.yml
-version: '3.8'
-services:
+                # We do this conditionally to gracefully merge with the MongoDB override if both are triggered.
+                if [ ! -f docker-compose.override.yml ]; then
+                    echo "version: '3.8'" > docker-compose.override.yml
+                    echo "services:" >> docker-compose.override.yml
+                fi
+                cat <<EOF >> docker-compose.override.yml
   frontend:
     ports:
       - "443:443"
@@ -211,15 +223,21 @@ if [ -n "$USER_MONGO_URI" ]; then
     echo -e "${GREEN}[OK] Using External MongoDB URI.${NC}"
 
     # Remove the local mongodb block and depends_on from docker-compose.yml to save VM resources
-    echo -e "${YELLOW}[INFO] Removing local MongoDB container from docker-compose.yml...${NC}"
-    # This sed command deletes from 'mongodb:' to the first blank line (which removes the service)
-    sed -i '/^  mongodb:/,/^$/d' docker-compose.yml
-    # Remove the volumes block for mongo and the parent volumes block if empty
-    sed -i '/^  swarm_mongo_data:/d' docker-compose.yml
-    sed -i '/^volumes:/d' docker-compose.yml
-    # Remove the depends_on reference from the relay and the parent depends_on block
-    sed -i '/- mongodb/d' docker-compose.yml
-    sed -i '/depends_on:/d' docker-compose.yml
+    echo -e "${YELLOW}[INFO] Configuring docker-compose overrides to disable local MongoDB...${NC}"
+
+    # The safest, highly-engineered way to disable a service in Docker Compose without parsing/destroying YAML
+    # is to scale it to zero and unset its restart policy via an override file.
+    # Note: We append (>>) or create conditionally to avoid overwriting the Nginx/SSL override block.
+    if [ ! -f docker-compose.override.yml ]; then
+        echo "version: '3.8'" > docker-compose.override.yml
+        echo "services:" >> docker-compose.override.yml
+    fi
+    cat <<EOF >> docker-compose.override.yml
+  mongodb:
+    deploy:
+      replicas: 0
+    restart: "no"
+EOF
 else
     echo -e "${GREEN}[OK] Using Local Dockerized MongoDB.${NC}"
 fi
