@@ -71,31 +71,52 @@ systemctl start docker
 
 # 4. Interactive Configuration
 echo -e "\n${BLUE}--- Configuration ---${NC}"
-echo -e "To ensure the Web UI can connect to the Relay Server, we need your VM's Public IP Address."
+echo -e "To ensure the Web UI can connect to the Relay Server, we need to configure your Public IP or Domain Name."
 
 # Try to auto-detect public IP via external service
 DETECTED_IP=$(curl -s -m 5 https://ifconfig.me || echo "")
 
 if [ -n "$DETECTED_IP" ]; then
-    read -p "Detected Public IP is $DETECTED_IP. Press [Enter] to use this, or type a different IP/Domain: " USER_IP
-    if [ -z "$USER_IP" ]; then
-        USER_IP=$DETECTED_IP
-    fi
+    echo -e "Detected Public IP: ${YELLOW}$DETECTED_IP${NC}"
 else
-    read -p "Enter the Public IP or Domain Name of this VM (e.g., 203.0.113.50): " USER_IP
-    if [ -z "$USER_IP" ]; then
-        echo -e "${RED}[ERROR] Public IP is required to configure the UI. Aborting.${NC}"
-        exit 1
-    fi
+    DETECTED_IP=""
 fi
 
-# Ensure it's prefixed with http:// if not a secure domain setup
-if [[ $USER_IP != http* ]]; then
-    FINAL_URL="http://${USER_IP}:3001"
+read -p "Do you have a Subdomain/Domain pointed to this server? (e.g. swarm.example.com). If not, just press [Enter] to use the IP: " USER_DOMAIN
+
+FINAL_HOST=""
+if [ -n "$USER_DOMAIN" ]; then
+    FINAL_HOST=$USER_DOMAIN
+    # Ask about SSL if using a domain (Cloudflare often provides this free)
+    read -p "Does your domain use HTTPS/SSL? (y/N): " USE_SSL
+    if [[ "$USE_SSL" =~ ^[Yy]$ ]]; then
+        PROTOCOL="https"
+    else
+        PROTOCOL="http"
+    fi
 else
-    FINAL_URL="${USER_IP}:3001"
+    if [ -n "$DETECTED_IP" ]; then
+        read -p "No domain provided. Press [Enter] to use IP ($DETECTED_IP), or type a different one: " USER_IP
+        if [ -z "$USER_IP" ]; then
+            FINAL_HOST=$DETECTED_IP
+        else
+            FINAL_HOST=$USER_IP
+        fi
+    else
+        read -p "No domain provided. Enter the Public IP of this VM (e.g., 203.0.113.50): " FINAL_HOST
+    fi
+    PROTOCOL="http"
 fi
 
+if [ -z "$FINAL_HOST" ]; then
+    echo -e "${RED}[ERROR] A valid IP or Domain is required to configure the UI. Aborting.${NC}"
+    exit 1
+fi
+
+# Clean up any accidental http:// typed by user
+FINAL_HOST=$(echo $FINAL_HOST | sed -e 's|^[^/]*//||' -e 's|/.*$||')
+
+FINAL_URL="${PROTOCOL}://${FINAL_HOST}:3001"
 echo -e "${GREEN}[OK] UI will be configured to connect to Relay at: $FINAL_URL${NC}"
 
 # 5. Environment Variable Setup (.env generation)
@@ -135,7 +156,7 @@ echo -e "\n${GREEN}====================================================${NC}"
 echo -e "${GREEN}  🚀 DEPLOYMENT COMPLETE! 🚀${NC}"
 echo -e "${GREEN}====================================================${NC}"
 echo -e "You can now access the Command Center UI at:"
-echo -e "  -->  ${YELLOW}http://${USER_IP}${NC}"
+echo -e "  -->  ${YELLOW}${PROTOCOL}://${FINAL_HOST}${NC}"
 echo -e ""
 echo -e "To view the logs of the Relay server, run:"
 echo -e "  docker compose logs -f relay"
