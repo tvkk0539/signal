@@ -123,6 +123,31 @@ function setupSockets(io) {
                 clientSocket.emit(shared_1.MessageType.REMOTE_LIST_RESPONSE, msg);
             });
         });
+        // --- Phase 13: Universal VFS Operations Routing ---
+        const vfsRequests = [
+            shared_1.MessageType.FILE_MKDIR_REQUEST,
+            shared_1.MessageType.FILE_DELETE_REQUEST,
+            shared_1.MessageType.FILE_MOVE_REQUEST,
+            shared_1.MessageType.FILE_COPY_REQUEST,
+            shared_1.MessageType.FILE_RENAME_REQUEST,
+            shared_1.MessageType.VFS_TASK_CANCEL_REQUEST
+        ];
+        vfsRequests.forEach(eventType => {
+            socket.on(eventType, (msg) => {
+                const workerData = exports.connectedWorkers.get(msg.workerId);
+                if (workerData) {
+                    workerData.socket.emit(eventType, msg);
+                }
+                else {
+                    console.error(`[Relay] Cannot route ${eventType}: Worker ${msg.workerId} not found.`);
+                }
+            });
+        });
+        socket.on(shared_1.MessageType.FILE_ACTION_RESPONSE, (msg) => {
+            exports.connectedUIClients.forEach((clientSocket) => {
+                clientSocket.emit(shared_1.MessageType.FILE_ACTION_RESPONSE, msg);
+            });
+        });
         // --- Phase 3: Chat Router & WebRTC Matchmaker ---
         // Helper to get socket by UI User ID or Worker ID
         const getTargetSocket = (targetId) => {

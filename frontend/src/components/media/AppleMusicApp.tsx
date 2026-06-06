@@ -336,10 +336,10 @@ export const AppleMusicApp: React.FC = () => {
 
         {/* Bottom Row: Tab Navigation */}
         <div className="px-6 pb-4">
-          <div className="flex items-center bg-black/40 p-1 rounded-xl border border-white/10 overflow-x-auto w-fit shadow-md">
+          <div className="flex items-center bg-black/40 p-1 rounded-xl border border-white/10 overflow-x-auto shadow-md custom-scrollbar max-w-full">
           <button
             onClick={() => setActiveTab('RIPPER')}
-            className={`flex items-center gap-2 px-4 py-2 rounded-lg text-sm font-semibold transition-all whitespace-nowrap ${
+            className={`flex items-center gap-2 px-4 py-2 rounded-lg text-sm font-semibold transition-all whitespace-nowrap shrink-0 ${
               activeTab === 'RIPPER' ? 'bg-white/10 text-white shadow-sm' : 'text-muted-foreground hover:text-white/80'
             }`}
           >
@@ -348,7 +348,7 @@ export const AppleMusicApp: React.FC = () => {
           </button>
           <button
             onClick={() => setActiveTab('QUEUE')}
-            className={`flex items-center gap-2 px-4 py-2 rounded-lg text-sm font-semibold transition-all whitespace-nowrap ${
+            className={`flex items-center gap-2 px-4 py-2 rounded-lg text-sm font-semibold transition-all whitespace-nowrap shrink-0 ${
               activeTab === 'QUEUE' ? 'bg-white/10 text-white shadow-sm' : 'text-muted-foreground hover:text-white/80'
             }`}
           >
@@ -357,7 +357,7 @@ export const AppleMusicApp: React.FC = () => {
           </button>
           <button
             onClick={() => setActiveTab('WRAPPER')}
-            className={`flex items-center gap-2 px-4 py-2 rounded-lg text-sm font-semibold transition-all whitespace-nowrap ${
+            className={`flex items-center gap-2 px-4 py-2 rounded-lg text-sm font-semibold transition-all whitespace-nowrap shrink-0 ${
               activeTab === 'WRAPPER' ? 'bg-white/10 text-white shadow-sm' : 'text-muted-foreground hover:text-white/80'
             }`}
           >
@@ -366,7 +366,7 @@ export const AppleMusicApp: React.FC = () => {
           </button>
           <button
             onClick={() => setActiveTab('CONFIG')}
-            className={`flex items-center gap-2 px-4 py-2 rounded-lg text-sm font-semibold transition-all whitespace-nowrap ${
+            className={`flex items-center gap-2 px-4 py-2 rounded-lg text-sm font-semibold transition-all whitespace-nowrap shrink-0 ${
               activeTab === 'CONFIG' ? 'bg-white/10 text-white shadow-sm' : 'text-muted-foreground hover:text-white/80'
             }`}
           >
@@ -375,7 +375,7 @@ export const AppleMusicApp: React.FC = () => {
           </button>
           <button
             onClick={() => setActiveTab('SETTINGS')}
-            className={`flex items-center gap-2 px-4 py-2 rounded-lg text-sm font-semibold transition-all whitespace-nowrap ${
+            className={`flex items-center gap-2 px-4 py-2 rounded-lg text-sm font-semibold transition-all whitespace-nowrap shrink-0 ${
               activeTab === 'SETTINGS' ? 'bg-white/10 text-white shadow-sm' : 'text-muted-foreground hover:text-white/80'
             }`}
           >

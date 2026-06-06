@@ -18,6 +18,33 @@ class RcloneDaemonManager {
     isRunning = false;
     configPath = '/tmp/rclone.conf';
     /**
+     * Universal RC Path Formatter
+     * Handles the strict path requirements of the rclone rc API for both Local and Cloud remotes.
+     */
+    formatRcParams(fsStr, pathStr) {
+        let cleanFs = fsStr || '/';
+        let cleanPath = pathStr || '';
+        // Handle Local File System
+        if (cleanFs === '/') {
+            // Rclone requires fs to be '/' and remote to be a relative path from root, or an absolute path.
+            // But passing an empty string as remote when creating/deleting root fails.
+            // E.g., fs: '/', remote: 'tmp/folder'
+            if (cleanPath.startsWith('/')) {
+                cleanPath = cleanPath.substring(1);
+            }
+            return { fs: '/', remote: cleanPath };
+        }
+        // Handle Cloud Remotes
+        if (!cleanFs.endsWith(':')) {
+            cleanFs += ':';
+        }
+        // Remove leading slashes from remote paths to avoid doubling up
+        if (cleanPath.startsWith('/')) {
+            cleanPath = cleanPath.substring(1);
+        }
+        return { fs: cleanFs, remote: cleanPath };
+    }
+    /**
      * Phase 11: Hybrid Configuration Engine
      * Generates the dynamic isolated /tmp/rclone.conf by merging Permanent and Ephemeral blocks.
      */
@@ -120,14 +147,13 @@ class RcloneDaemonManager {
         if (!this.isRunning) {
             throw new Error('Rclone daemon is not running');
         }
-        // Default to the local root if fs is empty or missing
-        const targetFs = fs || '/';
+        const { fs: formattedFs, remote: formattedRemote } = this.formatRcParams(fs, path);
         try {
-            console.log(`[Rclone] Executing listFiles on fs: "${targetFs}", path: "${path}"`);
+            console.log(`[Rclone] Executing listFiles on fs: "${formattedFs}", path: "${formattedRemote}"`);
             const auth = Buffer.from(`${RCLONE_RC_USER}:${RCLONE_RC_PASS}`).toString('base64');
             const response = await axios_1.default.post(`${RCLONE_RC_BASE_URL}/operations/list`, {
-                fs: targetFs,
-                remote: path
+                fs: formattedFs,
+                remote: formattedRemote
             }, {
                 headers: {
                     'Authorization': `Basic ${auth}`,
@@ -144,13 +170,13 @@ class RcloneDaemonManager {
     async mkdir(fs, path) {
         if (!this.isRunning)
             throw new Error('Rclone daemon is not running');
-        const targetFs = fs || '/';
+        const { fs: formattedFs, remote: formattedRemote } = this.formatRcParams(fs, path);
         try {
-            console.log(`[Rclone] Executing mkdir on fs: "${targetFs}", path: "${path}"`);
+            console.log(`[Rclone] Executing mkdir on fs: "${formattedFs}", path: "${formattedRemote}"`);
             const auth = Buffer.from(`${RCLONE_RC_USER}:${RCLONE_RC_PASS}`).toString('base64');
             await axios_1.default.post(`${RCLONE_RC_BASE_URL}/operations/mkdir`, {
-                fs: targetFs,
-                remote: path
+                fs: formattedFs,
+                remote: formattedRemote
             }, {
                 headers: {
                     'Authorization': `Basic ${auth}`,
@@ -166,13 +192,13 @@ class RcloneDaemonManager {
     async purge(fs, path) {
         if (!this.isRunning)
             throw new Error('Rclone daemon is not running');
-        const targetFs = fs || '/';
+        const { fs: formattedFs, remote: formattedRemote } = this.formatRcParams(fs, path);
         try {
-            console.log(`[Rclone] Executing purge (delete folder) on fs: "${targetFs}", path: "${path}"`);
+            console.log(`[Rclone] Executing purge (delete folder) on fs: "${formattedFs}", path: "${formattedRemote}"`);
             const auth = Buffer.from(`${RCLONE_RC_USER}:${RCLONE_RC_PASS}`).toString('base64');
             await axios_1.default.post(`${RCLONE_RC_BASE_URL}/operations/purge`, {
-                fs: targetFs,
-                remote: path
+                fs: formattedFs,
+                remote: formattedRemote
             }, {
                 headers: {
                     'Authorization': `Basic ${auth}`,
@@ -188,13 +214,13 @@ class RcloneDaemonManager {
     async deleteFile(fs, path) {
         if (!this.isRunning)
             throw new Error('Rclone daemon is not running');
-        const targetFs = fs || '/';
+        const { fs: formattedFs, remote: formattedRemote } = this.formatRcParams(fs, path);
         try {
-            console.log(`[Rclone] Executing deleteFile on fs: "${targetFs}", path: "${path}"`);
+            console.log(`[Rclone] Executing deleteFile on fs: "${formattedFs}", path: "${formattedRemote}"`);
             const auth = Buffer.from(`${RCLONE_RC_USER}:${RCLONE_RC_PASS}`).toString('base64');
             await axios_1.default.post(`${RCLONE_RC_BASE_URL}/operations/deletefile`, {
-                fs: targetFs,
-                remote: path
+                fs: formattedFs,
+                remote: formattedRemote
             }, {
                 headers: {
                     'Authorization': `Basic ${auth}`,
@@ -210,16 +236,16 @@ class RcloneDaemonManager {
     async moveFile(srcFs, srcPath, dstFs, dstPath) {
         if (!this.isRunning)
             throw new Error('Rclone daemon is not running');
-        const targetSrcFs = srcFs || '/';
-        const targetDstFs = dstFs || '/';
+        const src = this.formatRcParams(srcFs, srcPath);
+        const dst = this.formatRcParams(dstFs, dstPath);
         try {
-            console.log(`[Rclone] Executing moveFile from "${targetSrcFs}${srcPath}" to "${targetDstFs}${dstPath}"`);
+            console.log(`[Rclone] Executing moveFile from fs: "${src.fs}", remote: "${src.remote}" to fs: "${dst.fs}", remote: "${dst.remote}"`);
             const auth = Buffer.from(`${RCLONE_RC_USER}:${RCLONE_RC_PASS}`).toString('base64');
             await axios_1.default.post(`${RCLONE_RC_BASE_URL}/operations/movefile`, {
-                srcFs: targetSrcFs,
-                srcRemote: srcPath,
-                dstFs: targetDstFs,
-                dstRemote: dstPath
+                srcFs: src.fs,
+                srcRemote: src.remote,
+                dstFs: dst.fs,
+                dstRemote: dst.remote
             }, {
                 headers: {
                     'Authorization': `Basic ${auth}`,
@@ -235,16 +261,16 @@ class RcloneDaemonManager {
     async copyFile(srcFs, srcPath, dstFs, dstPath) {
         if (!this.isRunning)
             throw new Error('Rclone daemon is not running');
-        const targetSrcFs = srcFs || '/';
-        const targetDstFs = dstFs || '/';
+        const src = this.formatRcParams(srcFs, srcPath);
+        const dst = this.formatRcParams(dstFs, dstPath);
         try {
-            console.log(`[Rclone] Executing copyFile from "${targetSrcFs}${srcPath}" to "${targetDstFs}${dstPath}"`);
+            console.log(`[Rclone] Executing copyFile from fs: "${src.fs}", remote: "${src.remote}" to fs: "${dst.fs}", remote: "${dst.remote}"`);
             const auth = Buffer.from(`${RCLONE_RC_USER}:${RCLONE_RC_PASS}`).toString('base64');
             await axios_1.default.post(`${RCLONE_RC_BASE_URL}/operations/copyfile`, {
-                srcFs: targetSrcFs,
-                srcRemote: srcPath,
-                dstFs: targetDstFs,
-                dstRemote: dstPath
+                srcFs: src.fs,
+                srcRemote: src.remote,
+                dstFs: dst.fs,
+                dstRemote: dst.remote
             }, {
                 headers: {
                     'Authorization': `Basic ${auth}`,
@@ -289,13 +315,13 @@ class RcloneDaemonManager {
         if (!this.isRunning) {
             throw new Error('Rclone daemon is not running');
         }
-        const targetFs = fs || '/';
+        const { fs: formattedFs, remote: formattedRemote } = this.formatRcParams(fs, path);
         try {
-            console.log(`[Rclone] Executing stat on fs: "${targetFs}", path: "${path}"`);
+            console.log(`[Rclone] Executing stat on fs: "${formattedFs}", path: "${formattedRemote}"`);
             const auth = Buffer.from(`${RCLONE_RC_USER}:${RCLONE_RC_PASS}`).toString('base64');
             const response = await axios_1.default.post(`${RCLONE_RC_BASE_URL}/operations/stat`, {
-                fs: targetFs,
-                remote: path
+                fs: formattedFs,
+                remote: formattedRemote
             }, {
                 headers: {
                     'Authorization': `Basic ${auth}`,

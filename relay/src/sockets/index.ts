@@ -144,6 +144,33 @@ export function setupSockets(io: Server) {
       });
     });
 
+    // --- Phase 13: Universal VFS Operations Routing ---
+    const vfsRequests = [
+      MessageType.FILE_MKDIR_REQUEST,
+      MessageType.FILE_DELETE_REQUEST,
+      MessageType.FILE_MOVE_REQUEST,
+      MessageType.FILE_COPY_REQUEST,
+      MessageType.FILE_RENAME_REQUEST,
+      MessageType.VFS_TASK_CANCEL_REQUEST
+    ];
+
+    vfsRequests.forEach(eventType => {
+      socket.on(eventType, (msg: any) => {
+        const workerData = connectedWorkers.get(msg.workerId);
+        if (workerData) {
+          workerData.socket.emit(eventType, msg);
+        } else {
+          console.error(`[Relay] Cannot route ${eventType}: Worker ${msg.workerId} not found.`);
+        }
+      });
+    });
+
+    socket.on(MessageType.FILE_ACTION_RESPONSE, (msg: any) => {
+      connectedUIClients.forEach((clientSocket) => {
+        clientSocket.emit(MessageType.FILE_ACTION_RESPONSE, msg);
+      });
+    });
+
     // --- Phase 3: Chat Router & WebRTC Matchmaker ---
 
     // Helper to get socket by UI User ID or Worker ID
