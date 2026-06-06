@@ -8,6 +8,11 @@ export declare class RcloneDaemonManager {
     private isRunning;
     private configPath;
     /**
+     * Universal RC Path Formatter
+     * Handles the strict path requirements of the rclone rc API for both Local and Cloud remotes.
+     */
+    private formatRcParams;
+    /**
      * Phase 11: Hybrid Configuration Engine
      * Generates the dynamic isolated /tmp/rclone.conf by merging Permanent and Ephemeral blocks.
      */
